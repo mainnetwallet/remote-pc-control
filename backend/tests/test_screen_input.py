@@ -96,6 +96,66 @@ def test_unknown_message_ignored():
     m, k = run({"type": "format-c-drive"}); assert not m.calls and not k.calls
 
 
+def rel(dx, dy, start=(100, 100), mon=MON):
+    m, k = FakeMouse(), FakeKb(); m.position = start
+    screen.handle_input({"type": "rel", "dx": dx, "dy": dy}, mon, m, k, MOUSE_MOD, KEYS)
+    return m
+
+
+def test_rel_moves_from_current_position_without_clicking():
+    m = rel(10, -20)
+    assert m.position == (110, 80) and m.calls == []
+
+
+def test_rel_is_clamped_to_500_px_per_message():
+    assert rel(5000, -5000, start=(960, 540)).position == (1460, 40)
+    assert rel(-501, 501, start=(960, 540)).position == (460, 1040)
+    assert rel(500, 500, start=(960, 540)).position == (1460, 1040)
+
+
+def test_rel_is_clamped_to_monitor_edges():
+    assert rel(-300, -300, start=(10, 20)).position == (0, 0)
+    assert rel(400, 400, start=(1800, 1000)).position == (1919, 1079)
+
+
+def test_rel_respects_monitor_offset():
+    assert rel(-400, 0, start=(-1900, 50), mon=MON2).position == (-1920, 50)
+    assert rel(400, 0, start=(-10, 50), mon=MON2).position == (-1, 50)
+
+
+def test_rel_pointer_on_another_monitor_is_pulled_into_this_one():
+    assert rel(1, 1, start=(5000, 5000)).position == (1919, 1079)
+
+
+def test_rel_zero_missing_and_garbage_are_noops():
+    for msg in ({"type": "rel"}, {"type": "rel", "dx": 0, "dy": 0}, {"type": "rel", "dx": "abc", "dy": 5},
+                {"type": "rel", "dx": None, "dy": 5}, {"type": "rel", "dx": float("nan"), "dy": 1},
+                {"type": "rel", "dx": float("inf"), "dy": 1}, {"type": "rel", "dx": [1], "dy": 1}):
+        m, k = FakeMouse(), FakeKb(); m.position = (7, 8)
+        screen.handle_input(msg, MON, m, k, MOUSE_MOD, KEYS)
+        assert m.position == (7, 8) and not m.calls and not k.calls, msg
+
+
+def test_rel_single_axis_and_numeric_strings():
+    assert rel(15, 0).position == (115, 100)
+    assert rel("7", "-3").position == (107, 97)
+
+
+def test_clicks_without_coordinates_act_at_current_pointer():
+    m, k = FakeMouse(), FakeKb(); m.position = (321, 123)
+    for msg in ({"type": "click"}, {"type": "down"}, {"type": "up"}, {"type": "click", "button": "right"}):
+        screen.handle_input(msg, MON, m, k, MOUSE_MOD, KEYS)
+    assert m.position == (321, 123)
+    assert m.calls == [("click", "L", 1), ("press", "L"), ("release", "L"), ("click", "R", 1)]
+
+
+def test_trackpad_drag_sequence_down_rel_up():
+    m, k = FakeMouse(), FakeKb(); m.position = (500, 500)
+    for msg in ({"type": "down"}, {"type": "rel", "dx": 30, "dy": 10}, {"type": "rel", "dx": 30, "dy": 10}, {"type": "up"}):
+        screen.handle_input(msg, MON, m, k, MOUSE_MOD, KEYS)
+    assert m.calls == [("press", "L"), ("release", "L")] and m.position == (560, 520)
+
+
 def test_encode_frame_downscales_and_overlays_cursor(monkeypatch):
     monkeypatch.setattr(settings, "max_width", 960)
     raw = bytes([20, 40, 60, 0]) * (1920 * 1080)          # BGRX solid colour

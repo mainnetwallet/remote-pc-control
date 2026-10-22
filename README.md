@@ -10,7 +10,7 @@ See and control your own Windows PC from your phone: live screen, touch-as-mouse
 - **Keyboard**: text box plus quick keys (Esc, Tab, arrows, Win, Alt+Tab, Ctrl+C/V/A/Z).
 - **Monitor and power**: CPU/RAM/disk/network, lock, sleep, restart, shutdown (with confirmation).
 - **Security**: token-protected API and WebSockets, lockout after 8 wrong tokens (5 minutes).
-- **Clients**: mobile web dashboard and a native Android app (`android/`).
+- **Clients**: mobile web dashboard and a native Android app (`android/`) with a laptop-style trackpad (relative pointer, tap/double-tap/two-finger-tap clicks, two-finger scroll, tap-and-slide drag).
 
 ## Quick start (Windows PC + phone)
 

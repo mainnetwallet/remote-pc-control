@@ -6,6 +6,8 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
               then binary JPEG frames.
   /ws/input   client -> server:
       {"type":"move",   "nx":0..1, "ny":0..1}                    cursor to a normalized position
+      {"type":"rel",    "dx":int, "dy":int}                       move the pointer by pixel deltas (trackpad);
+                                                                 clamped to the monitor and to +-500 px per message
       {"type":"click",  "button":"left|right|middle", "count":1|2, "nx":.., "ny":..}
       {"type":"down"|"up", "button":"left", "nx":.., "ny":..}    press/release (for drag)
       {"type":"scroll", "dx":int, "dy":int}                      wheel steps (dy>0 = up)
@@ -25,6 +27,7 @@ from . import security
 
 KEEPALIVE_SECONDS = 3.0   # resend the last frame so idle screens don't hit client read timeouts
 MAX_SCROLL = 20
+MAX_REL_MOVE = 500        # pixels per "rel" message, per axis
 BUTTONS = ("left", "right", "middle")
 
 
@@ -59,6 +62,24 @@ def to_screen_xy(d: dict, mon: dict) -> tuple[int, int] | None:
             return None
     except (TypeError, ValueError):
         return None
+    return x, y
+
+
+def rel_target(d: dict, mon: dict, current: tuple[int, int]) -> tuple[int, int] | None:
+    """New pointer position for a {"type":"rel","dx","dy"} message, or None for a no-op.
+
+    Each delta is limited to +-MAX_REL_MOVE pixels and the result is kept inside the monitor.
+    Missing deltas count as 0; non-numeric/non-finite deltas make the whole message a no-op.
+    """
+    try:
+        dx = max(-MAX_REL_MOVE, min(MAX_REL_MOVE, int(d.get("dx", 0))))
+        dy = max(-MAX_REL_MOVE, min(MAX_REL_MOVE, int(d.get("dy", 0))))
+        cx, cy = int(current[0]), int(current[1])
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not dx and not dy: return None
+    x = min(mon["left"] + mon["width"] - 1, max(mon["left"], cx + dx))
+    y = min(mon["top"] + mon["height"] - 1, max(mon["top"], cy + dy))
     return x, y
 
 
@@ -155,7 +176,10 @@ def handle_input(d: dict, mon: dict, mouse_ctl, kb_ctl, mouse_mod, keys: dict) -
     pos = to_screen_xy(d, mon)
     if kind in ("move", "click", "down", "up") and pos is not None:
         mouse_ctl.position = pos
-    if kind == "click":
+    if kind == "rel":
+        target = rel_target(d, mon, mouse_ctl.position)
+        if target is not None: mouse_ctl.position = target
+    elif kind == "click":
         mouse_ctl.click(button, 2 if int(d.get("count", 1)) == 2 else 1)
     elif kind == "down": mouse_ctl.press(button)
     elif kind == "up": mouse_ctl.release(button)
@@ -181,7 +205,7 @@ def handle_input(d: dict, mon: dict, mouse_ctl, kb_ctl, mouse_mod, keys: dict) -
 
 async def input_socket(ws: WebSocket):
     await ws.accept()
-    held = False
+    held: set[str] = set()   # buttons currently pressed by this client
     try:
         if not await _authenticate(ws): return
         enable_dpi_awareness()
@@ -194,8 +218,9 @@ async def input_socket(ws: WebSocket):
             try: d = json.loads(await ws.receive_text())
             except json.JSONDecodeError: continue
             if not isinstance(d, dict): continue
-            if d.get("type") == "down": held = True
-            elif d.get("type") == "up": held = False
+            btn = d.get("button", "left") if d.get("button", "left") in BUTTONS else "left"
+            if d.get("type") == "down": held.add(btn)
+            elif d.get("type") == "up": held.discard(btn)
             try: handle_input(d, mon, m, k, mouse, keys)
             except Exception: pass   # a bad message must not kill the whole session
     except WebSocketDisconnect: return
@@ -207,5 +232,6 @@ async def input_socket(ws: WebSocket):
         if held:  # never leave a mouse button stuck down if the phone disconnects mid-drag
             try:
                 from pynput import mouse as _mouse
-                _mouse.Controller().release(_mouse.Button.left)
+                ctl = _mouse.Controller()
+                for name in held: ctl.release(getattr(_mouse.Button, name))
             except Exception: pass
