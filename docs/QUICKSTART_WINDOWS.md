@@ -31,6 +31,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 This creates `.venv`, installs the Python packages and builds the dashboard.
 
+Re-running it is safe and fast: packages are only reinstalled when `pyproject.toml` changes, and the dashboard is only rebuilt when its sources change. Use `.\scripts\setup.ps1 -Force` to redo everything.
+
 ## 3. Create the API token
 
 The agent refuses to start unless `.env` contains a unique `REMOTE_PC_TOKEN` of at least 32 bytes.
