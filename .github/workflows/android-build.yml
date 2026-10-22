@@ -38,7 +38,16 @@ jobs:
           gradle-version: "8.13"
       - name: Build debug APK
         working-directory: android
-        run: gradle assembleDebug --no-daemon
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon --console=plain 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+      - name: Show build errors
+        if: failure()
+        run: |
+          ERR=$(grep -E '^e: |What went wrong|^> |error:' "$RUNNER_TEMP/gradle.log" | sed 's#file://[^ ]*/android/##' | head -40 || true)
+          echo "$ERR" >> "$GITHUB_STEP_SUMMARY"
+          ERR="${ERR//'%'/'%25'}"; ERR="${ERR//$'\r'/'%0D'}"; ERR="${ERR//$'\n'/'%0A'}"
+          echo "::error title=Gradle build errors::${ERR:0:3500}"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
