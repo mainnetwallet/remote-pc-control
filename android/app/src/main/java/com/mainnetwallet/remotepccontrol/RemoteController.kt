@@ -167,6 +167,8 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
         }
     }
 
+    // The `quality` property's private setter is also named setQuality(Quality) on the JVM; rename this one there.
+    @JvmName("applyQuality")
     fun setQuality(q: Quality) {
         quality = q
         prefs.edit().putString(PREF_QUALITY, q.name).apply()
