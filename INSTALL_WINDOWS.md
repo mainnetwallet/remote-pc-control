@@ -12,3 +12,26 @@
 The agent cannot capture/control Windows secure desktop, UAC prompts or the sign-in screen. Use Windows Remote Desktop or a reviewed remote-access client to log in; this project does not bypass authentication.
 
 Wake-on-LAN requires firmware/NIC support. Mobile-data wake needs an authenticated always-on LAN relay; the API currently reports WOL as unconfigured.
+
+## Cloudflare tunnel (no Tailscale)
+Quick link (changes every run): run `scripts/start.ps1` in one PowerShell window and `scripts/start-tunnel.ps1` in a second one, then open the printed `https://...trycloudflare.com` link on the phone (browser, or paste it as the PC URL in the Android app).
+
+Permanent link (needs a domain added to your Cloudflare account):
+```powershell
+winget install Cloudflare.cloudflared
+cloudflared tunnel login
+cloudflared tunnel create mypc
+cloudflared tunnel route dns mypc pc.YOUR-DOMAIN.com
+```
+Create `%USERPROFILE%\.cloudflared\config.yml`:
+```yaml
+tunnel: mypc
+credentials-file: C:\Users\YOU\.cloudflared\<tunnel-id>.json
+ingress:
+  - hostname: pc.YOUR-DOMAIN.com
+    service: http://localhost:8788
+  - service: http_status:404
+```
+Run with `cloudflared tunnel run mypc` (or `cloudflared service install` to start with Windows).
+
+**Security:** a public link means only the token protects mouse/keyboard/shutdown. Put the hostname behind Cloudflare Access (Zero Trust, free) and never share the link. The agent locks a client out for 5 minutes after 8 wrong tokens.

@@ -16,3 +16,36 @@ def test_power_requires_confirmation(monkeypatch):
     monkeypatch.setattr(settings,"token","z"*40)
     with TestClient(app) as c:
         r=c.post("/api/v1/control/shutdown",headers={"Authorization":"Bearer "+"z"*40},json={"confirm":False}); assert r.status_code==400
+
+
+def test_lockout_after_repeated_wrong_tokens():
+    from app import security
+    good = "Bearer " + settings.token
+    with TestClient(app) as c:
+        for _ in range(security.MAX_FAILS):
+            assert c.get("/api/v1/status", headers={"Authorization": "Bearer bad"}).status_code == 401
+        assert c.get("/api/v1/status", headers={"Authorization": "Bearer bad"}).status_code == 429
+        assert c.get("/api/v1/status", headers={"Authorization": good}).status_code == 429   # locked out even with right token
+
+
+def test_lockout_is_per_client_ip_and_success_resets():
+    from app import security
+    good = "Bearer " + settings.token
+    with TestClient(app) as c:
+        for _ in range(security.MAX_FAILS):
+            c.get("/api/v1/status", headers={"Authorization": "Bearer bad", "CF-Connecting-IP": "1.2.3.4"})
+        assert c.get("/api/v1/status", headers={"Authorization": good, "CF-Connecting-IP": "1.2.3.4"}).status_code == 429
+        assert c.get("/api/v1/status", headers={"Authorization": good, "CF-Connecting-IP": "5.6.7.8"}).status_code == 200
+        c.get("/api/v1/status", headers={"Authorization": "Bearer bad", "CF-Connecting-IP": "9.9.9.9"})
+        assert c.get("/api/v1/status", headers={"Authorization": good, "CF-Connecting-IP": "9.9.9.9"}).status_code == 200
+        assert len(security._fails.get("9.9.9.9", [])) == 0
+
+
+def test_websocket_lockout():
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+    from app import security
+    for _ in range(security.MAX_FAILS): security.record_fail("testclient")
+    with TestClient(app) as c, c.websocket_connect("/ws/input") as ws:
+        with pytest.raises(WebSocketDisconnect) as e: ws.receive_text()
+        assert e.value.code == 4429
