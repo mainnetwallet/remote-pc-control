@@ -10,8 +10,19 @@ android {
         applicationId = "com.mainnetwallet.remotepccontrol"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3.0"
+        // CI passes its run number so every build has a higher versionCode and installs over the previous one.
+        val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+        versionCode = 100 + build
+        versionName = "1.3.$build"
+    }
+    // One fixed key for every build: Android only accepts an update signed with the same key as the installed app.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
     buildFeatures { compose = true }
     compileOptions {
