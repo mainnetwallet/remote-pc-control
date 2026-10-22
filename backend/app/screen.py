@@ -6,8 +6,11 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
               then binary JPEG frames.
   /ws/input   client -> server:
       {"type":"move",   "nx":0..1, "ny":0..1}                    cursor to a normalized position
+      {"type":"rel",    "dx":int, "dy":int}                       move the pointer by pixel deltas from where it is
+                                                                  (clamped to the monitor and to +-500 per message)
       {"type":"click",  "button":"left|right|middle", "count":1|2, "nx":.., "ny":..}
       {"type":"down"|"up", "button":"left", "nx":.., "ny":..}    press/release (for drag)
+      (click/down/up without nx/ny act at the current pointer position, as the trackpad needs)
       {"type":"scroll", "dx":int, "dy":int}                      wheel steps (dy>0 = up)
       {"type":"key",    "key":"ENTER"}                           single key
       {"type":"hotkey", "keys":["CTRL","C"]}                     key combination
@@ -25,6 +28,7 @@ from . import security
 
 KEEPALIVE_SECONDS = 3.0   # resend the last frame so idle screens don't hit client read timeouts
 MAX_SCROLL = 20
+MAX_REL = 500   # max pixels a single "rel" message may move the pointer on each axis
 BUTTONS = ("left", "right", "middle")
 
 
@@ -59,6 +63,24 @@ def to_screen_xy(d: dict, mon: dict) -> tuple[int, int] | None:
             return None
     except (TypeError, ValueError):
         return None
+    return x, y
+
+
+def _clamp_int(value, limit: int) -> int:
+    """int(value) limited to +-limit; garbage (None, text, NaN, inf) counts as 0."""
+    try: v = int(value)
+    except (TypeError, ValueError, OverflowError): return 0
+    return max(-limit, min(limit, v))
+
+
+def rel_screen_xy(d: dict, mon: dict, current: tuple) -> tuple[int, int] | None:
+    """New absolute pointer position for a "rel" message, or None when there is nothing to move."""
+    dx, dy = _clamp_int(d.get("dx", 0), MAX_REL), _clamp_int(d.get("dy", 0), MAX_REL)
+    if not dx and not dy: return None
+    try: cx, cy = int(current[0]), int(current[1])
+    except (TypeError, ValueError, IndexError): return None
+    x = min(mon["left"] + mon["width"] - 1, max(mon["left"], cx + dx))
+    y = min(mon["top"] + mon["height"] - 1, max(mon["top"], cy + dy))
     return x, y
 
 
@@ -155,7 +177,10 @@ def handle_input(d: dict, mon: dict, mouse_ctl, kb_ctl, mouse_mod, keys: dict) -
     pos = to_screen_xy(d, mon)
     if kind in ("move", "click", "down", "up") and pos is not None:
         mouse_ctl.position = pos
-    if kind == "click":
+    if kind == "rel":
+        target = rel_screen_xy(d, mon, mouse_ctl.position)
+        if target is not None: mouse_ctl.position = target
+    elif kind == "click":
         mouse_ctl.click(button, 2 if int(d.get("count", 1)) == 2 else 1)
     elif kind == "down": mouse_ctl.press(button)
     elif kind == "up": mouse_ctl.release(button)
