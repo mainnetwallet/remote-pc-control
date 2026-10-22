@@ -1,0 +1,28 @@
+name: Windows executable build
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: python -m pip install -e ".[build]"
+      - working-directory: frontend
+        run: |
+          npm install
+          npm run build
+      - shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force backend/app/static | Out-Null
+          Copy-Item -Recurse -Force frontend/dist/* backend/app/static/
+          pyinstaller --noconfirm --clean --onefile --name RemotePCControl --paths backend --add-data "backend/app/static;backend/app/static" --hidden-import mss --hidden-import pynput.keyboard --hidden-import pynput.mouse run_agent.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RemotePCControl-Windows-x64
+          path: dist/RemotePCControl.exe
