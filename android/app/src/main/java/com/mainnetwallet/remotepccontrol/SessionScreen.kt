@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -277,11 +276,11 @@ fun SessionScreen(c: RemoteController) {
                     StopButton { c.stopScreen() }
                 }
                 if (showKeys) Surface(
-                    Modifier.align(Alignment.BottomStart).fillMaxWidth(if (showPad) 0.56f else 1f).padding(8.dp),
+                    Modifier.align(Alignment.BottomStart).fillMaxWidth(if (showPad) 0.66f else 1f).padding(8.dp),
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
                 ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
                 if (showPad) Surface(
-                    Modifier.align(Alignment.BottomEnd).fillMaxHeight(0.8f).fillMaxWidth(0.4f).padding(8.dp),
+                    Modifier.align(Alignment.BottomEnd).fillMaxHeight(0.62f).fillMaxWidth(0.3f).padding(8.dp),
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -298,10 +297,13 @@ fun SessionScreen(c: RemoteController) {
             ) {
                 SessionToolbar(touchMode, { touchMode = it }, doubleClick, c.quality, { c.setQuality(it) }, { c.stopScreen() })
                 ScreenArea(
-                    c, touchMode, Modifier.fillMaxWidth(), Modifier.fillMaxWidth(),
-                    Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black, RoundedCornerShape(6.dp))
+                    c, touchMode,
+                    Modifier.fillMaxWidth().weight(1f).background(Color.Black, RoundedCornerShape(6.dp)),
+                    Modifier.fillMaxSize(),
+                    Modifier.fillMaxSize()
                 )
-                Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth().heightIn(min = 120.dp))
+                // Trackpad stays compact (about a quarter of the window) so the PC screen gets the rest.
+                Trackpad(sensitivity, send, Modifier.fillMaxWidth().height(maxOf(110.dp, minOf(200.dp, maxHeight * 0.26f))))
                 PadButtons(send, showKeys = showKeys, onShowKeys = { showKeys = it })
                 SpeedRow(sensitivity) { sensitivity = it }
                 if (showKeys) KeysPanel(send, typeText, { typeText = it }, onSendText)
