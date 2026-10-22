@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,14 +25,13 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Set up Android SDK command-line tools
-        uses: android-actions/setup-android@v3
-      - name: Install Android platform tools
-        run: sdkmanager --sdk_root="${ANDROID_HOME}" "platform-tools"
-      - name: Install Android 35 platform
-        run: sdkmanager --sdk_root="${ANDROID_HOME}" "platforms;android-35"
-      - name: Install Android 35 build tools
-        run: sdkmanager --sdk_root="${ANDROID_HOME}" "build-tools;35.0.0"
+      - name: Install Android SDK packages
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER" ]; then SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"; fi
+          yes | "$SDKMANAGER" --sdk_root="${ANDROID_HOME}" --licenses > /dev/null || true
+          "$SDKMANAGER" --sdk_root="${ANDROID_HOME}" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
