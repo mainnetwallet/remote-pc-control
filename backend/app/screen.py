@@ -21,6 +21,7 @@ import asyncio, hmac, io, json, platform, zlib
 from fastapi import WebSocket, WebSocketDisconnect
 from PIL import Image, ImageDraw
 from .config import settings
+from . import security
 
 KEEPALIVE_SECONDS = 3.0   # resend the last frame so idle screens don't hit client read timeouts
 MAX_SCROLL = 20
@@ -82,10 +83,13 @@ def encode_frame(raw: bytes, size: tuple[int, int], cursor: tuple[float, float] 
 
 
 async def _authenticate(ws: WebSocket) -> bool:
+    key = security.client_key(ws.headers, ws.client)
+    if security.is_blocked(key):
+        await ws.close(code=4429, reason="Too many failed attempts"); return False
     auth = json.loads(await asyncio.wait_for(ws.receive_text(), timeout=8))
-    if not hmac.compare_digest(str(auth.get("token", "")).encode(), settings.token.encode()):
-        await ws.close(code=4401)
-        return False
+    if not security.token_ok(str(auth.get("token", ""))):
+        security.record_fail(key); await ws.close(code=4401); return False
+    security.record_success(key)
     return True
 
 
