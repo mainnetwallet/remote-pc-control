@@ -265,6 +265,7 @@ fun SessionScreen(c: RemoteController) {
     val doubleClick: () -> Unit = { send(JSONObject().put("type", "click").put("count", 2)) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
+        val windowHeight = maxHeight   // read here: BoxWithConstraints' scope is not reachable from inside Column
         if (maxWidth > maxHeight) {
             Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
                 ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize())
@@ -303,7 +304,7 @@ fun SessionScreen(c: RemoteController) {
                     Modifier.fillMaxSize()
                 )
                 // Trackpad stays compact (about a quarter of the window) so the PC screen gets the rest.
-                Trackpad(sensitivity, send, Modifier.fillMaxWidth().height(maxOf(110.dp, minOf(200.dp, maxHeight * 0.26f))))
+                Trackpad(sensitivity, send, Modifier.fillMaxWidth().height(maxOf(110.dp, minOf(200.dp, windowHeight * 0.26f))))
                 PadButtons(send, showKeys = showKeys, onShowKeys = { showKeys = it })
                 SpeedRow(sensitivity) { sensitivity = it }
                 if (showKeys) KeysPanel(send, typeText, { typeText = it }, onSendText)
