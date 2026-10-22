@@ -2,8 +2,13 @@
 
 Protocol (JSON text frames, after the client sends {"token": "..."} first):
 
-  /ws/screen  server -> client: {"type":"ready"}, {"type":"screen","width":W,"height":H},
-              then binary JPEG frames.
+  /ws/screen  server -> client: {"type":"ready"}, {"type":"screen","width":W,"height":H,
+              "max_width":..,"fps":..,"quality":..}, then binary JPEG frames.
+              client -> server (any time while streaming, all fields optional):
+      {"type":"config","max_width":1920,"fps":15,"quality":70}
+          max_width 0 (native) or 320..3840, fps 1..30, quality 25..90; out-of-range values are
+          clamped, unusable ones ignored. Applied live; the server answers with a fresh
+          {"type":"screen",...} (carrying the values now in effect) followed by a new frame.
   /ws/input   client -> server:
       {"type":"move",   "nx":0..1, "ny":0..1}                    cursor to a normalized position
       {"type":"rel",    "dx":int, "dy":int}                       move the pointer by pixel deltas from where it is
@@ -20,7 +25,8 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
 Normalized coordinates make the mapping independent of the (possibly downscaled)
 frame the phone is showing, and of Windows display scaling.
 """
-import asyncio, hmac, io, json, platform, zlib
+import asyncio, contextlib, hmac, io, json, math, platform, zlib
+from dataclasses import dataclass
 from fastapi import WebSocket, WebSocketDisconnect
 from PIL import Image, ImageDraw
 from .config import settings
@@ -90,17 +96,56 @@ def _draw_cursor(img: Image.Image, x: float, y: float) -> None:
     ImageDraw.Draw(img).polygon(pts, fill=(255, 255, 255), outline=(0, 0, 0))
 
 
-def encode_frame(raw: bytes, size: tuple[int, int], cursor: tuple[float, float] | None = None) -> tuple[bytes, tuple[int, int]]:
-    """BGRA screen bytes -> (JPEG bytes, (width, height)) with optional downscale and cursor overlay."""
+WIDTH_MIN, WIDTH_MAX = 320, 3840
+FPS_MIN, FPS_MAX = 1, 30
+QUALITY_MIN, QUALITY_MAX = 25, 90
+
+
+def _number(value) -> float | None:
+    """float(value) for numbers and numeric strings; None for bool, text, NaN and inf."""
+    if isinstance(value, bool): return None
+    try: f = float(value)
+    except (TypeError, ValueError, OverflowError): return None
+    return f if math.isfinite(f) else None
+
+
+@dataclass
+class StreamConfig:
+    """Per-connection stream settings. Starts from the server defaults, changed live by "config" messages."""
+    max_width: int   # 0 = native resolution
+    fps: int
+    quality: int     # JPEG quality
+
+    @classmethod
+    def from_settings(cls) -> "StreamConfig":
+        return cls(settings.max_width, settings.fps, settings.jpeg_quality)
+
+    def updated(self, d: dict) -> "StreamConfig":
+        """New config with the fields of a "config" message applied (clamped). Missing or unusable fields keep their value."""
+        width, fps, quality = self.max_width, self.fps, self.quality
+        if (n := _number(d.get("max_width"))) is not None:
+            n = round(n); width = 0 if n <= 0 else min(WIDTH_MAX, max(WIDTH_MIN, n))
+        if (n := _number(d.get("fps"))) is not None: fps = min(FPS_MAX, max(FPS_MIN, round(n)))
+        if (n := _number(d.get("quality"))) is not None: quality = min(QUALITY_MAX, max(QUALITY_MIN, round(n)))
+        return StreamConfig(width, fps, quality)
+
+
+def encode_frame(raw: bytes, size: tuple[int, int], cursor: tuple[float, float] | None = None,
+                 max_width: int | None = None, quality: int | None = None) -> tuple[bytes, tuple[int, int]]:
+    """BGRA screen bytes -> (JPEG bytes, (width, height)) with optional downscale and cursor overlay.
+
+    max_width (0 = native) and quality default to the server settings."""
+    max_width = settings.max_width if max_width is None else max_width
+    quality = settings.jpeg_quality if quality is None else quality
     img = Image.frombytes("RGB", size, raw, "raw", "BGRX")
     scale = 1.0
-    if settings.max_width and img.width > settings.max_width:
-        scale = settings.max_width / img.width
-        img = img.resize((settings.max_width, max(1, round(img.height * scale))), Image.BILINEAR)
+    if max_width and img.width > max_width:
+        scale = max_width / img.width
+        img = img.resize((max_width, max(1, round(img.height * scale))), Image.BILINEAR)
     if cursor is not None:
         _draw_cursor(img, cursor[0] * scale, cursor[1] * scale)
     buf = io.BytesIO()
-    img.save(buf, "JPEG", quality=settings.jpeg_quality)
+    img.save(buf, "JPEG", quality=quality)
     return buf.getvalue(), img.size
 
 
@@ -115,44 +160,99 @@ async def _authenticate(ws: WebSocket) -> bool:
     return True
 
 
+def _on_windows() -> bool:
+    return platform.system() == "Windows"
+
+
+@contextlib.contextmanager
+def _capture_source():
+    """Yield grab() -> (raw BGRX bytes, (w, h), cursor position or None, change digest) for the primary monitor."""
+    import mss
+    from pynput import mouse
+    enable_dpi_awareness()
+    pointer = mouse.Controller()
+    with mss.mss() as sct:
+        mon = sct.monitors[1]
+
+        def grab():
+            shot = sct.grab(mon)
+            cur = None
+            if settings.show_cursor:
+                px, py = pointer.position
+                if mon["left"] <= px < mon["left"] + mon["width"] and mon["top"] <= py < mon["top"] + mon["height"]:
+                    cur = (px - mon["left"], py - mon["top"])
+            return shot.raw, shot.size, cur, zlib.crc32(shot.raw) ^ hash(cur)
+
+        yield grab
+
+
+class _StreamState:
+    def __init__(self):
+        self.config = StreamConfig.from_settings()
+        self.dirty = False                # a config message arrived: send a fresh screen message + frame
+        self.closed = False               # the client went away
+        self.wake = asyncio.Event()       # cuts the frame-interval sleep short
+
+
+async def _read_client(ws: WebSocket, state: _StreamState) -> None:
+    """Read client messages while frames are being streamed; only "config" is understood."""
+    try:
+        while True:
+            msg = await ws.receive()
+            if msg.get("type") == "websocket.disconnect": break
+            text = msg.get("text")
+            if text is None: continue
+            try: d = json.loads(text)
+            except (ValueError, RecursionError): continue
+            if isinstance(d, dict) and d.get("type") == "config":
+                state.config = state.config.updated(d)
+                state.dirty = True; state.wake.set()
+    except Exception:
+        pass
+    finally:
+        state.closed = True; state.wake.set()
+
+
+async def stream_frames(ws: WebSocket, grab) -> None:
+    """Send screen frames until the client disconnects, applying "config" messages live."""
+    state = _StreamState()
+    loop = asyncio.get_running_loop()
+    reader = asyncio.create_task(_read_client(ws, state))
+    try:
+        last_digest, last_jpeg, last_sent, size_sent = None, None, 0.0, None
+        while not state.closed:
+            started = loop.time()
+            if state.dirty:   # config changed: re-encode even an unchanged screen and re-announce the size
+                state.dirty = False; last_digest = None; size_sent = None
+            cfg = state.config
+            raw, size, cur, digest = await asyncio.to_thread(grab)
+            if digest != last_digest:
+                last_jpeg, out = await asyncio.to_thread(encode_frame, raw, size, cur, cfg.max_width, cfg.quality)
+                last_digest = digest
+                if out != size_sent:
+                    await ws.send_json({"type": "screen", "width": out[0], "height": out[1],
+                                        "max_width": cfg.max_width, "fps": cfg.fps, "quality": cfg.quality})
+                    size_sent = out
+                await ws.send_bytes(last_jpeg); last_sent = loop.time()
+            elif last_jpeg is not None and loop.time() - last_sent >= KEEPALIVE_SECONDS:
+                await ws.send_bytes(last_jpeg); last_sent = loop.time()
+            if state.dirty or state.closed: continue
+            state.wake.clear()
+            try: await asyncio.wait_for(state.wake.wait(), max(0.0, 1 / cfg.fps - (loop.time() - started)))
+            except asyncio.TimeoutError: pass
+    finally:
+        reader.cancel()
+
+
 async def screen_socket(ws: WebSocket):
     await ws.accept()
     try:
         if not await _authenticate(ws): return
         await ws.send_json({"type": "ready"})
-        if platform.system() != "Windows":
+        if not _on_windows():
             await ws.send_json({"type": "error", "message": "Windows required"}); return
-        import mss
-        from pynput import mouse
-        enable_dpi_awareness()
-        pointer = mouse.Controller()
-        loop = asyncio.get_running_loop()
-        with mss.mss() as sct:
-            mon = sct.monitors[1]
-
-            def grab():
-                shot = sct.grab(mon)
-                cur = None
-                if settings.show_cursor:
-                    px, py = pointer.position
-                    if mon["left"] <= px < mon["left"] + mon["width"] and mon["top"] <= py < mon["top"] + mon["height"]:
-                        cur = (px - mon["left"], py - mon["top"])
-                digest = zlib.crc32(shot.raw) ^ hash(cur)
-                return shot, cur, digest
-
-            last_digest, last_jpeg, last_sent, size_sent = None, None, 0.0, None
-            while True:
-                started = loop.time()
-                shot, cur, digest = await asyncio.to_thread(grab)
-                if digest != last_digest:
-                    last_jpeg, size = await asyncio.to_thread(encode_frame, shot.raw, shot.size, cur)
-                    last_digest = digest
-                    if size != size_sent:
-                        await ws.send_json({"type": "screen", "width": size[0], "height": size[1]}); size_sent = size
-                    await ws.send_bytes(last_jpeg); last_sent = loop.time()
-                elif last_jpeg is not None and loop.time() - last_sent >= KEEPALIVE_SECONDS:
-                    await ws.send_bytes(last_jpeg); last_sent = loop.time()
-                await asyncio.sleep(max(0.0, 1 / settings.fps - (loop.time() - started)))
+        with _capture_source() as grab:
+            await stream_frames(ws, grab)
     except WebSocketDisconnect: return
     except asyncio.TimeoutError: await ws.close(code=4401, reason="Authentication timeout")
     except Exception as exc:
