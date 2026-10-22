@@ -7,6 +7,7 @@ See and control your own Windows PC from your phone: live screen, touch-as-mouse
 ## Features
 - **Live screen** streamed to the phone (JPEG over WebSocket, downscaled, idle-frame skipping, on-screen pointer).
 - **Touch control**: tap = click, long-press = right click, drag, scroll, double-click, fullscreen/landscape.
+- **Trackpad (Android app)**: laptop-style pad under the screen. One finger = move, tap = click, double-tap = double click, two-finger tap = right click, two-finger slide = scroll, tap-then-slide = drag. Portrait: screen on top, pad below. Landscape: full-window screen with a hideable pad.
 - **Keyboard**: text box plus quick keys (Esc, Tab, arrows, Win, Alt+Tab, Ctrl+C/V/A/Z).
 - **Monitor and power**: CPU/RAM/disk/network, lock, sleep, restart, shutdown (with confirmation).
 - **Security**: token-protected API and WebSockets, lockout after 8 wrong tokens (5 minutes).

@@ -132,3 +132,59 @@ def test_screen_socket_rejects_bad_token():
         ws.send_text('{"token":"wrong"}')
         with pytest.raises(WebSocketDisconnect) as e: ws.receive_text()
         assert e.value.code == 4401
+
+
+# ---- relative pointer movement ("rel", used by the Android trackpad) ----
+
+def run_from(start, msg, mon=MON):
+    m, k = FakeMouse(), FakeKb(); m.position = start
+    screen.handle_input(msg, mon, m, k, MOUSE_MOD, KEYS)
+    return m, k
+
+
+def test_rel_moves_by_deltas_from_current_position():
+    m, k = run_from((100, 200), {"type": "rel", "dx": 15, "dy": -30})
+    assert m.position == (115, 170) and m.calls == [] and k.calls == []
+
+
+def test_rel_is_clamped_to_monitor_edges():
+    assert run_from((10, 10), {"type": "rel", "dx": -50, "dy": -50})[0].position == (0, 0)
+    assert run_from((1900, 1070), {"type": "rel", "dx": 400, "dy": 400})[0].position == (1919, 1079)
+
+
+def test_rel_is_clamped_per_message_to_500():
+    assert run_from((100, 100), {"type": "rel", "dx": 9999, "dy": -9999})[0].position == (600, 0)
+    assert run_from((1000, 600), {"type": "rel", "dx": 9999, "dy": 9999})[0].position == (1500, 1079)
+    assert run_from((1000, 600), {"type": "rel", "dx": -9999, "dy": -9999})[0].position == (500, 100)
+
+
+def test_rel_respects_monitor_offset():
+    assert run_from((-1900, 5), {"type": "rel", "dx": -100, "dy": -100}, MON2)[0].position == (-1920, 0)
+    assert run_from((-5, 5), {"type": "rel", "dx": 100, "dy": 0}, MON2)[0].position == (-1, 5)
+    # pointer currently on another monitor is pulled back onto this one
+    assert run_from((50, 50), {"type": "rel", "dx": 1, "dy": 1}, MON2)[0].position == (-1, 51)
+
+
+def test_rel_zero_missing_and_garbage_do_nothing():
+    for msg in ({"type": "rel"}, {"type": "rel", "dx": 0, "dy": 0},
+                {"type": "rel", "dx": "abc", "dy": None}, {"type": "rel", "dx": float("nan"), "dy": float("inf")}):
+        m, k = run_from((300, 300), msg)
+        assert m.position == (300, 300) and not m.calls and not k.calls
+
+
+def test_rel_one_axis_only_and_numeric_strings():
+    assert run_from((10, 10), {"type": "rel", "dx": 7})[0].position == (17, 10)
+    assert run_from((10, 10), {"type": "rel", "dx": "5", "dy": 2.9})[0].position == (15, 12)
+
+
+def test_click_down_up_without_coords_act_at_current_position():
+    m, _ = run_from((321, 123), {"type": "click", "button": "right"})
+    assert m.position == (321, 123) and m.calls == [("click", "R", 1)]
+    m, _ = run_from((321, 123), {"type": "down"}); assert m.position == (321, 123) and m.calls == [("press", "L")]
+    m, _ = run_from((321, 123), {"type": "up"}); assert m.position == (321, 123) and m.calls == [("release", "L")]
+
+
+def test_old_messages_unchanged_after_rel_added():
+    assert run({"type": "move", "nx": .5, "ny": .5})[0].position == (960, 540)
+    assert run({"type": "click", "count": 2, "nx": 0, "ny": 0})[0].calls == [("click", "L", 2)]
+    assert run({"type": "scroll", "dy": 3})[0].calls == [("scroll", 0, 3)]
