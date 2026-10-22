@@ -1,0 +1,134 @@
+from types import SimpleNamespace as NS
+from PIL import Image
+import io
+from app import screen
+from app.config import settings
+
+MON = {"left": 0, "top": 0, "width": 1920, "height": 1080}
+MON2 = {"left": -1920, "top": 0, "width": 1920, "height": 1080}   # monitor placed left of origin
+BTN = NS(left="L", right="R", middle="M")
+MOUSE_MOD = NS(Button=BTN)
+KEYS = {"CTRL": "<ctrl>", "C": "c-key", "ENTER": "<enter>", "ALT": "<alt>"}
+
+
+class FakeMouse:
+    def __init__(self): self.position = (0, 0); self.calls = []
+    def click(self, b, n=1): self.calls.append(("click", b, n))
+    def press(self, b): self.calls.append(("press", b))
+    def release(self, b): self.calls.append(("release", b))
+    def scroll(self, dx, dy): self.calls.append(("scroll", dx, dy))
+
+
+class FakeKb:
+    def __init__(self): self.calls = []
+    def press(self, k): self.calls.append(("press", k))
+    def release(self, k): self.calls.append(("release", k))
+    def type(self, t): self.calls.append(("type", t))
+
+
+def run(msg, mon=MON):
+    m, k = FakeMouse(), FakeKb()
+    screen.handle_input(msg, mon, m, k, MOUSE_MOD, KEYS)
+    return m, k
+
+
+def test_normalized_coords_map_to_screen_corners():
+    assert screen.to_screen_xy({"nx": 0, "ny": 0}, MON) == (0, 0)
+    assert screen.to_screen_xy({"nx": 1, "ny": 1}, MON) == (1919, 1079)
+    assert screen.to_screen_xy({"nx": .5, "ny": .5}, MON) == (960, 540)
+
+
+def test_coords_are_clamped_and_garbage_rejected():
+    assert screen.to_screen_xy({"nx": 9, "ny": -3}, MON) == (1919, 0)
+    assert screen.to_screen_xy({"nx": "abc", "ny": 0}, MON) is None
+    assert screen.to_screen_xy({}, MON) is None
+
+
+def test_monitor_offset_is_applied():
+    assert screen.to_screen_xy({"nx": 0, "ny": 0}, MON2) == (-1920, 0)
+
+
+def test_legacy_pixel_coords_still_work():
+    assert screen.to_screen_xy({"x": 100, "y": 50}, MON) == (100, 50)
+    assert screen.to_screen_xy({"x": 99999, "y": 99999}, MON) == (1919, 1079)
+
+
+def test_tap_moves_then_left_clicks():
+    m, _ = run({"type": "click", "nx": .5, "ny": .5})
+    assert m.position == (960, 540) and m.calls == [("click", "L", 1)]
+
+
+def test_right_and_double_click():
+    assert run({"type": "click", "button": "right", "nx": 0, "ny": 0})[0].calls == [("click", "R", 1)]
+    assert run({"type": "click", "count": 2, "nx": 0, "ny": 0})[0].calls == [("click", "L", 2)]
+
+
+def test_drag_is_down_move_up():
+    m, _ = run({"type": "down", "nx": .1, "ny": .1}); assert m.calls == [("press", "L")]
+    m, _ = run({"type": "up", "nx": .9, "ny": .9}); assert m.calls == [("release", "L")] and m.position == (1727, 971)
+
+
+def test_move_does_not_click():
+    m, _ = run({"type": "move", "nx": .25, "ny": .25}); assert m.calls == [] and m.position == (480, 270)
+
+
+def test_scroll_is_clamped_and_zero_ignored():
+    assert run({"type": "scroll", "dy": 500})[0].calls == [("scroll", 0, 20)]
+    assert run({"type": "scroll", "dy": -500, "dx": 3})[0].calls == [("scroll", 3, -20)]
+    assert run({"type": "scroll", "dy": 0})[0].calls == []
+
+
+def test_hotkey_presses_in_order_releases_reversed():
+    _, k = run({"type": "hotkey", "keys": ["CTRL", "c"]})
+    assert k.calls == [("press", "<ctrl>"), ("press", "c-key"), ("release", "c-key"), ("release", "<ctrl>")]
+
+
+def test_hotkey_with_unknown_key_does_nothing():
+    assert run({"type": "hotkey", "keys": ["CTRL", "NOPE"]})[1].calls == []
+
+
+def test_key_and_type():
+    assert run({"type": "key", "key": "ENTER"})[1].calls == [("press", "<enter>"), ("release", "<enter>")]
+    assert run({"type": "type", "text": "x" * 900})[1].calls == [("type", "x" * 500)]
+
+
+def test_unknown_message_ignored():
+    m, k = run({"type": "format-c-drive"}); assert not m.calls and not k.calls
+
+
+def test_encode_frame_downscales_and_overlays_cursor(monkeypatch):
+    monkeypatch.setattr(settings, "max_width", 960)
+    raw = bytes([20, 40, 60, 0]) * (1920 * 1080)          # BGRX solid colour
+    jpeg, size = screen.encode_frame(raw, (1920, 1080), cursor=(100, 100))
+    assert size == (960, 540)
+    img = Image.open(io.BytesIO(jpeg)); assert img.size == (960, 540)
+    assert img.getpixel((50 + 3, 50 + 6))[0] > 150        # white cursor pixel drawn near (50,50) after scaling
+    assert img.getpixel((800, 400))[2] < 40               # background stays the original dark colour (blue channel 20)
+
+
+def test_encode_frame_native_when_unlimited(monkeypatch):
+    monkeypatch.setattr(settings, "max_width", 0)
+    raw = bytes([0, 0, 0, 0]) * (320 * 200)
+    assert screen.encode_frame(raw, (320, 200))[1] == (320, 200)
+
+
+def test_input_socket_rejects_bad_token():
+    import pytest
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+    from app.main import app
+    with TestClient(app) as c, c.websocket_connect("/ws/input") as ws:
+        ws.send_text('{"token":"wrong"}')
+        with pytest.raises(WebSocketDisconnect) as e: ws.receive_text()
+        assert e.value.code == 4401
+
+
+def test_screen_socket_rejects_bad_token():
+    import pytest
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+    from app.main import app
+    with TestClient(app) as c, c.websocket_connect("/ws/screen") as ws:
+        ws.send_text('{"token":"wrong"}')
+        with pytest.raises(WebSocketDisconnect) as e: ws.receive_text()
+        assert e.value.code == 4401

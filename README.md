@@ -4,13 +4,27 @@ Windows 11 Pro remote monitor/control starter for a PC you own. Use only through
 
 ## Features
 - CPU/RAM/disk/network monitor and token-authenticated API.
-- Native Android companion app in `android/` with status, lock/sleep/restart/shutdown controls, screen streaming, touch-to-click, and text input.
+- Native Android companion app in `android/` with status, lock/sleep/restart/shutdown controls, live screen, full touch control (click, right-click, double-click, drag, scroll), fullscreen/landscape view, quick keys, and text input.
 - Mobile web dashboard, screen/input WebSockets, Wake-on-LAN relay integration point, tests, Windows installer workflow, and Android APK workflow.
 
 ## Android app
 Open the `android/` folder in Android Studio (JDK 17, Android SDK 35) and build **app > Build > Build APK(s)**. Or trigger **Actions > Android APK > Run workflow** on GitHub. A successful workflow publishes `remote-pc-control-android-debug` as an artifact. This is a debug APK for testing, not a Play Store release.
 
 Connect the phone and PC to the same private Tailscale/WireGuard network. In the app, enter the PC URL such as `http://100.64.0.10:8788` and the API token from the PC's `.env`.
+
+## Live screen & touch control
+Start a screen session in the Android app or the web dashboard (open `http://<PC-tailscale-IP>:8788` in the phone browser). Your finger acts as the mouse; pick a mode on the toolbar:
+
+| Mode | What your finger does |
+|---|---|
+| Click | tap = left click, long-press = right click (web: two fingers = scroll) |
+| Move | drag moves the pointer without clicking |
+| Drag | drag holds the left button (select text, move windows) |
+| Scroll | drag up/down scrolls the page |
+
+Also available: Double-click button, Fullscreen, quick keys (Esc, Tab, arrows, Win, Alt+Tab, Ctrl+C/V/A/Z) and a text box. A small pointer is drawn on the stream so you can see where the mouse is.
+
+Tuning in `.env`: `REMOTE_PC_FPS` (1-30), `REMOTE_PC_JPEG_QUALITY` (25-85), `REMOTE_PC_MAX_WIDTH` (frames wider than this are downscaled, default 1280; `0` = native), `REMOTE_PC_SHOW_CURSOR`. Lower the width/quality on slow mobile data. Touch positions are sent as fractions of the picture, so scaling and Windows display zoom never offset clicks.
 
 ## Windows setup
 Install Python 3.12 x64, Node.js 22 and Tailscale on the PC and phone. Run `scripts/setup.ps1`, then `scripts/start.ps1`. Keep `.env` secret.
