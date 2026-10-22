@@ -9,8 +9,10 @@ Or run from this directory: `gradle assembleDebug` with Gradle 8.11.1 or newer i
 
 ## Connect
 1. Install and start the Windows agent using the repository's Windows setup guide.
-2. Connect the phone and PC to the same private Tailscale/WireGuard network.
-3. Enter the PC base URL, for example `http://100.64.0.10:8788`, and the API token from the PC's `.env`.
+2. Make the PC reachable from the phone: Tailscale/WireGuard (`http://100.x.x.x:8788`), the same Wi-Fi (`http://<PC-LAN-IP>:8788`) or a Cloudflare tunnel (`https://....trycloudflare.com`, see the main README).
+3. Enter the PC base URL and the API token from the PC's `.env`.
+
+In the screen session use the toolbar modes Click / Move / Drag / Scroll, the Double-click button, Fullscreen and the quick-key bar.
 4. Tap Connect. The app loads system metrics and can open a live screen session.
 
 Do not expose port 8788 directly to the public internet. The API token is stored only in app memory and is not persisted by this starter app. The app requires a trusted private network because the current agent setup may use HTTP/WebSocket rather than TLS.
