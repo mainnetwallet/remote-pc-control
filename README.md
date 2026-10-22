@@ -51,7 +51,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 The first run installs `cloudflared`; if it asks, close the window, open a new one and run the same command again. It prints a link like `https://xxxx-xxxx.trycloudflare.com`. Open it on the phone (browser, or use it as the *PC URL* in the Android app) and enter the token.
 - Test first: `https://<your-link>/api/health` should show `{"ok":true,...}`.
 - The link **changes every time** the tunnel restarts. Keep both windows open; press `Ctrl+C` in the tunnel window when done. Do not share the link.
-- For a permanent link use a named tunnel (see [INSTALL_WINDOWS.md](INSTALL_WINDOWS.md)); it needs a domain on your Cloudflare account. Add Cloudflare Access (free) so the link asks you to log in first.
+- For a **permanent link** that never changes (and starts with Windows) use a named tunnel: step-by-step in **[docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)**. It needs a domain on your Cloudflare account; the guide also covers Cloudflare Access login protection.
 
 **B. Tailscale (private VPN, stable IP)**
 
@@ -115,7 +115,7 @@ Restart `start.ps1` after editing `.env`.
 
 ## Security and limitations
 - Anyone with the token (and a reachable URL) can control the PC. Keep the token and tunnel link private; revoke any credential you have pasted into chats or tickets.
-- Prefer Tailscale or Cloudflare Access over a bare public link. Never expose port 8788 directly.
+- Prefer Tailscale or Cloudflare Access (see [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)) over a bare public link. Never expose port 8788 directly.
 - The agent runs in the logged-in desktop session. It cannot capture or control the Windows sign-in screen or UAC prompts and does not bypass Windows authentication. Use Windows Remote Desktop or a reviewed remote-access product to sign in.
 - Wake-on-LAN over mobile data needs a separately authenticated always-on LAN relay (API reports it as not configured).
 - JPEG streaming is simple and bandwidth-hungry; tune FPS, quality and width for your connection.
