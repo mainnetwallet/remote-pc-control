@@ -61,7 +61,7 @@ You should see:
 
 ```
 INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8788
+INFO:     Uvicorn running on http://0.0.0.0:8888
 ```
 
 Stop it with `Ctrl+C`.
@@ -75,12 +75,12 @@ Stop it with `Ctrl+C`.
    ipconfig
    ```
    Use the **IPv4 Address**, for example `192.168.x.x`.
-3. In the app enter `http://<PC_IP>:8788` and the token from step 3.
+3. In the app enter `http://<PC_IP>:8888` and the token from step 3.
 4. The phone and the PC must be on the same Wi-Fi network. For access from outside, see
    [CLOUDFLARE.md](CLOUDFLARE.md) or use Tailscale.
 5. If the app cannot connect, allow the port in Windows Firewall (Administrator PowerShell):
    ```powershell
-   New-NetFirewallRule -DisplayName "RemotePCControl" -Direction Inbound -Protocol TCP -LocalPort 8788 -Action Allow -Profile Private
+   New-NetFirewallRule -DisplayName "RemotePCControl" -Direction Inbound -Protocol TCP -LocalPort 8888 -Action Allow -Profile Private
    ```
 
 ## 6. Run the tests
@@ -95,4 +95,4 @@ Stop it with `Ctrl+C`.
 |---|---|
 | `Set a unique REMOTE_PC_TOKEN (32+ bytes) in .env` | The token is missing, still the placeholder, or shorter than 32 bytes. Redo step 3 and check `$token.Length` prints 64. |
 | `SyntaxError ... <<<<<<<` in a `.py` file | A merge or stash conflict left markers in the file. Restore it with `git restore` as shown in step 1. |
-| App cannot reach the PC | Same Wi-Fi? Correct IP and port 8788? Firewall rule added? Agent still running? |
+| App cannot reach the PC | Same Wi-Fi? Correct IP and port 8888? Firewall rule added? Agent still running? |

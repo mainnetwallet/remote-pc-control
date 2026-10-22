@@ -2,7 +2,7 @@
 
 See and control your own Windows PC from your phone: live screen, touch-as-mouse, keyboard, system monitor and power controls. Works from anywhere through a private Tailscale network **or** a Cloudflare tunnel, from a phone browser or the Android app.
 
-> Use it only on a PC you own. Never port-forward port 8788 to the internet.
+> Use it only on a PC you own. Never port-forward port 8888 to the internet.
 
 New here? Follow the step-by-step **[Windows quick start](docs/QUICKSTART_WINDOWS.md)**.
 
@@ -39,7 +39,7 @@ Get-Content .env | Select-String REMOTE_PC_TOKEN
 ```powershell
 .\scripts\start.ps1
 ```
-Leave this window open. The server listens on port 8788.
+Leave this window open. The server listens on port 8888.
 
 ### 4. Connect the phone (pick one method)
 
@@ -58,16 +58,16 @@ The first run installs `cloudflared`; if it asks, close the window, open a new o
 
 **B. Tailscale (private VPN, stable IP)**
 
-Install Tailscale on the PC and phone and sign in to the **same account** on both, with the VPN switched on on the phone. Get the PC's address with `tailscale ip -4`, then open `http://<that-ip>:8788`. The firewall rule created by `setup.ps1` only accepts connections from Tailscale addresses (`100.64.0.0/10`). Run `setup.ps1` from an administrator PowerShell if the rule could not be created.
+Install Tailscale on the PC and phone and sign in to the **same account** on both, with the VPN switched on on the phone. Get the PC's address with `tailscale ip -4`, then open `http://<that-ip>:8888`. The firewall rule created by `setup.ps1` only accepts connections from Tailscale addresses (`100.64.0.0/10`). Run `setup.ps1` from an administrator PowerShell if the rule could not be created.
 
 **C. Same Wi-Fi only**
 
 From an administrator PowerShell:
 ```powershell
-New-NetFirewallRule -DisplayName "RemotePCControl LAN" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8788 -RemoteAddress LocalSubnet -Profile Any
+New-NetFirewallRule -DisplayName "RemotePCControl LAN" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8888 -RemoteAddress LocalSubnet -Profile Any
 ipconfig
 ```
-Open `http://<PC-IPv4-address>:8788` on a phone on the same Wi-Fi. Give the PC a fixed address (DHCP reservation in your router) so the URL does not change.
+Open `http://<PC-IPv4-address>:8888` on a phone on the same Wi-Fi. Give the PC a fixed address (DHCP reservation in your router) so the URL does not change.
 
 ### 5. Use it
 Enter the token, tap **Connect**, then **Start screen**. Pick a mode on the toolbar:
@@ -82,7 +82,7 @@ Enter the token, tap **Connect**, then **Start screen**. Pick a mode on the tool
 Also: **Double-click** button, **Fullscreen**, **Keys** (quick keys) and a text box.
 
 ## Android app
-Open **GitHub > Actions > Android APK** (it runs on every push to `main`, or use *Run workflow*) and download the APK from the run's artifact or from **Releases**. Install it (allow "install unknown apps" if asked). In the app enter the *PC URL* (`https://...trycloudflare.com`, `http://100.x.x.x:8788` or your LAN address) and the token. This is a debug build for personal use, not a Play Store release. Build instructions: [android/README.md](android/README.md).
+Open **GitHub > Actions > Android APK** (it runs on every push to `main`, or use *Run workflow*) and download the APK from the run's artifact or from **Releases**. Install it (allow "install unknown apps" if asked). In the app enter the *PC URL* (`https://...trycloudflare.com`, `http://100.x.x.x:8888` or your LAN address) and the token. This is a debug build for personal use, not a Play Store release. Build instructions: [android/README.md](android/README.md).
 
 The app has three screens:
 - **Connect**: PC URL and token. Only the URL is remembered; the token stays in memory.
@@ -118,7 +118,7 @@ git pull
 | Variable | Default | Meaning |
 |---|---|---|
 | `REMOTE_PC_TOKEN` | generated | Access secret (32+ chars). Required. |
-| `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `0.0.0.0` / `8788` | Listen address. |
+| `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `0.0.0.0` / `8888` | Listen address. |
 | `REMOTE_PC_FPS` | `10` | Starting frames per second (1-30); clients can change it live. |
 | `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality (25-85); clients can raise it to 90 live. |
 | `REMOTE_PC_MAX_WIDTH` | `1280` | Starting width limit; wider frames are downscaled (`0` = native). Clients can change it live. |
@@ -139,7 +139,7 @@ Restart `start.ps1` after editing `.env`.
 
 ## Security and limitations
 - Anyone with the token (and a reachable URL) can control the PC. Keep the token and tunnel link private; revoke any credential you have pasted into chats or tickets.
-- Prefer Tailscale or Cloudflare Access (see [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)) over a bare public link. Never expose port 8788 directly.
+- Prefer Tailscale or Cloudflare Access (see [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)) over a bare public link. Never expose port 8888 directly.
 - The agent runs in the logged-in desktop session. It cannot capture or control the Windows sign-in screen or UAC prompts and does not bypass Windows authentication. Use Windows Remote Desktop or a reviewed remote-access product to sign in.
 - Wake-on-LAN over mobile data needs a separately authenticated always-on LAN relay (API reports it as not configured).
 - JPEG streaming is simple and bandwidth-hungry; tune FPS, quality and width for your connection.

@@ -68,7 +68,7 @@ fun ConnectScreen(c: RemoteController) {
             AppCard(Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = c.baseUrl, onValueChange = { c.baseUrl = it },
-                    label = { Text("PC URL") }, placeholder = { Text("http://100.64.0.10:8788") },
+                    label = { Text("PC URL") }, placeholder = { Text("http://192.168.110.48:8888") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next)
                 )

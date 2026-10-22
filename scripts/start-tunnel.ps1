@@ -8,4 +8,4 @@ if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
 }
 Write-Host "Make sure .\scripts\start.ps1 is running in another window." -ForegroundColor Cyan
 Write-Host "Open the https://....trycloudflare.com link printed below on your phone. Do not share it." -ForegroundColor Yellow
-cloudflared tunnel --url http://localhost:8788
+cloudflared tunnel --url http://localhost:8888

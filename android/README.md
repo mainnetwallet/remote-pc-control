@@ -9,14 +9,14 @@ Or run from this directory: `gradle assembleDebug` with Gradle 8.11.1 or newer i
 
 ## Connect
 1. Install and start the Windows agent using the repository's Windows setup guide.
-2. Make the PC reachable from the phone: Tailscale/WireGuard (`http://100.x.x.x:8788`), the same Wi-Fi (`http://<PC-LAN-IP>:8788`) or a Cloudflare tunnel (`https://....trycloudflare.com`, see the main README).
+2. Make the PC reachable from the phone: Tailscale/WireGuard (`http://100.x.x.x:8888`), the same Wi-Fi (`http://<PC-LAN-IP>:8888`) or a Cloudflare tunnel (`https://....trycloudflare.com`, see the main README).
 3. Enter the PC base URL and the API token from the PC's `.env`.
 
 4. Tap Connect. The Dashboard shows system metrics and the power buttons, and opens a live screen session.
 
 In the screen session use the toolbar modes Click / Move / Drag / Scroll, the Double-click button, the **Quality** menu (Low / Medium / High / Native, applied live) and the quick-key bar. The corner overlay shows the stream resolution and frames per second.
 
-Do not expose port 8788 directly to the public internet. The API token is stored only in app memory; only the PC URL and the Quality choice are saved on the phone. The app requires a trusted private network because the current agent setup may use HTTP/WebSocket rather than TLS.
+Do not expose port 8888 directly to the public internet. The API token is stored only in app memory; only the PC URL and the Quality choice are saved on the phone. The app requires a trusted private network because the current agent setup may use HTTP/WebSocket rather than TLS.
 
 The app can only control the logged-in interactive Windows desktop. It cannot bypass Windows sign-in, UAC secure desktop, or other OS security boundaries. Sleep, restart and shutdown require confirmation.
 

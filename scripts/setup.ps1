@@ -60,7 +60,7 @@ if (-not (Test-Path ".env")) {
   @"
 REMOTE_PC_TOKEN=$token
 REMOTE_PC_HOST=0.0.0.0
-REMOTE_PC_PORT=8788
+REMOTE_PC_PORT=8888
 REMOTE_PC_FPS=10
 REMOTE_PC_JPEG_QUALITY=55
 REMOTE_PC_MAX_WIDTH=1280
@@ -68,6 +68,6 @@ REMOTE_PC_SHOW_CURSOR=1
 "@ | Set-Content -Encoding ascii ".env"
   Write-Host "Save this access token securely: $token" -ForegroundColor Yellow
 }
-try { New-NetFirewallRule -DisplayName "RemotePCControl Tailscale only" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8788 -RemoteAddress "100.64.0.0/10" -Profile Any | Out-Null }
+try { New-NetFirewallRule -DisplayName "RemotePCControl Tailscale only" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8888 -RemoteAddress "100.64.0.0/10" -Profile Any | Out-Null }
 catch { Write-Warning "Run elevated PowerShell to add a firewall rule restricted to 100.64.0.0/10. Never expose publicly." }
 Write-Host "Setup complete. Run .\scripts\start.ps1"
