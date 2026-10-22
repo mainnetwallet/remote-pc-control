@@ -4,6 +4,8 @@ See and control your own Windows PC from your phone: live screen, touch-as-mouse
 
 > Use it only on a PC you own. Never port-forward port 8788 to the internet.
 
+New here? Follow the step-by-step **[Windows quick start](docs/QUICKSTART_WINDOWS.md)**.
+
 ## Features
 - **Live screen** streamed to the phone (JPEG over WebSocket, downscaled, idle-frame skipping, on-screen pointer). Resolution, frame rate and JPEG quality can be changed live from the client (see *Stream quality*).
 - **Touch control**: tap = click, long-press = right click, drag, scroll, double-click, fullscreen/landscape.
