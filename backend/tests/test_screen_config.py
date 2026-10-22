@@ -1,0 +1,161 @@
+"""Live stream configuration on /ws/screen: {"type":"config","max_width":..,"fps":..,"quality":..}."""
+import asyncio, contextlib, io, os
+
+import pytest
+from PIL import Image
+from fastapi.testclient import TestClient
+
+from app import screen
+from app.config import settings
+from app.main import app
+from app.screen import StreamConfig
+
+W, H = 800, 450
+RAW = bytes([20, 40, 60, 0]) * (W * H)   # solid BGRX frame
+
+
+@pytest.fixture(autouse=True)
+def server_defaults(monkeypatch):
+    monkeypatch.setattr(settings, "max_width", 1280)
+    monkeypatch.setattr(settings, "fps", 10)
+    monkeypatch.setattr(settings, "jpeg_quality", 55)
+
+
+def fake_grab():
+    return RAW, (W, H), None, 1       # constant digest: the screen never "changes"
+
+
+# ---- clamping -------------------------------------------------------------
+
+def test_defaults_come_from_settings():
+    assert StreamConfig.from_settings() == StreamConfig(1280, 10, 55)
+
+
+@pytest.mark.parametrize("msg, expected", [
+    ({"max_width": 1920, "fps": 15, "quality": 70}, (1920, 15, 70)),
+    ({"max_width": 0}, (0, 10, 55)),                       # 0 = native
+    ({"max_width": 1}, (320, 10, 55)),                     # below the minimum -> 320
+    ({"max_width": 319}, (320, 10, 55)),
+    ({"max_width": 320}, (320, 10, 55)),
+    ({"max_width": 3840}, (3840, 10, 55)),
+    ({"max_width": 99999}, (3840, 10, 55)),
+    ({"max_width": -5}, (0, 10, 55)),                      # negative -> native
+    ({"fps": 0}, (1280, 1, 55)),
+    ({"fps": -3}, (1280, 1, 55)),
+    ({"fps": 31}, (1280, 30, 55)),
+    ({"fps": 1000}, (1280, 30, 55)),
+    ({"quality": 1}, (1280, 10, 25)),
+    ({"quality": 24}, (1280, 10, 25)),
+    ({"quality": 91}, (1280, 10, 90)),
+    ({"quality": 90}, (1280, 10, 90)),
+    ({"fps": 14.6, "quality": "70", "max_width": "1920"}, (1920, 15, 70)),   # floats / numeric strings
+])
+def test_config_values_are_clamped(msg, expected):
+    c = StreamConfig.from_settings().updated({"type": "config", **msg})
+    assert (c.max_width, c.fps, c.quality) == expected
+
+
+@pytest.mark.parametrize("msg", [
+    {}, {"fps": "fast"}, {"fps": None}, {"fps": True}, {"quality": float("nan")},
+    {"max_width": float("inf")}, {"max_width": [1920]}, {"fps": {"x": 1}}, {"quality": 10 ** 400},
+])
+def test_garbage_fields_are_ignored(msg):
+    assert StreamConfig.from_settings().updated({"type": "config", **msg}) == StreamConfig(1280, 10, 55)
+
+
+def test_fields_are_independent_and_cumulative():
+    c = StreamConfig.from_settings().updated({"fps": 20}).updated({"quality": 80}).updated({"max_width": 0})
+    assert c == StreamConfig(0, 20, 80)
+
+
+# ---- encode_frame ---------------------------------------------------------
+
+def test_encode_frame_uses_explicit_width_and_defaults(monkeypatch):
+    assert screen.encode_frame(RAW, (W, H))[1] == (800, 450)                       # settings.max_width 1280 > 800
+    assert screen.encode_frame(RAW, (W, H), max_width=400)[1] == (400, 225)
+    assert screen.encode_frame(RAW, (W, H), max_width=0)[1] == (800, 450)          # 0 = native, not "use default"
+    monkeypatch.setattr(settings, "max_width", 400)
+    assert screen.encode_frame(RAW, (W, H))[1] == (400, 225)                       # None -> server setting
+
+
+def test_encode_frame_quality_changes_jpeg_size():
+    noise = os.urandom(4 * 320 * 200)
+    small = screen.encode_frame(noise, (320, 200), max_width=0, quality=25)[0]
+    large = screen.encode_frame(noise, (320, 200), max_width=0, quality=90)[0]
+    assert len(large) > len(small) * 1.5
+    assert Image.open(io.BytesIO(large)).size == (320, 200)
+
+
+# ---- /ws/screen end to end (fake capture, so it runs on any OS) ------------
+
+@pytest.fixture
+def stream(monkeypatch):
+    monkeypatch.setattr(screen, "_on_windows", lambda: True)
+    monkeypatch.setattr(screen, "_capture_source", lambda: contextlib.nullcontext(fake_grab))
+    with TestClient(app) as client, client.websocket_connect("/ws/screen") as ws:
+        ws.send_json({"token": settings.token})
+        assert ws.receive_json() == {"type": "ready"}
+        yield ws
+
+
+def jpeg_size(data: bytes):
+    return Image.open(io.BytesIO(data)).size
+
+
+def test_stream_starts_with_unchanged_defaults(stream):
+    msg = stream.receive_json()
+    assert msg == {"type": "screen", "width": 800, "height": 450, "max_width": 1280, "fps": 10, "quality": 55}
+    assert jpeg_size(stream.receive_bytes()) == (800, 450)
+
+
+def test_config_is_applied_live_and_answered_with_fresh_screen_message(stream):
+    stream.receive_json(); stream.receive_bytes()
+    stream.send_json({"type": "config", "max_width": 400, "fps": 5, "quality": 40})
+    assert stream.receive_json() == {"type": "screen", "width": 400, "height": 225, "max_width": 400, "fps": 5, "quality": 40}
+    assert jpeg_size(stream.receive_bytes()) == (400, 225)
+    # same size again still gets an answer (the client asked for it)
+    stream.send_json({"type": "config", "quality": 80})
+    assert stream.receive_json() == {"type": "screen", "width": 400, "height": 225, "max_width": 400, "fps": 5, "quality": 80}
+    assert jpeg_size(stream.receive_bytes()) == (400, 225)
+    stream.send_json({"type": "config", "max_width": 0})
+    assert stream.receive_json()["width"] == 800
+    assert jpeg_size(stream.receive_bytes()) == (800, 450)
+
+
+def test_out_of_range_config_is_clamped_in_the_reply(stream):
+    stream.receive_json(); stream.receive_bytes()
+    stream.send_json({"type": "config", "max_width": 10, "fps": 99, "quality": 5})
+    assert stream.receive_json() == {"type": "screen", "width": 320, "height": 180, "max_width": 320, "fps": 30, "quality": 25}
+    stream.receive_bytes()
+    stream.send_json({"type": "config", "max_width": 99999, "fps": 0, "quality": 500})
+    reply = stream.receive_json()
+    assert (reply["max_width"], reply["fps"], reply["quality"], reply["width"]) == (3840, 1, 90, 800)   # never upscales
+
+
+def test_junk_messages_do_not_break_the_stream(stream):
+    stream.receive_json(); stream.receive_bytes()
+    stream.send_text("not json"); stream.send_text("[1,2,3]"); stream.send_json({"type": "nope"}); stream.send_bytes(b"\x00\x01")
+    stream.send_json({"type": "config", "fps": "fast"})            # unusable field: ignored, still answered
+    assert stream.receive_json() == {"type": "screen", "width": 800, "height": 450, "max_width": 1280, "fps": 10, "quality": 55}
+    assert jpeg_size(stream.receive_bytes()) == (800, 450)
+
+
+def test_stream_ends_when_client_disconnects():
+    class FakeWS:
+        def __init__(self): self.inbox = asyncio.Queue(); self.sent = []
+        async def receive(self): return await self.inbox.get()
+        async def send_json(self, d): self.sent.append(d)
+        async def send_bytes(self, b): self.sent.append(b)
+
+    async def run():
+        ws = FakeWS()
+        task = asyncio.create_task(screen.stream_frames(ws, fake_grab))
+        await asyncio.sleep(0.2)
+        ws.inbox.put_nowait({"type": "websocket.receive", "text": '{"type":"config","fps":2}'})
+        await asyncio.sleep(0.2)
+        ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(task, 3)                            # must return, not hang
+        return ws.sent
+    sent = asyncio.run(run())
+    screens = [m for m in sent if isinstance(m, dict)]
+    assert [m["fps"] for m in screens] == [10, 2]

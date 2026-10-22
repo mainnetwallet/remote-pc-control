@@ -5,13 +5,13 @@ See and control your own Windows PC from your phone: live screen, touch-as-mouse
 > Use it only on a PC you own. Never port-forward port 8788 to the internet.
 
 ## Features
-- **Live screen** streamed to the phone (JPEG over WebSocket, downscaled, idle-frame skipping, on-screen pointer).
+- **Live screen** streamed to the phone (JPEG over WebSocket, downscaled, idle-frame skipping, on-screen pointer). Resolution, frame rate and JPEG quality can be changed live from the client (see *Stream quality*).
 - **Touch control**: tap = click, long-press = right click, drag, scroll, double-click, fullscreen/landscape.
 - **Trackpad (Android app)**: laptop-style pad under the screen. One finger = move, tap = click, double-tap = double click, two-finger tap = right click, two-finger slide = scroll, tap-then-slide = drag. Portrait: screen on top, pad below. Landscape: full-window screen with a hideable pad.
 - **Keyboard**: text box plus quick keys (Esc, Tab, arrows, Win, Alt+Tab, Ctrl+C/V/A/Z).
 - **Monitor and power**: CPU/RAM/disk/network, lock, sleep, restart, shutdown (with confirmation).
 - **Security**: token-protected API and WebSockets, lockout after 8 wrong tokens (5 minutes).
-- **Clients**: mobile web dashboard and a native Android app (`android/`).
+- **Clients**: mobile web dashboard and a native Android app (`android/`): Material 3 dark UI with a Connect screen, a Dashboard (CPU/RAM/disk gauges, network, lock/sleep/restart/shutdown) and the screen session.
 
 ## Quick start (Windows PC + phone)
 
@@ -82,6 +82,27 @@ Also: **Double-click** button, **Fullscreen**, **Keys** (quick keys) and a text 
 ## Android app
 Open **GitHub > Actions > Android APK** (it runs on every push to `main`, or use *Run workflow*) and download the APK from the run's artifact or from **Releases**. Install it (allow "install unknown apps" if asked). In the app enter the *PC URL* (`https://...trycloudflare.com`, `http://100.x.x.x:8788` or your LAN address) and the token. This is a debug build for personal use, not a Play Store release. Build instructions: [android/README.md](android/README.md).
 
+The app has three screens:
+- **Connect**: PC URL and token. Only the URL is remembered; the token stays in memory.
+- **Dashboard**: CPU, memory and disk gauges, network speed (refreshed every 5 s), and power buttons. Sleep, Restart and Shutdown ask for confirmation; Lock does not. It also holds the **Quality** setting and the *Start screen session* button.
+- **Session**: live screen, touch modes, trackpad, keys. A small overlay in the corner of the picture shows the received resolution and the measured/maximum frames per second (for example `1280×720 · 14/15 fps`). **Quality** in the toolbar changes the stream while it is running, and the choice is remembered.
+
+| Quality | Width | Max FPS | JPEG quality |
+|---|---|---|---|
+| Low | 960 px | 10 | 45 |
+| Medium (default) | 1280 px | 15 | 65 |
+| High | 1920 px | 20 | 78 |
+| Native | PC resolution | 15 | 85 |
+
+Frames are drawn with high-quality (bicubic) filtering so text stays sharp when the picture is scaled to the phone screen. Native on a 4K PC needs a fast connection and decodes large images; use High if it stutters.
+
+## Stream quality (protocol)
+The server's `.env` values below are only the *starting* values of every `/ws/screen` connection. A client can change them at any time while streaming:
+```json
+{"type":"config","max_width":1920,"fps":15,"quality":70}
+```
+All fields are optional. `max_width` is `0` (native) or 320-3840, `fps` is 1-30, `quality` is JPEG 25-90; out-of-range numbers are clamped and unusable values are ignored. Settings are per connection. The server answers with a fresh `{"type":"screen","width":W,"height":H,"max_width":..,"fps":..,"quality":..}` (the values now in effect) followed by a new frame. Frames are never upscaled, so `max_width` above the PC's resolution just sends native size. Clients that never send `config` get exactly the `.env` behaviour.
+
 ## Updating
 ```powershell
 cd $HOME\remote-pc-control
@@ -96,9 +117,9 @@ git pull
 |---|---|---|
 | `REMOTE_PC_TOKEN` | generated | Access secret (32+ chars). Required. |
 | `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `0.0.0.0` / `8788` | Listen address. |
-| `REMOTE_PC_FPS` | `10` | Frames per second (1-30). |
-| `REMOTE_PC_JPEG_QUALITY` | `55` | JPEG quality (25-85). |
-| `REMOTE_PC_MAX_WIDTH` | `1280` | Frames wider than this are downscaled (`0` = native). Lower it on slow mobile data. |
+| `REMOTE_PC_FPS` | `10` | Starting frames per second (1-30); clients can change it live. |
+| `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality (25-85); clients can raise it to 90 live. |
+| `REMOTE_PC_MAX_WIDTH` | `1280` | Starting width limit; wider frames are downscaled (`0` = native). Clients can change it live. |
 | `REMOTE_PC_SHOW_CURSOR` | `1` | Draw a pointer on the stream. |
 
 Restart `start.ps1` after editing `.env`.
@@ -126,7 +147,7 @@ Restart `start.ps1` after editing `.env`.
 .\.venv\Scripts\python.exe -m pytest backend/tests tests -q   # backend tests
 cd frontend; npm install; npm run build                        # web dashboard
 ```
-Protocol and input handling live in `backend/app/screen.py`; the touch UI is `frontend/src/RemoteScreen.tsx` (web) and `android/.../MainActivity.kt` (Android).
+Protocol and input handling live in `backend/app/screen.py`; the touch UI is `frontend/src/RemoteScreen.tsx` (web). The Android app lives in `android/app/src/main/java/com/mainnetwallet/remotepccontrol/` (`MainActivity.kt` entry and navigation, `RemoteController.kt` networking/state, `ConnectScreen.kt`, `DashboardScreen.kt`, `SessionScreen.kt`, `Trackpad.kt`, `Theme.kt`, `Components.kt`).
 
 ---
 
