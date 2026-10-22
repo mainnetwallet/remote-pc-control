@@ -1,0 +1,10 @@
+.env
+.venv/
+node_modules/
+frontend/dist/
+backend/app/static/assets/
+dist/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.spec
