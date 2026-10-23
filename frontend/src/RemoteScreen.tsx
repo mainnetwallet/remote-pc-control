@@ -15,7 +15,7 @@ const QUICK:{label:string;msg:object}[]=[
  {label:'Ctrl+C',msg:{type:'hotkey',keys:['CTRL','C']}},{label:'Ctrl+V',msg:{type:'hotkey',keys:['CTRL','V']}},
  {label:'Ctrl+A',msg:{type:'hotkey',keys:['CTRL','A']}},{label:'Ctrl+Z',msg:{type:'hotkey',keys:['CTRL','Z']}},
 ];
-const LIFT_PX=56,LONG_PRESS_MS=500,TAP_SLOP=10,MOVE_INTERVAL_MS=16,SCROLL_STEP_PX=24;
+const LIFT_PX=104,LONG_PRESS_MS=500,TAP_SLOP=10,MOVE_INTERVAL_MS=16,SCROLL_STEP_PX=24;
 const clamp01=(v:number)=>Math.min(1,Math.max(0,v));
 
 export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
@@ -32,8 +32,8 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   const p={nx:clamp01((cx-ox)/w),ny:clamp01((cy-oy)/h)};g.current.lastPos=p;return p;
  },[]);
 
- // Click mode: the pointer sits above the fingertip so the finger never hides it; the gap shrinks to 0 at the bottom edge.
- const lifted=(cx:number,cy:number)=>{const el=img.current;if(!el)return norm(cx,cy);const r=el.getBoundingClientRect();const t=clamp01((cy-r.top)/r.height);return norm(cx,cy-LIFT_PX*(1-t))};
+ // Click mode: the pointer sits above the fingertip so the finger never hides it; the gap shrinks to 0 only over the bottom 20%.
+ const lifted=(cx:number,cy:number)=>{const el=img.current;if(!el)return norm(cx,cy);const r=el.getBoundingClientRect();const t=clamp01((cy-r.top)/r.height);return norm(cx,cy-LIFT_PX*Math.min(1,(1-t)/0.2))};
 
  useEffect(()=>{const h=()=>setFull(document.fullscreenElement===wrap.current);document.addEventListener('fullscreenchange',h);return()=>document.removeEventListener('fullscreenchange',h)},[]);
  useEffect(()=>()=>window.clearTimeout(g.current.timer),[]);

@@ -153,10 +153,10 @@ fun ScreenView(
     cursor: () -> Offset? = { null },   // pointer as 0..1 of the picture; read while drawing, so moving it never recomposes
     content: @Composable () -> Unit     // the picture itself: a Bitmap (WebSocket stream) or the WebRTC video
 ) {
-    // Click mode: the pointer sits above the fingertip so the finger never hides it; the gap shrinks to 0 at the bottom edge so every spot stays reachable.
-    val liftPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
+    // Click mode: the pointer sits above the fingertip so the finger never hides it; the gap shrinks to 0 only over the bottom 20% so every spot stays reachable.
+    val liftPx = with(androidx.compose.ui.platform.LocalDensity.current) { 104.dp.toPx() }
     fun lifted(p: Offset, size: androidx.compose.ui.unit.IntSize): Offset =
-        if (size.height == 0) p else Offset(p.x, p.y - liftPx * (1f - (p.y / size.height).coerceIn(0f, 1f)))
+        if (size.height == 0) p else Offset(p.x, p.y - liftPx * ((1f - (p.y / size.height).coerceIn(0f, 1f)) / 0.2f).coerceAtMost(1f))
     fun emit(type: String, p: Offset, size: androidx.compose.ui.unit.IntSize, button: String? = null) {
         if (size.width == 0 || size.height == 0) return
         val nx = (p.x / size.width).coerceIn(0f, 1f).toDouble()
