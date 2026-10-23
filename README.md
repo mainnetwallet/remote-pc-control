@@ -116,6 +116,8 @@ The server's `.env` values below are only the *starting* values of every `/ws/sc
 ```
 All fields are optional. `max_width` is `0` (native) or 320-3840, `fps` is 1-30, `quality` is JPEG 25-90; out-of-range numbers are clamped and unusable values are ignored. Settings are per connection. The server answers with a fresh `{"type":"screen","width":W,"height":H,"max_width":..,"fps":..,"quality":..}` (the values now in effect) followed by a new frame. Frames are never upscaled, so `max_width` above the PC's resolution just sends native size. Clients that never send `config` get exactly the `.env` behaviour.
 
+**Motion quality (less lag).** While the picture keeps changing (scrolling, window animations, dragging) the server sends frames at `REMOTE_PC_MOTION_QUALITY` percent (default 70) of the JPEG quality, so they are smaller and reach the phone sooner. As soon as the picture rests for about 0.2 s it sends one full-quality frame, so text is sharp again. Set `REMOTE_PC_MOTION_QUALITY=100` in `.env` to turn this off. No client change is needed.
+
 ## Updating
 ```powershell
 cd $HOME\remote-pc-control

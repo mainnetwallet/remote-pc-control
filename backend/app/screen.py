@@ -57,6 +57,8 @@ RTT_SAMPLES = 120         # ack round-trip samples kept to estimate the link's b
 MIN_RTT_SAMPLES = 4       # need this many samples before the base latency is trusted
 CURSOR_INTERVAL = 1 / 60  # how often the pointer position is sampled for watch_cursor clients
 CURSOR_HEARTBEAT = 0.25   # resend the unchanged position this often so a client can correct itself
+MOTION_WINDOW = 0.30      # a changed frame that follows another change within this many seconds counts as motion (scroll, animation, drag)
+REFINE_DELAY = 0.20       # the picture stood still this long after motion: send one sharp frame to replace the rough ones
 ACK_TIMEOUT = 1.0         # no ack for this long: assume the frames were lost and carry on
 KEEPALIVE_SECONDS = 3.0   # resend the last frame so idle screens don't hit client read timeouts
 MAX_SCROLL = 20
@@ -383,6 +385,22 @@ async def stream_frames(ws: WebSocket, grab) -> None:
     try:
         last_digest, last_jpeg, last_sent, size_sent = None, None, 0.0, None
         cycle = 0.0   # seconds the last capture+encode took
+        last_change = 0.0      # when the picture last changed (0 = not yet)
+        refine_due = False     # the last frame went out at reduced "motion" quality: a sharp one is owed once the picture rests
+
+        async def encode_and_send(raw, size, cur, width, quality, started):
+            nonlocal last_jpeg, last_sent, size_sent, cycle
+            last_jpeg, out = await loop.run_in_executor(
+                enc_pool, functools.partial(encode_frame, raw, size, cur, width, quality))
+            state.note_encoded(len(last_jpeg), quality, out[0], cfg, size[0])
+            if out != size_sent:
+                await ws.send_json({"type": "screen", "width": out[0], "height": out[1],
+                                    "max_width": cfg.max_width, "fps": cfg.fps, "quality": cfg.quality})
+                size_sent = out
+            await ws.send_bytes(last_jpeg); last_sent = loop.time()
+            state.on_sent(last_sent, len(last_jpeg))
+            cycle = last_sent - started
+
         while not state.closed:
             started = loop.time()
             if state.dirty:   # config changed: re-encode even an unchanged screen and re-announce the size
@@ -408,24 +426,30 @@ async def stream_frames(ws: WebSocket, grab) -> None:
             raw, size, cur, digest = grabbed
             if state.overlay: cur = None   # the client draws the pointer: it must not trigger or appear in frames
             digest = (digest, cur)
+
+            def shape_for(motion: bool) -> tuple[int, int]:
+                quality, width = state.shape(cfg, size[0]) if state.acks else (cfg.quality, cfg.max_width)
+                if state.acks: quality = min(quality, adaptive_quality(cfg.quality, state.queue_delay()))
+                if motion: quality = max(QUALITY_MIN, round(quality * settings.motion_quality / 100))
+                return quality, width
+
             if digest != last_digest:
                 if cycle >= interval * 0.9:   # PC-bound: capture the next frame while this one is encoded and sent
                     prefetch_done[0] = None
                     prefetch = loop.run_in_executor(cap_pool, grab)
                     prefetch.add_done_callback(lambda _f, d=prefetch_done: d.__setitem__(0, loop.time()))
-                quality, width = state.shape(cfg, size[0]) if state.acks else (cfg.quality, cfg.max_width)
-                if state.acks: quality = min(quality, adaptive_quality(cfg.quality, state.queue_delay()))
-                last_jpeg, out = await loop.run_in_executor(
-                    enc_pool, functools.partial(encode_frame, raw, size, cur, width, quality))
-                state.note_encoded(len(last_jpeg), quality, out[0], cfg, size[0])
+                # While the picture keeps changing (scrolling, animations, window moves) the viewer cannot read fine
+                # detail anyway, so those frames are smaller and arrive sooner; one sharp frame follows when it rests.
+                now = loop.time()
+                motion = settings.motion_quality < 100 and last_change > 0 and now - last_change <= MOTION_WINDOW
+                last_change = now; refine_due = motion
+                quality, width = shape_for(motion)
                 last_digest = digest
-                if out != size_sent:
-                    await ws.send_json({"type": "screen", "width": out[0], "height": out[1],
-                                        "max_width": cfg.max_width, "fps": cfg.fps, "quality": cfg.quality})
-                    size_sent = out
-                await ws.send_bytes(last_jpeg); last_sent = loop.time()
-                state.on_sent(last_sent, len(last_jpeg))
-                cycle = last_sent - started
+                await encode_and_send(raw, size, cur, width, quality, started)
+            elif refine_due and loop.time() - last_change >= REFINE_DELAY:
+                refine_due = False
+                quality, width = shape_for(False)
+                await encode_and_send(raw, size, cur, width, quality, started)
             elif last_jpeg is not None and loop.time() - last_sent >= KEEPALIVE_SECONDS:
                 await ws.send_bytes(last_jpeg); last_sent = loop.time()
                 state.on_sent(last_sent, len(last_jpeg))

@@ -498,3 +498,56 @@ def test_note_encoded_predicts_the_full_size_from_a_shrunk_frame():
 def test_ack_timeout_resets_bytes_in_flight():
     st = screen._StreamState(); st.on_sent(0.0, 1234); st.reset_flight()
     assert (st.inflight, st.inflight_bytes, len(st.sent_at)) == (0, 0, 0)
+
+
+# ---- motion quality: rough frames while the picture moves, one sharp frame at rest ----------
+
+NOISE = os.urandom(W * H * 4)
+
+
+def _moving_then_still_grab(moving_for):
+    """Digest changes on every grab for `moving_for` seconds, then the screen stands still."""
+    import time
+    t0 = time.monotonic(); n = [0]
+    def grab():
+        n[0] += 1
+        moving = time.monotonic() - t0 < moving_for
+        return NOISE, (W, H), None, n[0] if moving else -1
+    return grab
+
+
+async def _collect_frames(grab, seconds):
+    ws = _FakeWS()
+    task = asyncio.create_task(screen.stream_frames(ws, grab))
+    await asyncio.sleep(seconds)
+    ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+    await asyncio.wait_for(task, 3)
+    return [len(f) for f in _frames(ws)]
+
+
+def test_frames_are_smaller_while_moving_and_a_sharp_one_follows_at_rest(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 20)
+    monkeypatch.setattr(settings, "jpeg_quality", 80)
+    monkeypatch.setattr(settings, "motion_quality", 50)
+    sizes = asyncio.run(_collect_frames(_moving_then_still_grab(0.5), 1.4))
+    assert len(sizes) >= 4
+    first, rough, last = sizes[0], sizes[1:-1], sizes[-1]
+    assert max(rough) < first * 0.85      # frames after the first change are rough
+    assert last > max(rough) * 1.2        # the picture rested: the sharp frame replaced them
+    assert last == pytest.approx(first, rel=0.02)
+
+
+def test_motion_quality_100_keeps_every_frame_at_full_quality(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 20)
+    monkeypatch.setattr(settings, "jpeg_quality", 80)
+    monkeypatch.setattr(settings, "motion_quality", 100)
+    sizes = asyncio.run(_collect_frames(_moving_then_still_grab(0.5), 1.0))
+    assert len(sizes) >= 3 and max(sizes) == min(sizes)    # no rough frames, no extra sharp frame
+
+
+def test_a_single_change_is_sent_sharp_and_not_repeated(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 20)
+    monkeypatch.setattr(settings, "jpeg_quality", 80)
+    monkeypatch.setattr(settings, "motion_quality", 50)
+    sizes = asyncio.run(_collect_frames(_moving_then_still_grab(0.0), 0.8))
+    assert len(sizes) == 1                  # one frame (idle screens only get keepalives every few seconds)

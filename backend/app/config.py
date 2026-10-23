@@ -10,6 +10,9 @@ class Settings:
     jpeg_quality = max(25, min(85, int(os.getenv("REMOTE_PC_JPEG_QUALITY", "55"))))
     # Frames wider than this are downscaled before sending (0 = send full resolution).
     max_width = max(0, int(os.getenv("REMOTE_PC_MAX_WIDTH", "1280")))
+    # While the picture is changing fast (scrolling, animations) frames are sent at this percent of the JPEG quality
+    # so they arrive sooner; one full-quality frame follows when the picture stops (100 = off, 40-100).
+    motion_quality = max(40, min(100, int(os.getenv("REMOTE_PC_MOTION_QUALITY", "70"))))
     # Draw a small pointer on the stream so touch users can see where the mouse is.
     show_cursor = os.getenv("REMOTE_PC_SHOW_CURSOR", "1") not in ("0", "false", "False")
 
