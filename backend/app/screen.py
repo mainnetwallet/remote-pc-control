@@ -11,8 +11,8 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
           {"type":"screen",...} (carrying the values now in effect) followed by a new frame.
               {"type":"ack"}   send one after each frame you have shown. Once the server has seen an ack it
           keeps a small number of frames in flight (the newest screen always wins), measures the link's upload speed from
-          the ack spacing, never lets a new frame queue behind more than ~80 ms of older ones, and shrinks the JPEG quality
-          and then the width until a frame uploads in about 0.1 s, so a click's result shows up at once on a slow link. Clients that never ack get the
+          the ack spacing, and never lets a new frame queue behind more than ~80 ms of older ones. The JPEG quality and width
+          are never changed automatically: they stay at the configured values. Clients that never ack get the
           old fixed-rate stream. The in-flight window grows with the measured link round-trip time (up to
           MAX_WINDOW frames) so a high-latency link such as a tunnel can still reach the configured fps.
           Optional "cursor":true in a config message: the client draws the pointer itself (see watch_cursor below),
@@ -303,7 +303,7 @@ def _capture_source():
 def flight_window(base_rtt: float, fps: int) -> int:
     """How many unacknowledged frames may be on the wire. Enough to cover the link's round trip at this frame
     rate (otherwise a 150 ms tunnel caps the stream near 13 fps), never fewer than MAX_IN_FLIGHT or more than
-    MAX_WINDOW. Frames sitting on the wire add no delay of their own; queueing is handled by adaptive_quality."""
+    MAX_WINDOW. Frames sitting on the wire add no delay of their own; quality is never changed automatically."""
     if base_rtt <= 0: return MAX_IN_FLIGHT
     return max(MAX_IN_FLIGHT, min(MAX_WINDOW, math.ceil(base_rtt * max(1, fps)) + 1))
 
@@ -359,23 +359,6 @@ class _StreamState:
         if self.inflight == 0 or self.bw <= 0.0: return True
         return self.inflight_bytes + next_bytes <= self.bw * (self.base_rtt + LATENCY_BUDGET)
 
-    def shape(self, cfg: "StreamConfig", native_width: int) -> tuple[int, int]:
-        """(JPEG quality, max_width) for the next frame: the configured values while the link keeps up, smaller
-        when one frame would need longer than FRAME_TIME to upload. Quality drops first (down to about half),
-        then the picture is scaled down, so a click's result appears at once instead of after a queue of big frames."""
-        width = min(cfg.max_width, native_width) if cfg.max_width else native_width
-        if not self.acks or self.bw <= 0.0 or self.full_bytes <= 0: return cfg.quality, cfg.max_width
-        target = self.bw * min(FRAME_TIME_MAX, max(FRAME_TIME_MIN, 1 / cfg.fps))
-        r = target / self.full_bytes   # fraction of a full-quality frame the link can carry in that time
-        if r >= 1: return cfg.quality, cfg.max_width
-        floor_q = max(QUALITY_MIN, round(cfg.quality * 0.55))
-        q_ratio = (floor_q / cfg.quality) ** BYTES_PER_QUALITY_POW
-        if r >= q_ratio:
-            return max(QUALITY_MIN, round(cfg.quality * r ** (1 / BYTES_PER_QUALITY_POW))), cfg.max_width
-        factor = max(MIN_WIDTH_FACTOR, math.sqrt(r / q_ratio))
-        scaled = max(WIDTH_MIN, round(width * factor / WIDTH_STEP) * WIDTH_STEP)
-        return floor_q, min(width, scaled)
-
     def note_encoded(self, nbytes: int, quality: int, out_width: int, cfg: "StreamConfig", native_width: int) -> None:
         """Remember how big a frame at the configured quality and width would be, from the frame just encoded."""
         full_w = min(cfg.max_width, native_width) if cfg.max_width else native_width
@@ -393,14 +376,6 @@ class _StreamState:
     def queue_delay(self) -> float:
         """Seconds frames wait beyond the link's own latency. A slow-but-steady tunnel is not congestion."""
         return max(0.0, self.rtt - self.base_rtt)
-
-
-def adaptive_quality(quality: int, delay: float) -> int:
-    """Lower the JPEG quality when frames queue up (delay = extra ack time beyond the base latency),
-    so the stream catches up instead of lagging."""
-    if delay > 0.35: return max(QUALITY_MIN, quality - 25)
-    if delay > 0.20: return max(QUALITY_MIN, quality - 12)
-    return quality
 
 
 async def _read_client(ws: WebSocket, state: _StreamState) -> None:
@@ -485,8 +460,7 @@ async def stream_frames(ws: WebSocket, grab) -> None:
             digest = (digest, cur)
 
             def shape_for(motion: bool) -> tuple[int, int]:
-                quality, width = state.shape(cfg, size[0]) if state.acks else (cfg.quality, cfg.max_width)
-                if state.acks: quality = min(quality, adaptive_quality(cfg.quality, state.queue_delay()))
+                quality, width = cfg.quality, cfg.max_width   # fixed: no automatic quality/resolution changes
                 if motion:
                     quality = max(QUALITY_MIN, round(quality * settings.motion_quality / 100))
                     if settings.motion_width < 100:   # fewer pixels as well: cheaper to scale, encode, upload and decode

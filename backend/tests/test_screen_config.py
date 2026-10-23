@@ -225,12 +225,6 @@ def test_stream_resumes_if_the_client_stops_acking(monkeypatch):
     assert asyncio.run(run()) > screen.MAX_IN_FLIGHT
 
 
-@pytest.mark.parametrize("rtt, expected", [(0.0, 65), (0.1, 65), (0.25, 53), (0.5, 40), (2.0, 40)])
-def test_quality_drops_when_frames_arrive_slowly(rtt, expected):
-    assert screen.adaptive_quality(65, rtt) == expected
-    assert screen.adaptive_quality(30, 5.0) == screen.QUALITY_MIN
-
-
 def test_coalesce_merges_pointer_moves_but_keeps_clicks_in_order():
     msgs = [{"type": "rel", "dx": 3, "dy": 1}, {"type": "rel", "dx": 4, "dy": -2},
             {"type": "click", "button": "left"},
@@ -260,9 +254,8 @@ def test_steady_high_latency_is_not_mistaken_for_congestion():
     for _ in range(10): st.rtts.append(0.25)
     st.rtt = 0.25
     assert st.base_rtt == 0.25 and st.queue_delay() == 0.0
-    assert screen.adaptive_quality(65, st.queue_delay()) == 65       # quality is kept on a slow but steady tunnel
     st.rtt = 0.25 + 0.4                                              # frames now wait in a queue
-    assert screen.adaptive_quality(65, st.queue_delay()) == 40
+    assert st.queue_delay() == pytest.approx(0.4)
 
 
 def test_base_latency_needs_a_few_samples():
@@ -457,33 +450,6 @@ def test_fast_link_keeps_several_frames_in_flight():
     st = _link_state(bw=5_000_000, full_bytes=40_000, rtt=0.15)
     st.on_sent(0.0, 40_000); st.on_sent(0.03, 40_000)
     assert st.link_allows(40_000)                        # 5 MB/s * 0.23 s = 1.15 MB of room
-
-
-def test_shape_keeps_config_on_a_fast_link_and_before_measuring():
-    cfg = StreamConfig(1280, 30, 65)
-    assert _link_state(5_000_000, 40_000).shape(cfg, 1920) == (65, 1280)
-    assert screen._StreamState().shape(cfg, 1920) == (65, 1280)       # no acks yet
-
-
-def test_shape_lowers_quality_first_then_width():
-    cfg = StreamConfig(1280, 30, 65)
-    q, w = _link_state(bw=25_000, full_bytes=50_000).shape(cfg, 1920)  # 2 kB budget per frame = ~4% of a full frame
-    assert q == round(65 * 0.55) and w < 1280 and w >= screen.WIDTH_MIN
-    assert w % screen.WIDTH_STEP == 0
-    q2, w2 = _link_state(bw=450_000, full_bytes=50_000).shape(cfg, 1920)   # ~72% of a full frame fits
-    assert w2 == 1280 and screen.QUALITY_MIN <= q2 < 65                    # only the quality drops
-
-
-def test_shape_never_goes_below_the_floors():
-    cfg = StreamConfig(1280, 30, 65)
-    q, w = _link_state(bw=1, full_bytes=10 ** 7).shape(cfg, 1920)
-    assert q >= screen.QUALITY_MIN and w >= max(screen.WIDTH_MIN, round(1280 * screen.MIN_WIDTH_FACTOR) - screen.WIDTH_STEP)
-
-
-def test_shape_uses_native_width_when_unscaled():
-    cfg = StreamConfig(0, 20, 70)
-    _, w = _link_state(bw=1_000, full_bytes=100_000).shape(cfg, 1920)
-    assert screen.WIDTH_MIN <= w < 1920
 
 
 def test_note_encoded_predicts_the_full_size_from_a_shrunk_frame():
