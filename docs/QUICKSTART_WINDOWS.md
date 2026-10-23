@@ -1,98 +1,66 @@
-# Quick start: run the agent on Windows and connect the Android app
+# Windows Quick Start
 
-## 1. Get the code
+Set up the Windows agent and connect your phone.
+
+## Requirements
+
+- Windows 10/11 desktop session
+- Python 3.11+ (Python 3.12 recommended)
+- Node.js and npm
+- Git
+- Android phone; install Tailscale on both devices for private remote access
+
+## 1. Install
+
+Open PowerShell in your user account:
 
 ```powershell
-cd $HOME
 git clone https://github.com/mainnetwallet/remote-pc-control.git
 cd remote-pc-control
-```
-
-Already cloned? Update it instead:
-
-```powershell
-cd $HOME\remote-pc-control
-git pull origin main
-```
-
-If `git pull` stops because of local changes or a stash conflict, check `git status`.
-Files with `<<<<<<<` markers must be restored before the agent can start:
-
-```powershell
-git restore --staged --worktree --source=HEAD -- <conflicted file>
-```
-
-## 2. Set up
-
-```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\setup.ps1
 ```
 
-This creates `.venv`, installs the Python packages and builds the dashboard.
+Setup creates `.venv`, installs Python dependencies, builds the dashboard, and creates `.env` with a random access token. Keep that token private; do not commit `.env`.
 
-Re-running it is safe and fast: packages are only reinstalled when `pyproject.toml` changes, and the dashboard is only rebuilt when its sources change. Use `.\scripts\setup.ps1 -Force` to redo everything.
+If the repository is already cloned, update it with `git pull origin main`. Review or save local changes first.
 
-## 3. Create the API token
-
-The agent refuses to start unless `.env` contains a unique `REMOTE_PC_TOKEN` of at least 32 bytes.
-
-```powershell
-cp .env.example .env
-
-$bytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-$token = ($bytes | ForEach-Object { $_.ToString("x2") }) -join ""
-(Get-Content .env) -replace '^REMOTE_PC_TOKEN=.*', "REMOTE_PC_TOKEN=$token" | Set-Content .env
-
-$token.Length   # must print 64
-$token          # enter this in the phone app
-```
-
-Keep the token private: anyone who has it can control your PC. `.env` is git-ignored; never commit it.
-
-## 4. Start the agent
+## 2. Start the agent
 
 ```powershell
 .\scripts\start.ps1
 ```
 
-You should see:
+Keep this PowerShell window open. The server listens on port **8888**. Verify locally at `http://localhost:8888/api/health`.
 
-```
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8888
-```
+Stop the agent with **Ctrl+C**.
 
-Stop it with `Ctrl+C`.
+## 3. Connect your phone
 
-## 5. Connect the Android app
+Choose one connection method:
 
-1. Install the latest APK from the repository's **Releases** page
-   (`RemotePCControl-Android-android-build-<N>.apk`). Allow "Install unknown apps" if asked.
-2. Find the PC's IP address:
-   ```powershell
-   ipconfig
-   ```
-   Use the **IPv4 Address**, for example `192.168.x.x`.
-3. In the app enter `http://<PC_IP>:8888` and the token from step 3.
-4. The phone and the PC must be on the same Wi-Fi network. For access from outside, see
-   [CLOUDFLARE.md](CLOUDFLARE.md) or use Tailscale.
-5. If the app cannot connect, allow the port in Windows Firewall (Administrator PowerShell):
-   ```powershell
-   New-NetFirewallRule -DisplayName "RemotePCControl" -Direction Inbound -Protocol TCP -LocalPort 8888 -Action Allow -Profile Private
-   ```
+- **Tailscale:** Sign in to the same tailnet on both devices. Run `tailscale ip -4` on the PC and use `http://<PC-Tailscale-IP>:8888`.
+- **Same Wi-Fi:** Use the PC's LAN IPv4 address from `ipconfig`, for example `http://192.168.1.20:8888`.
+- **Outside your network:** Follow the [Cloudflare Tunnel guide](CLOUDFLARE.md).
 
-## 6. Run the tests
+Install the Android APK from GitHub Actions or Releases. In the app, enter the PC URL and the `REMOTE_PC_TOKEN` value from `.env`, then tap **Connect** and start a screen session.
+
+If a firewall rule is needed, restrict it to your trusted network. Do not expose port 8888 to the public internet.
+
+## 4. Troubleshooting
+
+| Issue | Solution |
+|---|---|
+| Setup says Python/npm is missing | Install Python and Node.js, then open a new PowerShell window. |
+| Token is rejected | Check `.env` for a non-placeholder `REMOTE_PC_TOKEN`; use the complete value. |
+| Phone cannot connect | Confirm both devices can reach each other, the URL and port are correct, and the agent is running. |
+| Black screen or missing input | Unlock the desktop; UAC prompts and the Windows sign-in screen are not controllable. |
+| Tunnel returns 502 | Start the agent before starting the tunnel. |
+
+## 5. Run tests
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend/tests tests -q
 ```
 
-## Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| `Set a unique REMOTE_PC_TOKEN (32+ bytes) in .env` | The token is missing, still the placeholder, or shorter than 32 bytes. Redo step 3 and check `$token.Length` prints 64. |
-| `SyntaxError ... <<<<<<<` in a `.py` file | A merge or stash conflict left markers in the file. Restore it with `git restore` as shown in step 1. |
-| App cannot reach the PC | Same Wi-Fi? Correct IP and port 8888? Firewall rule added? Agent still running? |
+For Android build instructions, see [android/README.md](../android/README.md).
