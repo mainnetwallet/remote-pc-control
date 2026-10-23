@@ -478,12 +478,12 @@ fun SessionScreen(c: RemoteController) {
                         Modifier.width(68.dp).fillMaxHeight().padding(horizontal = 4.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)
                     ) {
+                        SideButton("Hide", false, { showPad = true })
                         listOf(TouchMode.OFF, TouchMode.CLICK, TouchMode.SCROLL, TouchMode.DRAG).forEach { m ->
                             SideButton(m.label, m == touchMode, { touchMode = m })
                         }
                         SideButton("L-click", false, { send(JSONObject().put("type", "click").put("button", "left")) })
                         SideButton("R-click", false, { send(JSONObject().put("type", "click").put("button", "right")) })
-                        SideButton("Hide", false, { showPad = true })
                     }
                     if (showPad) Column(
                         Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(8.dp),
