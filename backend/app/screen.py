@@ -36,13 +36,18 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
 Normalized coordinates make the mapping independent of the (possibly downscaled)
 frame the phone is showing, and of Windows display scaling.
 """
-import asyncio, collections, contextlib, functools, hmac, io, json, math, platform, zlib
+import asyncio, collections, contextlib, functools, hmac, io, json, math, platform, time, zlib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from fastapi import WebSocket, WebSocketDisconnect
 from PIL import Image, ImageDraw
 from .config import settings
 from . import security
+
+# Timing of frames and acks uses this clock, not the event loop's: on Windows with Python 3.12 time.monotonic()
+# (and so loop.time()) only ticks every ~15.6 ms, which made "sent" and "previous ack" look simultaneous and
+# turned the upload-speed measurement into a wildly low number that stalled the stream and shrank every frame.
+_now = time.perf_counter
 
 MAX_IN_FLIGHT = 2         # minimum number of frames sent but not yet acknowledged (only once the client sends acks)
 MAX_WINDOW = 6            # the window grows up to this many frames on high-latency links (see flight_window)
@@ -287,7 +292,7 @@ class _StreamState:
             rtt = now - sent
             self.rtts.append(rtt)
             self.rtt = rtt if self.rtt == 0.0 else self.rtt * 0.7 + rtt * 0.3
-            if self.last_ack and sent <= self.last_ack and now > self.last_ack:
+            if self.last_ack and sent < self.last_ack and now > self.last_ack:
                 # The frame was already queued when the previous one finished: the gap between the two acks is
                 # how long the link (and the phone) needed for this frame alone, i.e. the real upload speed.
                 rate = nbytes / (now - self.last_ack)
@@ -358,7 +363,7 @@ async def _read_client(ws: WebSocket, state: _StreamState) -> None:
             try: d = json.loads(text)
             except (ValueError, RecursionError): continue
             if isinstance(d, dict) and d.get("type") == "ack":
-                state.on_ack(asyncio.get_running_loop().time())
+                state.on_ack(_now())
                 state.ack_wake.set()
             elif isinstance(d, dict) and d.get("type") == "config":
                 state.config = state.config.updated(d)
@@ -397,12 +402,12 @@ async def stream_frames(ws: WebSocket, grab) -> None:
                 await ws.send_json({"type": "screen", "width": out[0], "height": out[1],
                                     "max_width": cfg.max_width, "fps": cfg.fps, "quality": cfg.quality})
                 size_sent = out
-            await ws.send_bytes(last_jpeg); last_sent = loop.time()
+            await ws.send_bytes(last_jpeg); last_sent = _now()
             state.on_sent(last_sent, len(last_jpeg))
             cycle = last_sent - started
 
         while not state.closed:
-            started = loop.time()
+            started = _now()
             if state.dirty:   # config changed: re-encode even an unchanged screen and re-announce the size
                 state.dirty = False; last_digest = None; size_sent = None
             cfg = state.config
@@ -419,7 +424,7 @@ async def stream_frames(ws: WebSocket, grab) -> None:
                 try:
                     result = await prefetch
                     # Fresh enough unless it has been sitting unused for more than a frame (e.g. the window was closed).
-                    if prefetch_done[0] is None or loop.time() - prefetch_done[0] <= interval: grabbed = result
+                    if prefetch_done[0] is None or _now() - prefetch_done[0] <= interval: grabbed = result
                 finally: prefetch = None
             if grabbed is None:
                 grabbed = await loop.run_in_executor(cap_pool, grab)
@@ -437,25 +442,25 @@ async def stream_frames(ws: WebSocket, grab) -> None:
                 if cycle >= interval * 0.9:   # PC-bound: capture the next frame while this one is encoded and sent
                     prefetch_done[0] = None
                     prefetch = loop.run_in_executor(cap_pool, grab)
-                    prefetch.add_done_callback(lambda _f, d=prefetch_done: d.__setitem__(0, loop.time()))
+                    prefetch.add_done_callback(lambda _f, d=prefetch_done: d.__setitem__(0, _now()))
                 # While the picture keeps changing (scrolling, animations, window moves) the viewer cannot read fine
                 # detail anyway, so those frames are smaller and arrive sooner; one sharp frame follows when it rests.
-                now = loop.time()
+                now = _now()
                 motion = settings.motion_quality < 100 and last_change > 0 and now - last_change <= MOTION_WINDOW
                 last_change = now; refine_due = motion
                 quality, width = shape_for(motion)
                 last_digest = digest
                 await encode_and_send(raw, size, cur, width, quality, started)
-            elif refine_due and loop.time() - last_change >= REFINE_DELAY:
+            elif refine_due and _now() - last_change >= REFINE_DELAY:
                 refine_due = False
                 quality, width = shape_for(False)
                 await encode_and_send(raw, size, cur, width, quality, started)
-            elif last_jpeg is not None and loop.time() - last_sent >= KEEPALIVE_SECONDS:
-                await ws.send_bytes(last_jpeg); last_sent = loop.time()
+            elif last_jpeg is not None and _now() - last_sent >= KEEPALIVE_SECONDS:
+                await ws.send_bytes(last_jpeg); last_sent = _now()
                 state.on_sent(last_sent, len(last_jpeg))
             if state.dirty or state.closed: continue
             state.wake.clear()
-            try: await asyncio.wait_for(state.wake.wait(), max(0.0, interval - (loop.time() - started)))
+            try: await asyncio.wait_for(state.wake.wait(), max(0.0, interval - (_now() - started)))
             except asyncio.TimeoutError: pass
     finally:
         reader.cancel()
@@ -499,7 +504,7 @@ async def _push_cursor(ws: WebSocket, mouse_ctl, mon: dict) -> None:
     try:
         while True:
             pos = tuple(mouse_ctl.position)
-            now = loop.time()
+            now = _now()
             if pos != last or now - last_at >= CURSOR_HEARTBEAT:
                 await ws.send_json(cursor_message(pos, mon)); last, last_at = pos, now
             await asyncio.sleep(CURSOR_INTERVAL)

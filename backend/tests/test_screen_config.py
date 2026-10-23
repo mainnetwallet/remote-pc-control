@@ -551,3 +551,12 @@ def test_a_single_change_is_sent_sharp_and_not_repeated(monkeypatch):
     monkeypatch.setattr(settings, "motion_quality", 50)
     sizes = asyncio.run(_collect_frames(_moving_then_still_grab(0.0), 0.8))
     assert len(sizes) == 1                  # one frame (idle screens only get keepalives every few seconds)
+
+
+def test_ack_in_the_same_clock_tick_as_the_previous_ack_does_not_give_a_bogus_speed():
+    """Windows' coarse clock can stamp a frame with the same time as the previous ack; that must not count as 'queued'."""
+    st = screen._StreamState()
+    st.on_ack(1.0)                      # first ack, nothing measured yet
+    st.on_sent(1.0, 100_000)            # frame sent in the same tick as that ack
+    st.on_ack(1.5)                      # its ack arrives half a second later
+    assert st.bw == 0.0                 # not 200 KB/s measured from an idle link
