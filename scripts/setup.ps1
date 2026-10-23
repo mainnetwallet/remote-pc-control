@@ -60,11 +60,16 @@ if ($needBuild -or -not (Test-Path "$static\index.html")) {
   New-Item -ItemType Directory -Force $static | Out-Null
   Copy-Item -Recurse -Force "frontend\dist\*" "$static\"
 }
+$example = Join-Path $Root ".env.example"
 if (-not (Test-Path ".env")) {
   $bytes = New-Object byte[] 48
   $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $rng.GetBytes($bytes); $rng.Dispose()
   $token = [Convert]::ToBase64String($bytes).Replace("+","-").Replace("/","_").TrimEnd("=")
-  @"
+  if (Test-Path $example) {
+    # New .env = the full .env.example (every setting with its default and comments) with a fresh random password.
+    Get-Content $example | ForEach-Object { if ($_ -match '^\s*REMOTE_PC_TOKEN\s*=') { "REMOTE_PC_TOKEN=$token" } else { $_ } } | Set-Content -Encoding ascii ".env"
+  } else {
+    @"
 REMOTE_PC_TOKEN=$token
 REMOTE_PC_HOST=0.0.0.0
 REMOTE_PC_PORT=8888
@@ -76,7 +81,27 @@ REMOTE_PC_MOTION_QUALITY=70
 REMOTE_PC_MOTION_WIDTH=80
 REMOTE_PC_CAPTURE=auto
 "@ | Set-Content -Encoding ascii ".env"
+  }
   Write-Host "Save this access token securely: $token" -ForegroundColor Yellow
+} elseif (Test-Path $example) {
+  # Existing .env: add settings that .env.example gained since (e.g. after git pull). Existing values are never changed,
+  # the password is never touched, and a setting you commented out yourself is not added again.
+  $have = @{}
+  foreach ($line in Get-Content ".env") { if ($line -match '^\s*#?\s*([A-Za-z_][A-Za-z0-9_]*)\s*=') { $have[$Matches[1].ToUpper()] = $true } }
+  $missing = @()
+  foreach ($line in Get-Content $example) {
+    if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=') {
+      $key = $Matches[1].ToUpper()
+      if ($key -ne "REMOTE_PC_TOKEN" -and -not $have[$key]) { $missing += $line }
+    }
+  }
+  if ($missing.Count -gt 0) {
+    Add-Content -Path ".env" -Value (@("", "# added by setup.ps1 from .env.example") + $missing) -Encoding ascii
+    $names = ($missing | ForEach-Object { ($_ -split '=')[0].Trim() }) -join ", "
+    Write-Host "Added new settings to .env: $names" -ForegroundColor Green
+  } else {
+    Write-Host ".env already has every setting from .env.example."
+  }
 }
 # Optional: lets the Android app find the tunnel link by itself. Needs a GitHub *classic* token with ONLY the "gist" scope.
 $envText = Get-Content ".env" -Raw
