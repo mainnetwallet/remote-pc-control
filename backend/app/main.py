@@ -38,6 +38,9 @@ async def ws_screen(ws:WebSocket): await screen_socket(ws)
 async def ws_rtc(ws:WebSocket): await rtc_socket(ws)
 @app.websocket("/ws/input")
 async def ws_input(ws:WebSocket): await input_socket(ws)
+from fastapi import Response
+@app.get("/favicon.ico",include_in_schema=False)
+def favicon(): return Response(status_code=204)
 static_dir=Path(__file__).resolve().parent/"static"
 if static_dir.exists():
     app.mount("/assets",StaticFiles(directory=static_dir/"assets"),name="assets")
