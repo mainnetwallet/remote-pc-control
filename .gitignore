@@ -12,3 +12,4 @@ __pycache__/
 *.egg-info/
 cloudflared.log
 cloudflared.out.log
+autostart.log
