@@ -26,7 +26,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force backend/app/static | Out-Null
           Copy-Item -Recurse -Force frontend/dist/* backend/app/static/
-          pyinstaller --noconfirm --clean --onefile --name RemotePCControl --paths backend --add-data "backend/app/static;backend/app/static" --hidden-import mss --hidden-import pynput.keyboard --hidden-import pynput.mouse run_agent.py
+          pyinstaller --noconfirm --clean --onefile --name RemotePCControl --paths backend --add-data "backend/app/static;backend/app/static" --hidden-import mss --hidden-import pynput.keyboard --hidden-import pynput.mouse --collect-all aiortc --collect-all av --collect-all aioice --collect-all pylibsrtp --collect-all google_crc32c run_agent.py
       - name: Build setup installer
         shell: pwsh
         run: |

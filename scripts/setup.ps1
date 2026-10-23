@@ -23,6 +23,12 @@ if ($Force -or -not $pyCurrent) {
     if ($LASTEXITCODE -ne 0) { Write-Warning "Fast capture (dxcam) was not installed; the standard capture is used." }
   } catch { Write-Warning "Fast capture (dxcam) was not installed; the standard capture is used." }
   finally { $ErrorActionPreference = $prevEap }
+  # WebRTC (aiortc + PyAV) is installed by "pip install -e ." above. If it did not work the live screen still runs over the WebSocket stream.
+  $prevEap2 = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+  & $py -c "import aiortc, av" 2>&1 | Out-Null
+  $webrtcOk = ($LASTEXITCODE -eq 0)
+  $ErrorActionPreference = $prevEap2
+  if (-not $webrtcOk) { Write-Warning "WebRTC packages (aiortc, av) are not usable; the live screen will use the WebSocket stream. Run: $py -m pip install aiortc av" }
   Set-Content -Path $pyStamp -Value $pyHash -Encoding ascii
 } else {
   Write-Host "Python packages are up to date (use -Force to reinstall)."
@@ -81,6 +87,14 @@ REMOTE_PC_MOTION_QUALITY=100
 REMOTE_PC_MOTION_WIDTH=100
 REMOTE_PC_LATENCY_FIRST=1
 REMOTE_PC_CAPTURE=auto
+REMOTE_PC_WEBRTC=1
+REMOTE_PC_RTC_FPS=30
+REMOTE_PC_RTC_BITRATE=4000
+REMOTE_PC_RTC_ENCODER=auto
+REMOTE_PC_STUN_URL=stun:stun.l.google.com:19302
+REMOTE_PC_TURN_URL=
+REMOTE_PC_TURN_USER=
+REMOTE_PC_TURN_PASS=
 "@ | Set-Content -Encoding ascii ".env"
   }
   Write-Host "Save this access token securely: $token" -ForegroundColor Yellow

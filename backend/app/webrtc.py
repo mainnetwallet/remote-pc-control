@@ -36,6 +36,10 @@ from .config import settings
 from . import screen
 
 log = logging.getLogger("remote_pc.webrtc")
+if not log.handlers and not logging.getLogger().handlers:
+    # Started by start.ps1 nothing configures logging, so INFO lines (encoder in use, connection state) would be lost.
+    _h = logging.StreamHandler(); _h.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
+    log.addHandler(_h); log.setLevel(logging.INFO); log.propagate = False
 
 MAX_SESSIONS = 4              # simultaneous WebRTC sessions
 MAX_SDP_BYTES = 64 * 1024
