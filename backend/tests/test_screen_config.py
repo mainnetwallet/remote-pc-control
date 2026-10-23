@@ -541,6 +541,7 @@ def test_motion_quality_100_keeps_every_frame_at_full_quality(monkeypatch):
     monkeypatch.setattr(settings, "fps", 20)
     monkeypatch.setattr(settings, "jpeg_quality", 80)
     monkeypatch.setattr(settings, "motion_quality", 100)
+    monkeypatch.setattr(settings, "motion_width", 100)
     sizes = asyncio.run(_collect_frames(_moving_then_still_grab(0.5), 1.0))
     assert len(sizes) >= 3 and max(sizes) == min(sizes)    # no rough frames, no extra sharp frame
 
@@ -560,3 +561,91 @@ def test_ack_in_the_same_clock_tick_as_the_previous_ack_does_not_give_a_bogus_sp
     st.on_sent(1.0, 100_000)            # frame sent in the same tick as that ack
     st.on_ack(1.5)                      # its ack arrives half a second later
     assert st.bw == 0.0                 # not 200 KB/s measured from an idle link
+
+
+def test_frames_are_narrower_while_moving_and_full_width_at_rest(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 20)
+    monkeypatch.setattr(settings, "motion_quality", 100)
+    monkeypatch.setattr(settings, "motion_width", 80)
+    async def run():
+        ws = _FakeWS()
+        task = asyncio.create_task(screen.stream_frames(ws, _moving_then_still_grab(0.5)))
+        await asyncio.sleep(1.4)
+        ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(task, 3)
+        return [Image.open(io.BytesIO(f)).width for f in _frames(ws)]
+    widths = asyncio.run(run())
+    assert widths[0] == W                       # first change after an idle screen: full width
+    assert min(widths) == 640                   # 80 % of 800, rounded to the 80 px step
+    assert widths[-1] == W                      # at rest the full picture is back
+
+
+# ---- optional DXGI capture (falls back to mss on any problem) ----------------------------
+
+class _FakeFrame:
+    def __init__(self, w, h, channels=4): self.shape = (h, w, channels); self._n = w * h * channels
+    def tobytes(self): return bytes(self._n)
+
+
+class _FakeCam:
+    def __init__(self, w, h, frames): self.width, self.height, self.frames, self.released = w, h, frames, False
+    def grab(self, **kw): return self.frames.pop(0) if len(self.frames) > 1 else self.frames[0]
+    def release(self): self.released = True
+
+
+@pytest.fixture
+def fake_dxcam(monkeypatch):
+    import sys, types
+    screen._Dx.reset()
+    mod = types.ModuleType("dxcam"); mod.made = []
+    def create(**kw):
+        cam = _FakeCam(64, 32, [_FakeFrame(64, 32)]); mod.made.append((kw, cam)); return cam
+    mod.create = create
+    monkeypatch.setitem(sys.modules, "dxcam", mod)
+    monkeypatch.setattr(settings, "capture", "auto")
+    yield mod
+    screen._Dx.reset()
+
+
+MON64 = {"left": 0, "top": 0, "width": 64, "height": 32}
+
+
+def test_dxgi_capture_returns_bgra_bytes_and_reuses_the_camera(fake_dxcam):
+    raw, size = screen.dx_grab(MON64)
+    assert size == (64, 32) and len(raw) == 64 * 32 * 4
+    screen.dx_grab(MON64)
+    assert len(fake_dxcam.made) == 1 and fake_dxcam.made[0][0]["output_color"] == "BGRA"
+
+
+def test_dxgi_capture_is_skipped_when_mss_is_forced(fake_dxcam, monkeypatch):
+    monkeypatch.setattr(settings, "capture", "mss")
+    assert screen.dx_grab(MON64) is None and fake_dxcam.made == []
+
+
+def test_dxgi_capture_gives_up_when_dxcam_is_missing(monkeypatch):
+    import sys
+    screen._Dx.reset()
+    monkeypatch.setitem(sys.modules, "dxcam", None)       # import raises ImportError
+    monkeypatch.setattr(settings, "capture", "auto")
+    assert screen.dx_grab(MON64) is None and screen._Dx.failed
+    assert screen.dx_grab(MON64) is None                  # and does not retry on every frame
+    screen._Dx.reset()
+
+
+def test_dxgi_capture_falls_back_when_the_monitor_size_differs(fake_dxcam):
+    assert screen.dx_grab({**MON64, "width": 1920}) is None
+    assert screen._Dx.failed and fake_dxcam.made[0][1].released
+
+
+def test_dxgi_capture_falls_back_after_repeated_empty_answers(fake_dxcam):
+    fake_dxcam.create_orig = fake_dxcam.create
+    def create(**kw):
+        cam = _FakeCam(64, 32, [None]); fake_dxcam.made.append((kw, cam)); return cam
+    fake_dxcam.create = create
+    for _ in range(screen.DX_MAX_MISSES - 1): assert screen.dx_grab(MON64) is None and not screen._Dx.failed
+    assert screen.dx_grab(MON64) is None and screen._Dx.failed
+
+
+def test_dxgi_capture_falls_back_on_unexpected_frame_format(fake_dxcam):
+    fake_dxcam.create = lambda **kw: _FakeCam(64, 32, [_FakeFrame(64, 32, channels=3)])
+    assert screen.dx_grab(MON64) is None and screen._Dx.failed

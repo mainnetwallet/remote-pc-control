@@ -16,6 +16,13 @@ if ($Force -or -not $pyCurrent) {
   & $py -m pip install --upgrade pip
   & $py -m pip install -e ".[test,build]"
   if ($LASTEXITCODE -ne 0) { throw "pip install failed." }
+  # Optional: much faster screen capture (DXGI). If it cannot be installed the server simply keeps using mss.
+  try {
+    $prevEap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    & $py -m pip install --quiet "dxcam>=0.3.0" 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Warning "Fast capture (dxcam) was not installed; the standard capture is used." }
+  } catch { Write-Warning "Fast capture (dxcam) was not installed; the standard capture is used." }
+  finally { $ErrorActionPreference = $prevEap }
   Set-Content -Path $pyStamp -Value $pyHash -Encoding ascii
 } else {
   Write-Host "Python packages are up to date (use -Force to reinstall)."

@@ -13,6 +13,10 @@ class Settings:
     # While the picture is changing fast (scrolling, animations) frames are sent at this percent of the JPEG quality
     # so they arrive sooner; one full-quality frame follows when the picture stops (100 = off, 40-100).
     motion_quality = max(40, min(100, int(os.getenv("REMOTE_PC_MOTION_QUALITY", "70"))))
+    # Same moments: frames are also scaled to this percent of their width (50-100; 100 = keep the width).
+    motion_width = max(50, min(100, int(os.getenv("REMOTE_PC_MOTION_WIDTH", "80"))))
+    # Screen capture: "auto" uses fast DXGI capture when the optional dxcam package works and mss otherwise; "mss" forces mss.
+    capture = os.getenv("REMOTE_PC_CAPTURE", "auto").strip().lower()
     # Draw a small pointer on the stream so touch users can see where the mouse is.
     show_cursor = os.getenv("REMOTE_PC_SHOW_CURSOR", "1") not in ("0", "false", "False")
 

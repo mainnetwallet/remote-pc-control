@@ -36,7 +36,7 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
 Normalized coordinates make the mapping independent of the (possibly downscaled)
 frame the phone is showing, and of Windows display scaling.
 """
-import asyncio, collections, contextlib, functools, hmac, io, json, math, platform, time, zlib
+import asyncio, collections, contextlib, functools, hmac, io, json, math, platform, threading, time, zlib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from fastapi import WebSocket, WebSocketDisconnect
@@ -212,6 +212,54 @@ def _on_windows() -> bool:
     return platform.system() == "Windows"
 
 
+DX_MAX_MISSES = 5   # this many "no frame" answers in a row and DXGI capture is given up for good
+
+
+class _Dx:
+    """Process-wide state of the optional DXGI (Desktop Duplication) capture. It is several times faster than mss/GDI.
+    Any problem (not installed, no GPU output, other monitor size, no frames) switches it off and mss takes over."""
+    lock = threading.Lock()
+    cam = None
+    failed = False
+    misses = 0
+
+    @classmethod
+    def reset(cls):
+        with cls.lock:
+            cam, cls.cam, cls.failed, cls.misses = cls.cam, None, False, 0
+        if cam is not None:
+            with contextlib.suppress(Exception): cam.release()
+
+
+def dx_grab(mon: dict):
+    """(BGRA bytes, (w, h)) of the primary monitor through DXGI, or None when mss should be used for this frame."""
+    if settings.capture == "mss" or _Dx.failed: return None
+    try:
+        with _Dx.lock:
+            if _Dx.cam is None:
+                import dxcam
+                cam = dxcam.create(output_color="BGRA", processor_backend="numpy")
+                if (cam.width, cam.height) != (mon["width"], mon["height"]):
+                    with contextlib.suppress(Exception): cam.release()
+                    raise RuntimeError("DXGI output is not the primary monitor")
+                _Dx.cam = cam
+            frame = _Dx.cam.grab(new_frame_only=False)   # never None because another session took the "new frame"
+        if frame is None:
+            _Dx.misses += 1
+            if _Dx.misses >= DX_MAX_MISSES: raise RuntimeError("no frames")
+            return None
+        h, w, channels = frame.shape
+        if channels != 4 or (w, h) != (mon["width"], mon["height"]): raise RuntimeError("unexpected frame format")
+        _Dx.misses = 0
+        return frame.tobytes(), (w, h)
+    except Exception as exc:
+        cam, _Dx.cam, _Dx.failed = _Dx.cam, None, True
+        if cam is not None:
+            with contextlib.suppress(Exception): cam.release()
+        print(f"Fast DXGI capture unavailable ({type(exc).__name__}: {exc}); using the standard capture.")
+        return None
+
+
 @contextlib.contextmanager
 def _capture_source():
     """Yield grab() -> (raw BGRX bytes, (w, h), cursor position or None, change digest) for the primary monitor.
@@ -229,13 +277,16 @@ def _capture_source():
         if sct is None:
             sct = held["sct"] = mss.mss(); held["mon"] = sct.monitors[1]
         mon = held["mon"]
-        shot = sct.grab(mon)
+        fast = dx_grab(mon)
+        if fast is not None: raw, size = fast
+        else:
+            shot = sct.grab(mon); raw, size = shot.raw, shot.size
         cur = None
         if settings.show_cursor:
             px, py = pointer.position
             if mon["left"] <= px < mon["left"] + mon["width"] and mon["top"] <= py < mon["top"] + mon["height"]:
                 cur = (px - mon["left"], py - mon["top"])
-        return shot.raw, shot.size, cur, zlib.crc32(shot.raw)   # digest = pixels only; the pointer is compared separately
+        return raw, size, cur, zlib.crc32(raw)   # digest = pixels only; the pointer is compared separately
 
     def close():
         sct = held.pop("sct", None)
@@ -391,6 +442,7 @@ async def stream_frames(ws: WebSocket, grab) -> None:
         last_digest, last_jpeg, last_sent, size_sent = None, None, 0.0, None
         cycle = 0.0   # seconds the last capture+encode took
         last_change = 0.0      # when the picture last changed (0 = not yet)
+        config_changed = False  # the next frame is the answer to a config message: always sharp, never "motion"
         refine_due = False     # the last frame went out at reduced "motion" quality: a sharp one is owed once the picture rests
 
         async def encode_and_send(raw, size, cur, width, quality, started):
@@ -409,7 +461,7 @@ async def stream_frames(ws: WebSocket, grab) -> None:
         while not state.closed:
             started = _now()
             if state.dirty:   # config changed: re-encode even an unchanged screen and re-announce the size
-                state.dirty = False; last_digest = None; size_sent = None
+                state.dirty = False; last_digest = None; size_sent = None; config_changed = True
             cfg = state.config
             interval = 1 / cfg.fps
             if state.acks and (state.inflight >= state.window(cfg.fps)
@@ -435,7 +487,12 @@ async def stream_frames(ws: WebSocket, grab) -> None:
             def shape_for(motion: bool) -> tuple[int, int]:
                 quality, width = state.shape(cfg, size[0]) if state.acks else (cfg.quality, cfg.max_width)
                 if state.acks: quality = min(quality, adaptive_quality(cfg.quality, state.queue_delay()))
-                if motion: quality = max(QUALITY_MIN, round(quality * settings.motion_quality / 100))
+                if motion:
+                    quality = max(QUALITY_MIN, round(quality * settings.motion_quality / 100))
+                    if settings.motion_width < 100:   # fewer pixels as well: cheaper to scale, encode, upload and decode
+                        full = min(width, size[0]) if width else size[0]
+                        smaller = max(WIDTH_MIN, round(full * settings.motion_width / 100 / WIDTH_STEP) * WIDTH_STEP)
+                        width = min(full, smaller)
                 return quality, width
 
             if digest != last_digest:
@@ -446,8 +503,9 @@ async def stream_frames(ws: WebSocket, grab) -> None:
                 # While the picture keeps changing (scrolling, animations, window moves) the viewer cannot read fine
                 # detail anyway, so those frames are smaller and arrive sooner; one sharp frame follows when it rests.
                 now = _now()
-                motion = settings.motion_quality < 100 and last_change > 0 and now - last_change <= MOTION_WINDOW
-                last_change = now; refine_due = motion
+                motion = (not config_changed and (settings.motion_quality < 100 or settings.motion_width < 100)
+                          and last_change > 0 and now - last_change <= MOTION_WINDOW)
+                config_changed = False; last_change = now; refine_due = motion
                 quality, width = shape_for(motion)
                 last_digest = digest
                 await encode_and_send(raw, size, cur, width, quality, started)
