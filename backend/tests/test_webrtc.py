@@ -97,6 +97,13 @@ async def settle(session, ticks=5):
     for _ in range(ticks): await asyncio.sleep(0.01)
 
 
+def _short_id(v):
+    """Test ids stay short: a 64 KB parameter would overflow Windows' 32767-character environment variable limit
+    (pytest stores the running test's id in PYTEST_CURRENT_TEST)."""
+    if isinstance(v, (str, bytes)): return v if len(v) <= 40 else f"{type(v).__name__}-len{len(v)}"
+    return None
+
+
 # ---------------------------------------------------------------- signaling message validation
 
 def test_parse_offer_ok_and_normalized():
@@ -115,7 +122,7 @@ def test_parse_offer_ok_and_normalized():
     json.dumps({"type": "candidate", "candidate": {"candidate": "candidate:1 1 udp 1 1.2.3.4 5 typ host", "sdpMLineIndex": 99}}),
     json.dumps({"type": "candidate", "candidate": {"candidate": "candidate:" + "9" * 5000}}),
     json.dumps({"type": "candidate", "candidate": {"candidate": "candidate:1 1 udp 1 1.2.3.4 5 typ host", "sdpMid": 7}}),
-])
+], ids=_short_id)
 def test_parse_rejects_malformed(text):
     with pytest.raises(webrtc.SignalError): webrtc.parse_signal(text)
 
@@ -419,7 +426,7 @@ def test_pointer_moves_are_coalesced_but_clicks_keep_order():
     "not json", "[]", "5", "null", json.dumps({"type": "click", "button": "left", "count": "x"}),
     json.dumps({"type": "hotkey", "keys": ["NOPE_KEY"]}), json.dumps({"type": "scroll", "dy": "abc"}),
     json.dumps({"type": "who-knows"}), b"binary", "x" * (webrtc.MAX_CHANNEL_MESSAGE + 1), 12345,
-])
+], ids=_short_id)
 def test_malformed_channel_messages_are_dropped_and_the_session_survives(payload):
     async def go():
         s = make_session(); ch = await started(s)
