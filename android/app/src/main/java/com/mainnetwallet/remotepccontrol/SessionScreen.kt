@@ -416,6 +416,7 @@ fun SessionScreen(c: RemoteController) {
     DisposableEffect(Unit) { onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
+        val windowWidth = maxWidth
         val windowHeight = maxHeight   // read here: BoxWithConstraints' scope is not reachable from inside Column
         val isLandscape = maxWidth > maxHeight
         val rotate: () -> Unit = {
@@ -424,14 +425,8 @@ fun SessionScreen(c: RemoteController) {
         }
         if (maxWidth > maxHeight) {
             // Landscape: PC screen on the left, a separate control panel on the right (nothing is drawn over the picture).
-            // The panel takes exactly the width the picture does not need, so the PC screen fills the full height
-            // (no black bars above and below). Measured inside the safe area: status/navigation bars are excluded.
-            BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
-            val availWidth = maxWidth
-            val availHeight = maxHeight
-            val aspect = if (c.videoAspect > 0f) c.videoAspect else 16f / 9f
-            val panelWidth = (availWidth - availHeight * aspect).coerceIn(200.dp, availWidth * 0.5f)
-            Row(Modifier.fillMaxSize()) {
+            val panelWidth = (windowWidth * 0.28f).coerceIn(230.dp, 340.dp)
+            Row(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize())
                     if (showKeys) Surface(
@@ -465,7 +460,6 @@ fun SessionScreen(c: RemoteController) {
                     PadButtons(send)
                     SpeedRow(sensitivity) { sensitivity = it }
                 }
-            }
             }
         } else {
             Column(
