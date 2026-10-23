@@ -440,7 +440,7 @@ fun SessionScreen(c: RemoteController) {
     var sensitivity by rememberSaveable { mutableStateOf(1.5f) }
     var showPad by rememberSaveable { mutableStateOf(true) }
     var showKeys by rememberSaveable { mutableStateOf(false) }
-    var showControls by rememberSaveable { mutableStateOf(false) }   // landscape: Touch/Keys/Hide/Rotate shown left of the Controls button (hidden until tapped)
+    var showControls by rememberSaveable { mutableStateOf(false) }   // landscape: Touch/Keys/Fullscreen/Rotate shown in the panel under the Controls button (hidden until tapped)
     var typeText by rememberSaveable { mutableStateOf("") }
     val send: (JSONObject) -> Unit = { c.sendInput(it) }
     val onSendText: () -> Unit = {
@@ -461,7 +461,7 @@ fun SessionScreen(c: RemoteController) {
         }
         if (maxWidth > maxHeight) {
             // Landscape: PC screen on the left, a separate trackpad panel on the right.
-            // The Controls button sits at the top-right of the panel; tapping it shows Touch, Keys, Hide and Rotate inside the panel (never over the PC picture).
+            // The Controls button sits at the top-right of the panel; tapping it shows Touch, Keys, Fullscreen and Rotate inside the panel (never over the PC picture).
             // Quality and Stop are only in the portrait toolbar.
             val panelWidth = (windowWidth * 0.28f).coerceIn(230.dp, 340.dp)
             Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
@@ -474,12 +474,12 @@ fun SessionScreen(c: RemoteController) {
                         ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
                     }
                     // Panel hidden: a slim column in the free space to the right of the PC picture (nothing is drawn over the screen).
-                    // Hide on top, then touch modes and left/right click; the active mode is highlighted, Hide brings the panel back as it was.
+                    // Exit (brings the panel back as it was) on top, then touch modes and left/right click; the active mode is highlighted.
                     if (!showPad) Column(
                         Modifier.width(68.dp).fillMaxHeight().padding(horizontal = 4.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)
                     ) {
-                        SideButton("Hide", false, { showPad = true })
+                        SideButton("Exit", false, { showPad = true })
                         listOf(TouchMode.OFF, TouchMode.CLICK, TouchMode.SCROLL, TouchMode.DRAG).forEach { m ->
                             SideButton(m.label, m == touchMode, { touchMode = m })
                         }
@@ -500,7 +500,7 @@ fun SessionScreen(c: RemoteController) {
                             ) {
                                 MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() })
                                 MenuButton("Keys", { showKeys = !showKeys })
-                                MenuButton("Hide", { showPad = false })
+                                MenuButton("Fullscreen", { showPad = false })
                                 RotateButton(rotate, tonal = true, small = true)
                             }
                         }
