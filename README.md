@@ -29,7 +29,7 @@ cd remote-pc-control
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\setup.ps1
 ```
-`setup.ps1` creates a virtual environment, installs dependencies, builds the web dashboard and generates a private `.env` containing your **access token**. Save the token somewhere safe; never commit `.env`. To show it again later:
+`setup.ps1` creates a virtual environment, installs dependencies, builds the web dashboard and generates a private `.env` containing your **access token**. It also asks for an optional `GIST_TOKEN` (press Enter to skip; or pass `-GistToken ghp_...` and `-GistId <id>`), which turns on the automatic tunnel link for the Android app (see A2 below). Save the token somewhere safe; never commit `.env`. To show it again later:
 ```powershell
 Get-Content .env | Select-String REMOTE_PC_TOKEN
 ```

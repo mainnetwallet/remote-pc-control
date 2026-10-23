@@ -1,4 +1,4 @@
-param([switch]$Force)   # -Force: reinstall packages and rebuild the dashboard even if nothing changed
+param([switch]$Force, [string]$GistToken = "", [string]$GistId = "")   # -Force: reinstall packages and rebuild the dashboard even if nothing changed; -GistToken/-GistId: save them to .env without asking
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
@@ -77,6 +77,25 @@ REMOTE_PC_MOTION_WIDTH=80
 REMOTE_PC_CAPTURE=auto
 "@ | Set-Content -Encoding ascii ".env"
   Write-Host "Save this access token securely: $token" -ForegroundColor Yellow
+}
+# Optional: lets the Android app find the tunnel link by itself. Needs a GitHub *classic* token with ONLY the "gist" scope.
+$envText = Get-Content ".env" -Raw
+if ($envText -notmatch '(?m)^\s*GIST_TOKEN\s*=') {
+  if (-not $GistToken -and [Environment]::UserInteractive) {
+    Write-Host ""
+    Write-Host "Optional: GIST_TOKEN lets the Android app find the tunnel link by itself." -ForegroundColor Cyan
+    Write-Host "Create a classic token with ONLY the 'gist' scope: https://github.com/settings/tokens"
+    $GistToken = (Read-Host "Paste GIST_TOKEN (press Enter to skip)").Trim()
+  }
+  if ($GistToken -and $GistToken.Length -lt 20) { Write-Warning "That does not look like a GitHub token; GIST_TOKEN was not saved."; $GistToken = "" }
+  if ($GistToken) {
+    $add = ""
+    if ($envText -notmatch '(?m)^\s*QUICK_TUNNEL\s*=') { $add += "`r`nQUICK_TUNNEL=1" }
+    $add += "`r`nGIST_TOKEN=$GistToken"
+    if ($GistId -and $envText -notmatch '(?m)^\s*GIST_ID\s*=') { $add += "`r`nGIST_ID=$GistId" }
+    Add-Content -Path ".env" -Value $add -Encoding ascii
+    Write-Host "GIST_TOKEN saved to .env" -ForegroundColor Green
+  }
 }
 try { New-NetFirewallRule -DisplayName "RemotePCControl Tailscale only" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8888 -RemoteAddress "100.64.0.0/10" -Profile Any | Out-Null }
 catch { Write-Warning "Run elevated PowerShell to add a firewall rule restricted to 100.64.0.0/10. Never expose publicly." }
