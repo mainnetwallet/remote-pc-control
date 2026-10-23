@@ -131,6 +131,9 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
         private set
     var rtcStats by mutableStateOf<RtcStatsInfo?>(null)
         private set
+    /** Why WebRTC was given up for the WebSocket stream (shown in the corner label so it can be read at a glance). */
+    var rtcFallbackReason by mutableStateOf("")
+        private set
     var quality by mutableStateOf(Quality.values().firstOrNull { it.name == prefs.getString(PREF_QUALITY, null) } ?: Quality.MEDIUM)
         private set
 
@@ -276,7 +279,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     fun startScreen() {
         if (!connected || screenOpen) return
         val gen = ++sessionGen
-        frameCounter.set(0); frame = null; streamInfo = null; videoTrack = null; rtcStats = null
+        frameCounter.set(0); frame = null; streamInfo = null; videoTrack = null; rtcStats = null; rtcFallbackReason = ""
         cursorX = -1f; cursorY = -1f; cursorFromServer = false; localCursorUntilNs = 0L
         screenOpen = true
         startRtc(gen)
@@ -322,7 +325,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
         if (gen != sessionGen || !screenOpen) return
         val wasConnected = transport == "WebRTC"
         rtc?.close(); rtc = null
-        videoTrack = null; rtcStats = null; streamInfo = null
+        videoTrack = null; rtcStats = null; streamInfo = null; rtcFallbackReason = reason.take(80)
         notice = Notice(if (wasConnected) "WebRTC lost ($reason), using WebSocket" else "WebRTC unavailable ($reason), using WebSocket", false)
         startWebSocketStream(gen)
     }

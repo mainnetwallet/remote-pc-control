@@ -292,7 +292,8 @@ private fun StreamStatsOverlay(c: RemoteController, modifier: Modifier = Modifie
         c.transport == "Connecting" -> "Connecting\u2026"
         info != null -> {
             val cap = if (info.targetFps > 0) "/${info.targetFps}" else ""
-            "WebSocket \u00B7 ${info.width}\u00D7${info.height} \u00B7 $fps$cap fps"
+            val why = if (c.rtcFallbackReason.isNotEmpty()) " \u00B7 WebRTC: ${c.rtcFallbackReason}" else ""
+            "WebSocket \u00B7 ${info.width}\u00D7${info.height} \u00B7 $fps$cap fps$why"
         }
         else -> return
     }
