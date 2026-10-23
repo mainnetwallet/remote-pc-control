@@ -187,13 +187,26 @@ fun ScreenView(
                     var accX = 0f
                     var accY = 0f
                     val stepPx = 24.dp.toPx()
+                    // Click mode: send whatever finger movement is still waiting (the 16 ms throttle can hold some back at the end of a drag).
+                    fun flushMove() {
+                        if (mode != TouchMode.CLICK || size.width <= 0 || size.height <= 0 || (accX == 0f && accY == 0f)) return
+                        cur = Offset((cur.x + accX / size.width).coerceIn(0f, 1f), (cur.y + accY / size.height).coerceIn(0f, 1f))
+                        accX = 0f; accY = 0f; lastSentNs = System.nanoTime()
+                        emit("move", Offset(cur.x * size.width, cur.y * size.height), size)
+                    }
                     detectDragGestures(
                         onDragStart = { p ->
                             last = p; scrollAcc = 0f; accX = 0f; accY = 0f
-                            if (mode == TouchMode.DRAG) emit("down", p, size, "left") else if (mode == TouchMode.CLICK) cur = cursor() ?: cur
+                            if (mode == TouchMode.DRAG) emit("down", p, size, "left")
+                            else if (mode == TouchMode.CLICK && System.nanoTime() - lastSentNs > 1_500_000_000L) {
+                                // Carry on from where this pointer was left. Only after a pause is the pointer position reported by the PC trusted
+                                // (it may have moved with the trackpad or a real mouse); right after a drag that report can still be one step behind
+                                // and would pull the pointer back to its old place.
+                                cur = cursor() ?: cur
+                            }
                         },
-                        onDragEnd = { if (mode == TouchMode.DRAG) emit("up", last, size, "left") },
-                        onDragCancel = { if (mode == TouchMode.DRAG) emit("up", last, size, "left") },
+                        onDragEnd = { if (mode == TouchMode.DRAG) emit("up", last, size, "left") else flushMove() },
+                        onDragCancel = { if (mode == TouchMode.DRAG) emit("up", last, size, "left") else flushMove() },
                         onDrag = { change, amount ->
                             change.consume()
                             last = change.position
