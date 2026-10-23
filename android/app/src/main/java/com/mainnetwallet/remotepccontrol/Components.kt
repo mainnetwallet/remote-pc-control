@@ -24,6 +24,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,6 +45,8 @@ import java.util.Locale
 fun Modifier.screenInsets(): Modifier = systemBarsPadding().displayCutoutPadding()
 
 val compactPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+/** Smaller padding for the compact buttons inside the landscape Controls menu (32 dp high). */
+val menuPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
 
 @Composable
 fun AppCard(modifier: Modifier = Modifier, padding: Dp = 16.dp, content: @Composable ColumnScope.() -> Unit) {
@@ -88,10 +91,14 @@ fun QualityPicker(selected: Quality, onSelect: (Quality) -> Unit, modifier: Modi
 
 /** Compact "Quality: Medium" button with a drop-down, used in the session toolbars. */
 @Composable
-fun QualityMenuButton(quality: Quality, onSelect: (Quality) -> Unit) {
+fun QualityMenuButton(quality: Quality, onSelect: (Quality) -> Unit, small: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        FilledTonalButton(onClick = { expanded = true }, contentPadding = compactPadding) { Text("Quality: ${quality.label}") }
+        FilledTonalButton(
+            onClick = { expanded = true },
+            modifier = if (small) Modifier.height(32.dp) else Modifier,
+            contentPadding = if (small) menuPadding else compactPadding
+        ) { Text("Quality: ${quality.label}", style = if (small) MaterialTheme.typography.labelSmall else LocalTextStyle.current) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             Quality.values().forEach { q ->
                 DropdownMenuItem(

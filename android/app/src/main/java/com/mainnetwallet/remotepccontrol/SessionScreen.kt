@@ -32,6 +32,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -283,14 +284,16 @@ private fun RotateIcon(color: Color, modifier: Modifier = Modifier) {
 
 /** Toggles the phone between portrait and landscape, even when auto-rotate is off in Android. */
 @Composable
-private fun RotateButton(onClick: () -> Unit, tonal: Boolean) {
+private fun RotateButton(onClick: () -> Unit, tonal: Boolean, small: Boolean = false) {
     val content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         RotateIcon(LocalContentColor.current, Modifier.semantics { contentDescription = "Rotate screen" })
         Spacer(Modifier.width(4.dp))
-        Text("Rotate")
+        Text("Rotate", style = if (small) MaterialTheme.typography.labelSmall else LocalTextStyle.current)
     }
-    if (tonal) FilledTonalButton(onClick = onClick, contentPadding = compactPadding, content = content)
-    else OutlinedButton(onClick = onClick, contentPadding = compactPadding, content = content)
+    val size = if (small) Modifier.height(32.dp) else Modifier
+    val pad = if (small) menuPadding else compactPadding
+    if (tonal) FilledTonalButton(onClick = onClick, modifier = size, contentPadding = pad, content = content)
+    else OutlinedButton(onClick = onClick, modifier = size, contentPadding = pad, content = content)
 }
 
 private fun Context.findActivity(): Activity? {
@@ -317,11 +320,21 @@ private fun SessionToolbar(
 }
 
 @Composable
-private fun StopButton(onStop: () -> Unit) {
+private fun StopButton(onStop: () -> Unit, small: Boolean = false) {
     Button(
-        onClick = onStop, contentPadding = compactPadding,
+        onClick = onStop,
+        modifier = if (small) Modifier.height(32.dp) else Modifier,
+        contentPadding = if (small) menuPadding else compactPadding,
         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)
-    ) { Text("Stop") }
+    ) { Text("Stop", style = if (small) MaterialTheme.typography.labelSmall else LocalTextStyle.current) }
+}
+
+/** Small tonal button (32 dp high) used inside the landscape Controls menu. */
+@Composable
+private fun MenuButton(text: String, onClick: () -> Unit) {
+    FilledTonalButton(onClick = onClick, modifier = Modifier.height(32.dp), contentPadding = menuPadding) {
+        Text(text, style = MaterialTheme.typography.labelSmall)
+    }
 }
 
 @Composable
@@ -438,29 +451,29 @@ fun SessionScreen(c: RemoteController) {
                         FilledTonalButton(onClick = { showPad = true }, contentPadding = compactPadding) { Text("Trackpad") }
                         FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
                         FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
-                        QualityMenuButton(c.quality) { c.setQuality(it) }
+                        QualityMenuButton(c.quality, { c.setQuality(it) })
                         RotateButton(rotate, tonal = true)
-                        StopButton { c.stopScreen() }
+                        StopButton({ c.stopScreen() })
                     }
                 }
                 if (showPad) Column(
                     Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // One tap shows the control rows, another tap hides them again.
-                    FilledTonalButton(onClick = { showControls = !showControls }, contentPadding = compactPadding) {
-                        Text(if (showControls) "Controls ▴" else "Controls ▾")
+                    // Controls button sits on the right side of the panel; one tap shows the compact rows, another hides them.
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        MenuButton(if (showControls) "Controls ▴" else "Controls ▾", { showControls = !showControls })
                     }
                     if (showControls) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
-                            FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
-                            FilledTonalButton(onClick = { showPad = false }, contentPadding = compactPadding) { Text("Hide") }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                            MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() })
+                            MenuButton("Keys", { showKeys = !showKeys })
+                            MenuButton("Hide", { showPad = false })
                         }
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            QualityMenuButton(c.quality) { c.setQuality(it) }
-                            RotateButton(rotate, tonal = true)
-                            StopButton { c.stopScreen() }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                            QualityMenuButton(c.quality, { c.setQuality(it) }, small = true)
+                            RotateButton(rotate, tonal = true, small = true)
+                            StopButton({ c.stopScreen() }, small = true)
                         }
                     }
                     Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
