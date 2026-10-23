@@ -7,6 +7,9 @@ $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 $log = Join-Path $Root "autostart.log"
 if ((Test-Path $log) -and (Get-Item $log).Length -gt 1MB) { Remove-Item $log -Force -ErrorAction SilentlyContinue }
+$outLog = Join-Path $Root "server.out.log"
+$errLog = Join-Path $Root "server.err.log"
+foreach ($f in @($outLog,$errLog)) { if ((Test-Path $f) -and (Get-Item $f).Length -gt 1MB) { Remove-Item $f -Force -ErrorAction SilentlyContinue } }
 function Log($m) { Add-Content -Path $log -Value ("{0:yyyy-MM-dd HH:mm:ss}  {1}" -f (Get-Date), $m) }
 
 function Test-Online {
@@ -51,7 +54,15 @@ while ($true) {
   }
   Wait-ForNetwork
   Log "Starting server"
-  try { & (Join-Path $PSScriptRoot "start.ps1") *>> $log } catch { Log "Server error: $($_.Exception.Message)" }
-  Log "Server stopped. Restarting in 10 s"
+  # Run the server as its own hidden process with output sent straight to files. (Redirecting uvicorn's stderr through
+  # PowerShell turns its normal INFO lines into errors and kills the server under $ErrorActionPreference = "Stop".)
+  try {
+    $startScript = Join-Path $PSScriptRoot "start.ps1"
+    $p = Start-Process powershell.exe -ArgumentList @("-NoProfile","-ExecutionPolicy","Bypass","-File","`"$startScript`"") `
+      -WorkingDirectory $Root -WindowStyle Hidden -PassThru -Wait -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+    Log "Server stopped (exit code $($p.ExitCode)). Last lines of server.err.log:"
+    if (Test-Path $errLog) { Get-Content $errLog -Tail 5 -ErrorAction SilentlyContinue | ForEach-Object { Log "    $_" } }
+  } catch { Log "Could not run the server: $($_.Exception.Message)" }
+  Log "Restarting in 10 s"
   Start-Sleep -Seconds 10
 }

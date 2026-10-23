@@ -13,3 +13,5 @@ __pycache__/
 cloudflared.log
 cloudflared.out.log
 autostart.log
+server.out.log
+server.err.log
