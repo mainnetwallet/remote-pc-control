@@ -498,6 +498,41 @@ def test_steady_shape_never_exceeds_config():
     st = _link_state(bw=5_000_000, full_bytes=40_000)
     for i in range(10): assert st.steady_shape(cfg, 1920, i * 3.0) == (65, 1280)
 
+
+def test_reset_shape_lets_a_higher_preset_apply_at_once():
+    low, high = StreamConfig(960, 20, 45), StreamConfig(1920, 30, 78)
+    st = _link_state(bw=5_000_000, full_bytes=40_000)
+    assert st.steady_shape(low, 1920, 0.0) == (45, 960)
+    assert st.steady_shape(high, 1920, 0.1) == (45, 960)      # without a reset the picture creeps up one small step per 2 s
+    st.reset_shape()
+    assert st.steady_shape(high, 1920, 0.2) == (78, 1920)     # the new preset is used on the very next frame
+
+
+def test_reset_shape_still_shrinks_at_once_on_a_slow_link():
+    high = StreamConfig(1920, 30, 78)
+    st = _link_state(bw=25_000, full_bytes=200_000)
+    st.steady_shape(StreamConfig(960, 20, 45), 1920, 0.0)
+    st.reset_shape()
+    q, w = st.steady_shape(high, 1920, 0.1)
+    assert q < 78 and w < 1920                                 # a link that cannot carry it is not flooded after the switch
+
+
+def test_a_config_message_resets_the_remembered_shape(monkeypatch):
+    calls = []
+    real = screen._StreamState.reset_shape
+    monkeypatch.setattr(screen._StreamState, "reset_shape", lambda self: (calls.append(1), real(self))[1])
+    async def run():
+        ws = _FakeWS()
+        task = asyncio.create_task(screen.stream_frames(ws, _changing_grab()))
+        await asyncio.sleep(0.2)
+        ws.say('{"type":"config","max_width":1920,"fps":30,"quality":80}')
+        await asyncio.sleep(0.3)
+        ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(task, 3)
+    asyncio.run(run())
+    assert len(calls) == 1
+
+
 def test_note_encoded_predicts_the_full_size_from_a_shrunk_frame():
     cfg = StreamConfig(1280, 30, 65)
     st = screen._StreamState()

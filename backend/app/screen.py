@@ -337,6 +337,11 @@ class _StreamState:
     def reset_flight(self) -> None:
         self.inflight = 0; self.inflight_bytes = 0; self.sent_at.clear()
 
+    def reset_shape(self) -> None:
+        """Forget the remembered picture shape (the client chose new quality/width/fps). Without this, picking a
+        higher preset only grew back one 10-quality / 80 px step per RECOVER_SECONDS: 20+ s of a blurry picture."""
+        self._shown = (0, 0); self._shown_at = 0.0
+
     def on_ack(self, now: float) -> None:
         """An ack arrived: update the round trip, the measured upload speed and what is still in flight."""
         self.acks = True
@@ -480,6 +485,7 @@ async def stream_frames(ws: WebSocket, grab) -> None:
             started = _now()
             if state.dirty:   # config changed: re-encode even an unchanged screen and re-announce the size
                 state.dirty = False; last_digest = None; size_sent = None; config_changed = True
+                state.reset_shape()   # the new preset applies at once; a slow link still shrinks the next frame
             cfg = state.config
             interval = 1 / cfg.fps
             if state.acks and (state.inflight >= state.window(cfg.fps)

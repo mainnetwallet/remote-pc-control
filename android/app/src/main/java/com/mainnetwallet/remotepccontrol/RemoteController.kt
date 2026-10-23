@@ -92,7 +92,9 @@ class StreamInfo(val width: Int, val height: Int, val targetFps: Int)
 /** Live numbers of the WebRTC session (roundtrip ms, frames/s, kbit/s received, decode ms per frame). */
 class RtcStatsInfo(val rttMs: Int, val fps: Int, val kbps: Int, val decodeMs: Int)
 
-private const val RTC_CONNECT_TIMEOUT_MS = 6000L   // no WebRTC connection by then: use the WebSocket stream
+// The WebSocket stream shows the picture from the first second, so WebRTC may take its time to negotiate. If it has
+// not delivered decoded video by then (no direct UDP path, decoder problem...), it is dropped and the WebSocket stream stays.
+private const val RTC_CONNECT_TIMEOUT_MS = 10_000L
 
 /**
  * All connection state and networking. UI reads the Compose state properties; the activity is not
@@ -157,6 +159,10 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     private var inputSocket: WebSocket? = null
     private var rtc: RtcClient? = null
     private var sessionGen = 0   // callbacks of an older session must not touch the current one
+    private var wsGen = 0        // same for the WebSocket stream: dropping it (WebRTC took over) must not end the session
+    private var pendingTrack: VideoTrack? = null   // the PC video; it is shown only once frames are really being decoded
+    private var rtcInfo: StreamInfo? = null        // size and fps the PC reports over WebRTC (used once the video is live)
+    @Volatile private var rtcLive = false          // WebRTC video is decoding and on screen; the WebSocket stream is off
 
     // When the address field holds a Gist reference ("gist:<id>"), this is the current tunnel URL read from it.
     private var resolvedBase: String? = null
@@ -271,15 +277,15 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     fun setQuality(q: Quality) {
         quality = q
         prefs.edit().putString(PREF_QUALITY, q.name).apply()
-        val r = rtc
-        if (r != null) r.sendControl(q.rtcConfigMessage())   // WebRTC: bitrate, size and fps are applied live
-        else screenSocket?.send(q.configMessage())   // applied live, the PC answers with the new frame size
+        rtc?.sendControl(q.rtcConfigMessage())       // WebRTC: bitrate, size and fps are applied live
+        screenSocket?.send(q.configMessage())        // WebSocket stream (on screen until WebRTC takes over): applied live too
     }
 
     fun startScreen() {
         if (!connected || screenOpen) return
         val gen = ++sessionGen
         frameCounter.set(0); frame = null; streamInfo = null; videoTrack = null; rtcStats = null; rtcFallbackReason = ""
+        pendingTrack = null; rtcInfo = null; rtcLive = false
         cursorX = -1f; cursorY = -1f; cursorFromServer = false; localCursorUntilNs = 0L
         screenOpen = true
         startRtc(gen)
@@ -287,33 +293,62 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
 
     private fun wsRoot() = normalizedBase().replaceFirst("https://", "wss://").replaceFirst("http://", "ws://")
 
-    /** Tries WebRTC first; any failure (or no connection within a few seconds) switches to the WebSocket stream. */
+    /**
+     * The WebSocket stream starts at once, so the picture is on screen while WebRTC is still negotiating (or can never
+     * connect: Cloudflare tunnel, mobile data behind CGNAT). When WebRTC really delivers decoded video it takes over and
+     * the WebSocket stream is dropped; if it fails, times out or never produces a frame, the WebSocket stream just stays.
+     */
     private fun startRtc(gen: Int) {
-        transport = "Connecting"
+        startWebSocketStream(gen)
         val listener = object : RtcListener {
-            override fun onVideo(track: VideoTrack) { if (gen == sessionGen) videoTrack = track }
-            override fun onConnected() { if (gen == sessionGen) { transport = "WebRTC"; notice = Notice("", false) } }
+            override fun onVideo(track: VideoTrack) { if (gen == sessionGen) pendingTrack = track }   // shown later, see goLive
+            override fun onConnected() { }   // a connected peer is not proof of video: goLive waits for decoded frames
             override fun onFailed(reason: String) {
                 scope.launch { if (gen == sessionGen) fallBackToWebSocket(gen, reason) }
             }
             override fun onScreen(width: Int, height: Int, fps: Int) {
                 if (gen != sessionGen) return
-                streamInfo = StreamInfo(width, height, fps)
+                val info = StreamInfo(width, height, fps)
+                rtcInfo = info
                 if (width > 0 && height > 0) videoAspect = width.toFloat() / height.toFloat()
+                if (rtcLive) streamInfo = info   // before that the label belongs to the WebSocket stream still on screen
             }
             override fun onCursor(o: JSONObject) { if (gen == sessionGen) onServerCursor(o) }
-            override fun onStats(rttMs: Int, fps: Int, kbps: Int, decodeMs: Int) {
-                if (gen == sessionGen) { rtcStats = RtcStatsInfo(rttMs, fps, kbps, decodeMs); frameCounter.set(fps) }
+            override fun onStats(rttMs: Int, fps: Int, kbps: Int, decodeMs: Int, decoded: Long) {
+                if (gen != sessionGen) return
+                rtcStats = RtcStatsInfo(rttMs, fps, kbps, decodeMs)
+                if (!rtcLive && decoded > 0) scope.launch { goLive(gen) }
+                if (rtcLive) frameCounter.set(fps)
             }
         }
         val client = try { RtcClient(appContext, wsClient, wsRoot(), token.trim(), listener) } catch (e: Throwable) { null }
-        if (client == null) { startWebSocketStream(gen); return }
+        if (client == null) { fallBackToWebSocket(gen, "could not start"); return }
         rtc = client
         try { client.start(quality.rtcConfigMessage()) } catch (e: Throwable) { fallBackToWebSocket(gen, e.message ?: "WebRTC error"); return }
         scope.launch {
             delay(RTC_CONNECT_TIMEOUT_MS)
-            if (gen == sessionGen && rtc === client && transport == "Connecting") fallBackToWebSocket(gen, "no connection in time")
+            if (gen == sessionGen && rtc === client && !rtcLive) fallBackToWebSocket(gen, "no video in time")
         }
+    }
+
+    /** WebRTC frames are being decoded: show the video and switch the WebSocket stream off. */
+    private fun goLive(gen: Int) {
+        if (gen != sessionGen || !screenOpen || rtcLive) return
+        val track = pendingTrack ?: return
+        rtcLive = true
+        dropWebSocketStream()
+        frame = null; rtcFallbackReason = ""
+        streamInfo = rtcInfo
+        videoTrack = track
+        transport = "WebRTC"
+        notice = Notice("", false)
+    }
+
+    /** Closes the WebSocket screen and input sockets without ending the session (WebRTC carries picture and input now). */
+    private fun dropWebSocketStream() {
+        wsGen++   // callbacks of the old sockets are ignored from now on
+        screenSocket?.close(1000, "WebRTC active"); inputSocket?.close(1000, "WebRTC active")
+        screenSocket = null; inputSocket = null
     }
 
     /** The decoded video's real size (from the renderer): its aspect ratio sizes the touch area. */
@@ -323,29 +358,42 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
 
     private fun fallBackToWebSocket(gen: Int, reason: String) {
         if (gen != sessionGen || !screenOpen) return
-        val wasConnected = transport == "WebRTC"
+        val wasLive = rtcLive
         rtc?.close(); rtc = null
-        videoTrack = null; rtcStats = null; streamInfo = null; rtcFallbackReason = reason.take(80)
-        notice = Notice(if (wasConnected) "WebRTC lost ($reason), using WebSocket" else "WebRTC unavailable ($reason), using WebSocket", false)
-        startWebSocketStream(gen)
+        pendingTrack = null; rtcInfo = null; rtcLive = false
+        videoTrack = null; rtcStats = null; rtcFallbackReason = reason.take(80)
+        transport = "WebSocket"
+        notice = Notice(if (wasLive) "WebRTC lost ($reason), using WebSocket" else "WebRTC unavailable ($reason), using WebSocket", false)
+        // Normally the WebSocket stream has been running all along; it is gone only after WebRTC had taken over.
+        if (wasLive || screenSocket == null) { streamInfo = null; startWebSocketStream(gen) }
+    }
+
+    /** The WebSocket screen stream ended by itself. While WebRTC may still deliver the picture the session goes on. */
+    private fun wsStreamLost(gen: Int, ws: Int, text: String) {
+        if (gen != sessionGen || ws != wsGen) return
+        if (rtc != null && !rtcLive) { screenSocket = null; return }
+        notice = Notice(text, true)
+        stopScreen()
     }
 
     private fun startWebSocketStream(gen: Int) {
         val wsBase = wsRoot()
+        val ws = ++wsGen
+        screenSocket?.cancel(); inputSocket?.cancel()   // never leave an older pair of sockets open behind the new one
         transport = "WebSocket"
         screenSocket = wsClient.newWebSocket(Request.Builder().url("$wsBase/ws/screen").build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 webSocket.send(JSONObject().put("token", token.trim()).toString())
             }
             override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
-                if (gen != sessionGen) return
+                if (gen != sessionGen || ws != wsGen) return
                 val data = bytes.toByteArray()
                 val decoded = BitmapFactory.decodeByteArray(data, 0, data.size)
                 if (decoded != null) { frame = decoded; frameCounter.incrementAndGet() }
                 webSocket.send("{\"type\":\"ack\"}")   // frame shown: the PC may send the next one (keeps the stream lag-free)
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
-                if (gen != sessionGen) return
+                if (gen != sessionGen || ws != wsGen) return
                 try {
                     val o = JSONObject(text)
                     when (o.optString("type")) {
@@ -357,14 +405,10 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
             }
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 webSocket.close(1000, null)
-                if (gen != sessionGen) return
-                notice = Notice("Screen stream closed" + if (reason.isNotBlank()) ": $reason" else ".", true)
-                stopScreen()
+                wsStreamLost(gen, ws, "Screen stream closed" + if (reason.isNotBlank()) ": $reason" else ".")
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (gen != sessionGen) return
-                notice = Notice("Screen stream disconnected: ${t.message ?: "network error"}", true)
-                stopScreen()
+                wsStreamLost(gen, ws, "Screen stream disconnected: ${t.message ?: "network error"}")
             }
         })
         inputSocket = wsClient.newWebSocket(Request.Builder().url("$wsBase/ws/input").build(), object : WebSocketListener() {
@@ -372,7 +416,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
                 webSocket.send(JSONObject().put("token", token.trim()).toString())
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
-                if (gen != sessionGen) return
+                if (gen != sessionGen || ws != wsGen) return
                 try {
                     val o = JSONObject(text)
                     when (o.optString("type")) {
@@ -382,7 +426,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
                 } catch (_: Exception) { }
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (gen != sessionGen) return
+                if (gen != sessionGen || ws != wsGen) return
                 notice = Notice("Input connection failed: ${t.message ?: "network error"}", true)
             }
         })
@@ -390,6 +434,8 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
 
     fun stopScreen() {
         sessionGen++
+        wsGen++
+        pendingTrack = null; rtcInfo = null; rtcLive = false
         rtc?.close(); rtc = null
         screenSocket?.close(1000, "User closed screen")
         inputSocket?.close(1000, "User closed screen")
@@ -431,6 +477,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     /** Called when the activity goes away: drop the sockets without touching UI state. */
     fun shutdown() {
         sessionGen++
+        wsGen++
         rtc?.close(); rtc = null
         screenSocket?.cancel(); inputSocket?.cancel()
     }

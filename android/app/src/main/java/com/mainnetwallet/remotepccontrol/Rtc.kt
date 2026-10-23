@@ -57,8 +57,12 @@ interface RtcListener {
     fun onFailed(reason: String)
     fun onScreen(width: Int, height: Int, fps: Int)
     fun onCursor(o: JSONObject)
-    fun onStats(rttMs: Int, fps: Int, kbps: Int, decodeMs: Int)
+    /** [decoded] counts the video frames decoded so far: above 0 means the picture really arrives. */
+    fun onStats(rttMs: Int, fps: Int, kbps: Int, decodeMs: Int, decoded: Long)
 }
+
+// A phone's radio often drops the path for a moment ("disconnected") and ICE recovers by itself; only a longer outage ends WebRTC.
+private const val DISCONNECT_GRACE_MS = 5000L
 
 private open class SdpAdapter : SdpObserver {
     override fun onCreateSuccess(sdp: SessionDescription?) {}
@@ -87,6 +91,7 @@ class RtcClient(
     private var inputChannel: DataChannel? = null
     private var controlChannel: DataChannel? = null
     private var statsTimer: Timer? = null
+    private var disconnectTimer: Timer? = null
     private var lastBytes = 0L
     private var lastBytesAt = 0L
     @Volatile private var pingRttMs = -1
@@ -117,6 +122,24 @@ class RtcClient(
         if (closed || failedReported) return
         failedReported = true
         listener.onFailed(reason)
+    }
+
+    /** "Disconnected" is often a short radio hiccup: give ICE a few seconds to recover before giving up on WebRTC. */
+    @Synchronized
+    private fun startDisconnectTimer() {
+        if (closed) return
+        disconnectTimer?.cancel()
+        val timer = Timer("rtc-disconnect", true)
+        disconnectTimer = timer
+        timer.schedule(object : TimerTask() {
+            override fun run() { fail("the connection to the PC was lost") }
+        }, DISCONNECT_GRACE_MS)
+    }
+
+    @Synchronized
+    private fun cancelDisconnectTimer() {
+        disconnectTimer?.cancel()
+        disconnectTimer = null
     }
 
     private fun handleSignal(o: JSONObject) {
@@ -191,10 +214,11 @@ class RtcClient(
             override fun onConnectionChange(state: PeerConnection.PeerConnectionState?) {
                 when (state) {
                     PeerConnection.PeerConnectionState.CONNECTED -> {
+                        cancelDisconnectTimer()   // it came back by itself
                         if (!connected) { connected = true; listener.onConnected(); startStats() }
                     }
-                    PeerConnection.PeerConnectionState.FAILED -> fail("the connection to the PC failed")
-                    PeerConnection.PeerConnectionState.DISCONNECTED -> if (connected) fail("the connection to the PC was lost")
+                    PeerConnection.PeerConnectionState.FAILED -> { cancelDisconnectTimer(); fail("the connection to the PC failed") }
+                    PeerConnection.PeerConnectionState.DISCONNECTED -> if (connected) startDisconnectTimer()
                     else -> {}
                 }
             }
@@ -281,6 +305,7 @@ class RtcClient(
                     var fps = 0
                     var kbps = 0
                     var decodeMs = 0
+                    var decoded = 0L
                     for (s: RTCStats in report.statsMap.values) {
                         val m = s.members
                         when (s.type) {
@@ -293,13 +318,14 @@ class RtcClient(
                                 val frames = (m["framesDecoded"] as? Number)?.toDouble() ?: 0.0
                                 val total = (m["totalDecodeTime"] as? Number)?.toDouble() ?: 0.0
                                 if (frames > 0) decodeMs = (total / frames * 1000).toInt()
+                                decoded = frames.toLong()
                             }
                             "candidate-pair" -> if (m["nominated"] == true && m["state"] == "succeeded" && rtt < 0) {
                                 rtt = ((m["currentRoundTripTime"] as? Number)?.toDouble() ?: 0.0).times(1000).toInt()
                             }
                         }
                     }
-                    listener.onStats(rtt, fps, kbps, decodeMs)
+                    listener.onStats(rtt, fps, kbps, decodeMs, decoded)
                 }
             }
         }, 1000L, 1000L)
@@ -308,6 +334,7 @@ class RtcClient(
     fun close() {
         if (closed) return
         closed = true
+        cancelDisconnectTimer()
         statsTimer?.cancel(); statsTimer = null
         try { signaling?.send("{\"type\":\"bye\"}") } catch (_: Exception) { }
         try { signaling?.close(1000, null) } catch (_: Exception) { }

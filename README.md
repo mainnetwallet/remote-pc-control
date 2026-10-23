@@ -125,7 +125,8 @@ All fields are optional. `max_width` is `0` (native) or 320-3840, `fps` is 1-30,
 The default JPEG stream sends one picture per frame over a TCP WebSocket. One slow packet delays everything behind it, and a Cloudflare tunnel adds a relay hop on top. WebRTC sends H.264 video over UDP (old frames are dropped instead of queued) and carries mouse/keyboard input on data channels.
 
 **How it works.** When you tap *Start screen*, the Android app first opens `/ws/rtc` on the same PC address and with the same password. That socket is only used to exchange the connection offer (signaling). The video and the input then travel directly between phone and PC.
-- If the connection is not up within about 5 seconds, or the PC says WebRTC is unavailable, the app switches to the WebSocket JPEG stream by itself and shows a small notice. Nothing else changes.
+- The WebSocket JPEG stream starts at the same moment, so there is a picture from the first second while WebRTC negotiates. As soon as WebRTC video is really being decoded the app switches to it and closes the JPEG stream.
+- If WebRTC has not delivered video within about 10 seconds, or the PC says WebRTC is unavailable, the app simply keeps the WebSocket stream and shows a small notice. A short network drop (under 5 seconds) does not end a working WebRTC session.
 - The PC encodes with the GPU when it can (NVIDIA `nvenc`, Intel `qsv`, AMD `amf`) and otherwise with libx264 (`ultrafast`, `zerolatency`, no B-frames). A hardware encoder that does not work is skipped automatically.
 - Input uses two data channels with the same JSON messages as `/ws/input`: `input` (unordered, no retransmits) for pointer moves, and `control` (reliable) for clicks, keys, scroll, hotkeys and typed text.
 
