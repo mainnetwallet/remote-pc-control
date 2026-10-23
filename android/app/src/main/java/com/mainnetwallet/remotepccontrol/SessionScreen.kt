@@ -449,10 +449,9 @@ fun SessionScreen(c: RemoteController) {
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
                         ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
                         if (!showPad) Row(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            FilledTonalButton(onClick = { showPad = true }, contentPadding = compactPadding) { Text("Trackpad") }
-                            FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
+                            // Panel hidden: only Touch and Hide stay; Hide brings the panel back exactly as it was.
                             FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
-                            RotateButton(rotate, tonal = true)
+                            FilledTonalButton(onClick = { showPad = true }, contentPadding = compactPadding) { Text("Hide") }
                         }
                     }
                     if (showPad) Column(
