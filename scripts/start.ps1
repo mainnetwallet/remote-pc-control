@@ -19,7 +19,9 @@ if (Test-Path ".env") {
 
 function Read-SharedText($path) {
   try {
-    $fs = [System.IO.File]::Open($path, 'Open', 'Read', 'ReadWrite')
+    # .NET resolves relative paths against the process folder, not PowerShell's current folder, so use a full path
+    $full = [System.IO.Path]::GetFullPath((Join-Path $Root $path))
+    $fs = [System.IO.File]::Open($full, 'Open', 'Read', 'ReadWrite')
     try { return (New-Object System.IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Dispose() }
   } catch { return "" }
 }
