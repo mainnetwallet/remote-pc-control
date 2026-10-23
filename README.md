@@ -98,7 +98,7 @@ Open **GitHub > Actions > Android APK** (it runs on every push to `main`, or use
 The app has three screens:
 - **Connect**: PC URL and token. The URL and the password (encrypted with the Android Keystore) are remembered after the first login, so the login screen only appears once; Log out forgets them.
 - **Dashboard**: CPU, memory and disk gauges, network speed (refreshed every 5 s), and power buttons. Sleep, Restart and Shutdown ask for confirmation; Lock does not. It also holds the **Quality** setting and the *Start screen session* button.
-- **Session**: live screen, touch modes, trackpad, keys. A small overlay in the corner of the picture shows the received resolution and the measured/maximum frames per second (for example `1280×720 · 14/15 fps`). **Quality** in the toolbar changes the stream while it is running, and the choice is remembered.
+- **Session**: live screen, touch modes, trackpad, keys. A small overlay in the corner of the picture shows the received resolution and the measured/maximum frames per second (for example `1280×720 · 27/30 fps`). **Quality** in the toolbar changes the stream while it is running, and the choice is remembered.
 
 | Quality | Width | Max FPS | JPEG quality |
 |---|---|---|---|
@@ -130,7 +130,7 @@ git pull
 |---|---|---|
 | `REMOTE_PC_TOKEN` | generated | Access password (4+ characters, 12+ recommended; setup generates a long random one). Required. |
 | `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `0.0.0.0` / `8888` | Listen address. |
-| `REMOTE_PC_FPS` | `10` | Starting frames per second (1-30); clients can change it live. |
+| `REMOTE_PC_FPS` | `20` | Starting frames per second (1-30); clients can change it live. If you set it in an existing `.env`, change it there too: the file wins over the default. |
 | `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality (25-85); clients can raise it to 90 live. |
 | `REMOTE_PC_MAX_WIDTH` | `1280` | Starting width limit; wider frames are downscaled (`0` = native). Clients can change it live. |
 | `REMOTE_PC_SHOW_CURSOR` | `1` | Draw a pointer on the stream. |

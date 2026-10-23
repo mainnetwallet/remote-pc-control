@@ -10,9 +10,10 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
           clamped, unusable ones ignored. Applied live; the server answers with a fresh
           {"type":"screen",...} (carrying the values now in effect) followed by a new frame.
               {"type":"ack"}   send one after each frame you have shown. Once the server has seen an ack it
-          keeps at most 2 frames in flight (the newest screen always wins) and lowers JPEG quality when the
-          link is slow, so the picture and the pointer never lag behind. Clients that never ack get the
-          old fixed-rate stream.
+          keeps a small number of frames in flight (the newest screen always wins) and lowers JPEG quality when the
+          link is congested, so the picture and the pointer never lag behind. Clients that never ack get the
+          old fixed-rate stream. The in-flight window grows with the measured link round-trip time (up to
+          MAX_WINDOW frames) so a high-latency link such as a tunnel can still reach the configured fps.
   /ws/input   client -> server:
       {"type":"move",   "nx":0..1, "ny":0..1}                    cursor to a normalized position
       {"type":"rel",    "dx":int, "dy":int}                       move the pointer by pixel deltas from where it is
@@ -29,14 +30,18 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
 Normalized coordinates make the mapping independent of the (possibly downscaled)
 frame the phone is showing, and of Windows display scaling.
 """
-import asyncio, collections, contextlib, hmac, io, json, math, platform, zlib
+import asyncio, collections, contextlib, functools, hmac, io, json, math, platform, zlib
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from fastapi import WebSocket, WebSocketDisconnect
 from PIL import Image, ImageDraw
 from .config import settings
 from . import security
 
-MAX_IN_FLIGHT = 2         # frames sent but not yet acknowledged (only once the client sends acks)
+MAX_IN_FLIGHT = 2         # minimum number of frames sent but not yet acknowledged (only once the client sends acks)
+MAX_WINDOW = 6            # the window grows up to this many frames on high-latency links (see flight_window)
+RTT_SAMPLES = 120         # ack round-trip samples kept to estimate the link's base latency
+MIN_RTT_SAMPLES = 4       # need this many samples before the base latency is trusted
 ACK_TIMEOUT = 1.0         # no ack for this long: assume the frames were lost and carry on
 KEEPALIVE_SECONDS = 3.0   # resend the last frame so idle screens don't hit client read timeouts
 MAX_SCROLL = 20
@@ -54,6 +59,21 @@ def enable_dpi_awareness():
     except Exception:
         try: ctypes.windll.user32.SetProcessDPIAware()
         except Exception: pass
+
+
+_timer_raised = False
+
+
+def enable_high_res_timer():
+    """Windows sleeps in ~15.6 ms steps by default, which caps a 30 fps stream near 20 fps. Ask for 1 ms steps."""
+    global _timer_raised
+    if _timer_raised or platform.system() != "Windows":
+        return
+    import ctypes
+    try:
+        ctypes.windll.winmm.timeBeginPeriod(1); _timer_raised = True
+    except Exception:
+        pass
 
 
 def primary_monitor() -> dict:
@@ -172,24 +192,47 @@ def _on_windows() -> bool:
 
 @contextlib.contextmanager
 def _capture_source():
-    """Yield grab() -> (raw BGRX bytes, (w, h), cursor position or None, change digest) for the primary monitor."""
+    """Yield grab() -> (raw BGRX bytes, (w, h), cursor position or None, change digest) for the primary monitor.
+
+    grab() must always run on the same thread (stream_frames gives it a dedicated one): mss keeps its Windows
+    GDI handles per thread, so the capture object is created lazily on that thread. grab.close() releases it there."""
     import mss
     from pynput import mouse
     enable_dpi_awareness()
     pointer = mouse.Controller()
-    with mss.mss() as sct:
-        mon = sct.monitors[1]
+    held: dict = {}
 
-        def grab():
-            shot = sct.grab(mon)
-            cur = None
-            if settings.show_cursor:
-                px, py = pointer.position
-                if mon["left"] <= px < mon["left"] + mon["width"] and mon["top"] <= py < mon["top"] + mon["height"]:
-                    cur = (px - mon["left"], py - mon["top"])
-            return shot.raw, shot.size, cur, zlib.crc32(shot.raw) ^ hash(cur)
+    def grab():
+        sct = held.get("sct")
+        if sct is None:
+            sct = held["sct"] = mss.mss(); held["mon"] = sct.monitors[1]
+        mon = held["mon"]
+        shot = sct.grab(mon)
+        cur = None
+        if settings.show_cursor:
+            px, py = pointer.position
+            if mon["left"] <= px < mon["left"] + mon["width"] and mon["top"] <= py < mon["top"] + mon["height"]:
+                cur = (px - mon["left"], py - mon["top"])
+        return shot.raw, shot.size, cur, zlib.crc32(shot.raw) ^ hash(cur)
 
+    def close():
+        sct = held.pop("sct", None)
+        if sct is not None:
+            with contextlib.suppress(Exception): sct.close()
+
+    grab.close = close
+    try:
         yield grab
+    finally:
+        close()   # normally already done on the capture thread by stream_frames; this is the safety net
+
+
+def flight_window(base_rtt: float, fps: int) -> int:
+    """How many unacknowledged frames may be on the wire. Enough to cover the link's round trip at this frame
+    rate (otherwise a 150 ms tunnel caps the stream near 13 fps), never fewer than MAX_IN_FLIGHT or more than
+    MAX_WINDOW. Frames sitting on the wire add no delay of their own; queueing is handled by adaptive_quality."""
+    if base_rtt <= 0: return MAX_IN_FLIGHT
+    return max(MAX_IN_FLIGHT, min(MAX_WINDOW, math.ceil(base_rtt * max(1, fps)) + 1))
 
 
 class _StreamState:
@@ -197,22 +240,37 @@ class _StreamState:
         self.config = StreamConfig.from_settings()
         self.dirty = False                # a config message arrived: send a fresh screen message + frame
         self.closed = False               # the client went away
-        self.wake = asyncio.Event()       # cuts the frame-interval sleep short
+        self.wake = asyncio.Event()       # config change / disconnect: cuts the frame-interval sleep short
+        self.ack_wake = asyncio.Event()   # an ack arrived (or config change / disconnect): re-check the in-flight window
         self.acks = False                 # the client sends acks, so flow control and quality adaptation are on
         self.inflight = 0                 # frames sent and not yet acknowledged
         self.sent_at: collections.deque = collections.deque()
         self.rtt = 0.0                    # smoothed seconds between sending a frame and its ack
+        self.rtts: collections.deque = collections.deque(maxlen=RTT_SAMPLES)
+
+    @property
+    def base_rtt(self) -> float:
+        """The link's own round-trip time (lowest recent sample); 0.0 until enough acks were seen."""
+        return min(self.rtts) if len(self.rtts) >= MIN_RTT_SAMPLES else 0.0
+
+    def window(self, fps: int) -> int:
+        return flight_window(self.base_rtt, fps)
+
+    def queue_delay(self) -> float:
+        """Seconds frames wait beyond the link's own latency. A slow-but-steady tunnel is not congestion."""
+        return max(0.0, self.rtt - self.base_rtt)
 
 
-def adaptive_quality(quality: int, rtt: float) -> int:
-    """Lower the JPEG quality when frames take long to arrive, so the stream catches up instead of lagging."""
-    if rtt > 0.35: return max(QUALITY_MIN, quality - 25)
-    if rtt > 0.20: return max(QUALITY_MIN, quality - 12)
+def adaptive_quality(quality: int, delay: float) -> int:
+    """Lower the JPEG quality when frames queue up (delay = extra ack time beyond the base latency),
+    so the stream catches up instead of lagging."""
+    if delay > 0.35: return max(QUALITY_MIN, quality - 25)
+    if delay > 0.20: return max(QUALITY_MIN, quality - 12)
     return quality
 
 
 async def _read_client(ws: WebSocket, state: _StreamState) -> None:
-    """Read client messages while frames are being streamed; only "config" is understood."""
+    """Read client messages while frames are being streamed; only "ack" and "config" are understood."""
     try:
         while True:
             msg = await ws.receive()
@@ -226,39 +284,63 @@ async def _read_client(ws: WebSocket, state: _StreamState) -> None:
                 state.inflight = max(0, state.inflight - 1)
                 if state.sent_at:
                     rtt = asyncio.get_running_loop().time() - state.sent_at.popleft()
+                    state.rtts.append(rtt)
                     state.rtt = rtt if state.rtt == 0.0 else state.rtt * 0.7 + rtt * 0.3
-                state.wake.set()
+                state.ack_wake.set()
             elif isinstance(d, dict) and d.get("type") == "config":
                 state.config = state.config.updated(d)
-                state.dirty = True; state.wake.set()
+                state.dirty = True; state.wake.set(); state.ack_wake.set()
     except Exception:
         pass
     finally:
-        state.closed = True; state.wake.set()
+        state.closed = True; state.wake.set(); state.ack_wake.set()
 
 
 async def stream_frames(ws: WebSocket, grab) -> None:
-    """Send screen frames until the client disconnects, applying "config" messages live."""
+    """Send screen frames until the client disconnects, applying "config" messages live.
+
+    Capture and JPEG encoding each run on their own worker thread. When one capture+encode cycle takes longer
+    than a frame interval (the PC is the bottleneck, not the link) the next capture is started while the
+    current frame is still being encoded, so the stream runs at the slower of the two stages, not at their sum."""
     state = _StreamState()
     loop = asyncio.get_running_loop()
+    cap_pool = ThreadPoolExecutor(1, thread_name_prefix="rpc-capture")
+    enc_pool = ThreadPoolExecutor(1, thread_name_prefix="rpc-encode")
     reader = asyncio.create_task(_read_client(ws, state))
+    prefetch = None; prefetch_done = [None]   # the capture started during the last encode, and when it finished
     try:
         last_digest, last_jpeg, last_sent, size_sent = None, None, 0.0, None
+        cycle = 0.0   # seconds the last capture+encode took
         while not state.closed:
             started = loop.time()
             if state.dirty:   # config changed: re-encode even an unchanged screen and re-announce the size
                 state.dirty = False; last_digest = None; size_sent = None
             cfg = state.config
-            if state.acks and state.inflight >= MAX_IN_FLIGHT:
+            interval = 1 / cfg.fps
+            if state.acks and state.inflight >= state.window(cfg.fps):
                 # The client has not shown the previous frames yet: wait instead of queueing more (newest screen wins).
-                state.wake.clear()
-                try: await asyncio.wait_for(state.wake.wait(), ACK_TIMEOUT)
+                state.ack_wake.clear()
+                try: await asyncio.wait_for(state.ack_wake.wait(), ACK_TIMEOUT)
                 except asyncio.TimeoutError: state.inflight = 0; state.sent_at.clear()
                 continue
-            raw, size, cur, digest = await asyncio.to_thread(grab)
+            grabbed = None
+            if prefetch is not None:
+                try:
+                    result = await prefetch
+                    # Fresh enough unless it has been sitting unused for more than a frame (e.g. the window was closed).
+                    if prefetch_done[0] is None or loop.time() - prefetch_done[0] <= interval: grabbed = result
+                finally: prefetch = None
+            if grabbed is None:
+                grabbed = await loop.run_in_executor(cap_pool, grab)
+            raw, size, cur, digest = grabbed
             if digest != last_digest:
-                quality = adaptive_quality(cfg.quality, state.rtt) if state.acks else cfg.quality
-                last_jpeg, out = await asyncio.to_thread(encode_frame, raw, size, cur, cfg.max_width, quality)
+                if cycle >= interval * 0.9:   # PC-bound: capture the next frame while this one is encoded and sent
+                    prefetch_done[0] = None
+                    prefetch = loop.run_in_executor(cap_pool, grab)
+                    prefetch.add_done_callback(lambda _f, d=prefetch_done: d.__setitem__(0, loop.time()))
+                quality = adaptive_quality(cfg.quality, state.queue_delay()) if state.acks else cfg.quality
+                last_jpeg, out = await loop.run_in_executor(
+                    enc_pool, functools.partial(encode_frame, raw, size, cur, cfg.max_width, quality))
                 last_digest = digest
                 if out != size_sent:
                     await ws.send_json({"type": "screen", "width": out[0], "height": out[1],
@@ -266,15 +348,22 @@ async def stream_frames(ws: WebSocket, grab) -> None:
                     size_sent = out
                 await ws.send_bytes(last_jpeg); last_sent = loop.time()
                 state.inflight += 1; state.sent_at.append(last_sent)
+                cycle = last_sent - started
             elif last_jpeg is not None and loop.time() - last_sent >= KEEPALIVE_SECONDS:
                 await ws.send_bytes(last_jpeg); last_sent = loop.time()
                 state.inflight += 1; state.sent_at.append(last_sent)
             if state.dirty or state.closed: continue
             state.wake.clear()
-            try: await asyncio.wait_for(state.wake.wait(), max(0.0, 1 / cfg.fps - (loop.time() - started)))
+            try: await asyncio.wait_for(state.wake.wait(), max(0.0, interval - (loop.time() - started)))
             except asyncio.TimeoutError: pass
     finally:
         reader.cancel()
+        if prefetch is not None:
+            with contextlib.suppress(BaseException): await prefetch
+        close = getattr(grab, "close", None)
+        if close is not None:   # release the capture handles on the thread that created them
+            with contextlib.suppress(BaseException): await loop.run_in_executor(cap_pool, close)
+        cap_pool.shutdown(wait=False); enc_pool.shutdown(wait=False)
 
 
 async def screen_socket(ws: WebSocket):
@@ -284,6 +373,7 @@ async def screen_socket(ws: WebSocket):
         await ws.send_json({"type": "ready"})
         if not _on_windows():
             await ws.send_json({"type": "error", "message": "Windows required"}); return
+        enable_high_res_timer()
         with _capture_source() as grab:
             await stream_frames(ws, grab)
     except WebSocketDisconnect: return

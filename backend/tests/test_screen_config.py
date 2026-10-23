@@ -240,3 +240,106 @@ def test_coalesce_merges_pointer_moves_but_keeps_clicks_in_order():
     assert out == [{"type": "rel", "dx": 7, "dy": -1}, {"type": "click", "button": "left"},
                    {"type": "rel", "dx": 1, "dy": 1}, {"type": "move", "nx": 0.5, "ny": 0.5}, {"type": "scroll", "dy": 2}]
     assert msgs[0] == {"type": "rel", "dx": 3, "dy": 1}        # input list is left untouched
+
+
+# ---- smoothness: latency-aware window, fps cap, pipelined capture/encode -----------
+
+@pytest.mark.parametrize("base_rtt, fps, expected", [
+    (0.0, 30, 2),      # unknown latency: the old minimum
+    (0.02, 30, 2),     # LAN
+    (0.15, 15, 4),     # tunnel, moderate rate
+    (0.15, 30, 6),     # tunnel, full rate
+    (1.5, 30, 6),      # never above MAX_WINDOW
+])
+def test_flight_window_covers_the_link_round_trip(base_rtt, fps, expected):
+    assert screen.flight_window(base_rtt, fps) == expected
+
+
+def test_steady_high_latency_is_not_mistaken_for_congestion():
+    st = screen._StreamState()
+    for _ in range(10): st.rtts.append(0.25)
+    st.rtt = 0.25
+    assert st.base_rtt == 0.25 and st.queue_delay() == 0.0
+    assert screen.adaptive_quality(65, st.queue_delay()) == 65       # quality is kept on a slow but steady tunnel
+    st.rtt = 0.25 + 0.4                                              # frames now wait in a queue
+    assert screen.adaptive_quality(65, st.queue_delay()) == 40
+
+
+def test_base_latency_needs_a_few_samples():
+    st = screen._StreamState()
+    st.rtts.append(0.5)
+    assert st.base_rtt == 0.0 and st.window(30) == screen.MAX_IN_FLIGHT
+
+
+async def _run_acking_client(grab, seconds, ack_delay):
+    """A client that shows every frame ack_delay seconds after it was sent. Returns how many frames the server sent."""
+    ws = _FakeWS()
+    loop = asyncio.get_running_loop()
+    task = asyncio.create_task(screen.stream_frames(ws, grab))
+    seen = 0
+    async def client():
+        nonlocal seen
+        while True:
+            while len(_frames(ws)) > seen:
+                seen += 1
+                loop.call_later(ack_delay, ws.say, '{"type":"ack"}')   # acks overlap, like frames on a real link
+            await asyncio.sleep(0.002)
+    c = asyncio.create_task(client())
+    await asyncio.sleep(seconds)
+    c.cancel()
+    ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+    await asyncio.wait_for(task, 3)
+    return len(_frames(ws))
+
+
+def test_acks_do_not_push_the_stream_past_the_fps_cap(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 10)
+    n = asyncio.run(_run_acking_client(_changing_grab(), 1.0, 0.0))
+    assert 7 <= n <= 12          # about 10 frames in a second, however fast the client acks
+
+
+def test_high_latency_link_still_reaches_the_target_fps(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 30)
+    n = asyncio.run(_run_acking_client(_changing_grab(), 1.5, 0.15))
+    # two frames per 150 ms round trip would give ~20 frames in 1.5 s; the wider window must beat that clearly
+    assert n > 32
+
+
+def test_capture_and_encode_overlap_when_the_pc_is_the_bottleneck(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 30)
+    real_encode = screen.encode_frame
+    def slow_grab_factory():
+        n = [0]
+        def grab():
+            import time; time.sleep(0.04); n[0] += 1
+            return RAW, (W, H), None, n[0]
+        return grab
+    def slow_encode(*a, **k):
+        import time; time.sleep(0.04); return real_encode(*a, **k)
+    monkeypatch.setattr(screen, "encode_frame", slow_encode)
+    async def run():
+        ws = _FakeWS()
+        task = asyncio.create_task(screen.stream_frames(ws, slow_grab_factory()))
+        await asyncio.sleep(1.5)
+        ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(task, 3)
+        return len(_frames(ws))
+    n = asyncio.run(run())
+    assert n > 1.5 / 0.08 * 1.3     # clearly faster than one 80 ms capture+encode after the other (~18 frames)
+
+
+def test_capture_is_released_on_the_capture_thread():
+    import threading
+    seen = {}
+    def grab():
+        seen["grab"] = threading.get_ident(); return RAW, (W, H), None, 1
+    def close(): seen["close"] = threading.get_ident()
+    grab.close = close
+    async def run():
+        ws = _FakeWS()
+        task = asyncio.create_task(screen.stream_frames(ws, grab))
+        await asyncio.sleep(0.2)
+        ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(task, 3)
+    asyncio.run(run())
+    assert seen["grab"] == seen["close"] != threading.get_ident()

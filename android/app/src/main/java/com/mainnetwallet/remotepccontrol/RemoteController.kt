@@ -39,10 +39,10 @@ private const val PREF_QUALITY = "quality"
 
 /** Live-screen quality presets. Each one is sent to the PC as {"type":"config","max_width","fps","quality"}. */
 enum class Quality(val label: String, val maxWidth: Int, val fps: Int, val jpeg: Int, val hint: String) {
-    LOW("Low", 960, 10, 45, "960 px wide, 10 fps. Saves data."),
-    MEDIUM("Medium", 1280, 15, 65, "1280 px wide, 15 fps."),
-    HIGH("High", 1920, 20, 78, "1920 px wide, 20 fps."),
-    NATIVE("Native", 0, 15, 85, "The PC's full resolution, 15 fps. Needs a fast link.");
+    LOW("Low", 960, 20, 45, "960 px wide, up to 20 fps. Saves data."),
+    MEDIUM("Medium", 1280, 30, 65, "1280 px wide, up to 30 fps."),
+    HIGH("High", 1920, 30, 78, "1920 px wide, up to 30 fps."),
+    NATIVE("Native", 0, 20, 85, "The PC's full resolution, up to 20 fps. Needs a fast link.");
 
     fun configMessage(): String = JSONObject()
         .put("type", "config").put("max_width", maxWidth).put("fps", fps).put("quality", jpeg).toString()

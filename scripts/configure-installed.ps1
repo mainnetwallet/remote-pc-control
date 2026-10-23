@@ -8,7 +8,7 @@ if (-not (Test-Path ".env")) {
 REMOTE_PC_TOKEN=$token
 REMOTE_PC_HOST=0.0.0.0
 REMOTE_PC_PORT=8888
-REMOTE_PC_FPS=5
+REMOTE_PC_FPS=20
 REMOTE_PC_JPEG_QUALITY=55
 "@ | Set-Content -Encoding ascii ".env"
   Write-Host "Save this access token securely: $token" -ForegroundColor Yellow
