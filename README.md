@@ -64,16 +64,12 @@ Then start the server using step 3 above. For a scheduled-task installation, see
 Use this if the server runs as the `RemotePCControl` Windows scheduled task. Change the folder path if your repository is elsewhere.
 ```powershell
 cd $HOME\remote-pc-control
-git pull
-.\.venv\Scripts\python.exe -m pytest backend/tests tests -q
-cd frontend
-npm install
-npm run build
-cd ..
 Stop-ScheduledTask -TaskName RemotePCControl
+git pull
+.\scripts\setup.ps1
 Start-ScheduledTask -TaskName RemotePCControl
 ```
-This stops and starts only the named scheduled task rather than killing every Python process on the PC. Run the setup script first if dependencies changed.
+This stops and starts only the named scheduled task rather than killing every Python process on the PC.
 
 ### 7. Run backend tests and build the dashboard
 ```powershell
