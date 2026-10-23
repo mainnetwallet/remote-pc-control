@@ -1,10 +1,9 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 
-type Mode='click'|'move'|'drag'|'scroll';
+type Mode='click'|'drag'|'scroll';
 type Send=(o:object)=>void;
 const MODES:{id:Mode;label:string;hint:string}[]=[
- {id:'click',label:'Click',hint:'Tap = click · long-press = right click · two fingers = scroll'},
- {id:'move',label:'Move',hint:'Drag to move the pointer without clicking'},
+ {id:'click',label:'Click',hint:'Tap = click · long-press = right click · drag = move the pointer · two fingers = scroll'},
  {id:'drag',label:'Drag',hint:'Drag = hold left button (select text, move windows)'},
  {id:'scroll',label:'Scroll',hint:'Drag up/down to scroll the page'},
 ];
@@ -68,7 +67,7 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   }
   if(!st.moved&&Math.hypot(e.clientX-st.start.x,e.clientY-st.start.y)>TAP_SLOP){st.moved=true;window.clearTimeout(st.timer)}
   if(mode==='scroll'){st.scrollAcc+=dy;scrollBy(st);return}
-  if(mode==='move'||mode==='drag'){
+  if(mode==='click'||mode==='drag'){
    const now=performance.now();if(now-st.lastMove<MOVE_INTERVAL_MS)return;st.lastMove=now;
    send({type:'move',...norm(e.clientX,e.clientY)});
   }

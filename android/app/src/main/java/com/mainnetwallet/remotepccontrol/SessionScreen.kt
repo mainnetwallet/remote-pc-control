@@ -79,8 +79,7 @@ import kotlin.math.sin
 
 enum class TouchMode(val label: String, val hint: String) {
     OFF("Off", "Screen is view-only; use the trackpad"),
-    CLICK("Click", "Tap = click · long-press = right click"),
-    MOVE("Move", "Drag to move the pointer without clicking"),
+    CLICK("Click", "Tap = click · long-press = right click · drag = move the pointer"),
     DRAG("Drag", "Drag = hold the left button (select, move windows)"),
     SCROLL("Scroll", "Drag up/down to scroll the page")
 }
@@ -176,7 +175,7 @@ fun ScreenView(
                     )
                 }
                 .pointerInput(mode) {
-                    if (mode == TouchMode.CLICK || mode == TouchMode.OFF) return@pointerInput
+                    if (mode == TouchMode.OFF) return@pointerInput   // Click mode also moves the pointer on drag (a plain tap still clicks)
                     var last = Offset.Zero
                     var lastSentNs = 0L
                     var scrollAcc = 0f
@@ -184,7 +183,7 @@ fun ScreenView(
                     detectDragGestures(
                         onDragStart = { p ->
                             last = p; scrollAcc = 0f
-                            if (mode == TouchMode.DRAG) emit("down", p, size, "left") else if (mode == TouchMode.MOVE) emit("move", p, size)
+                            if (mode == TouchMode.DRAG) emit("down", p, size, "left") else if (mode == TouchMode.CLICK) emit("move", p, size)
                         },
                         onDragEnd = { if (mode == TouchMode.DRAG) emit("up", last, size, "left") },
                         onDragCancel = { if (mode == TouchMode.DRAG) emit("up", last, size, "left") },
@@ -465,7 +464,7 @@ fun SessionScreen(c: RemoteController) {
                         Modifier.width(68.dp).fillMaxHeight().padding(horizontal = 4.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)
                     ) {
-                        listOf(TouchMode.OFF, TouchMode.CLICK, TouchMode.MOVE, TouchMode.SCROLL, TouchMode.DRAG).forEach { m ->
+                        listOf(TouchMode.OFF, TouchMode.CLICK, TouchMode.SCROLL, TouchMode.DRAG).forEach { m ->
                             SideButton(m.label, m == touchMode, { touchMode = m })
                         }
                         SideButton("L-click", false, { send(JSONObject().put("type", "click").put("button", "left")) })

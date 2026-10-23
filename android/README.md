@@ -14,7 +14,7 @@ Or run from this directory: `gradle assembleDebug` with Gradle 8.11.1 or newer i
 
 4. Tap Connect. The Dashboard shows system metrics and the power buttons, and opens a live screen session.
 
-In the screen session use the toolbar modes Click / Move / Drag / Scroll, the Double-click button, the **Quality** menu (Low / Medium / High / Native, applied live) and the quick-key bar. The corner overlay shows the stream resolution and frames per second.
+In the screen session use the toolbar modes Click (tap = click, drag = move the pointer) / Drag / Scroll, the Double-click button, the **Quality** menu (Low / Medium / High / Native, applied live) and the quick-key bar. The corner overlay shows the stream resolution and frames per second.
 
 Do not expose port 8888 directly to the public internet. After the first successful login the password is stored encrypted (Android Keystore) so the app signs in by itself at start; tap Log out to forget it. The app requires a trusted private network because the current agent setup may use HTTP/WebSocket rather than TLS.
 

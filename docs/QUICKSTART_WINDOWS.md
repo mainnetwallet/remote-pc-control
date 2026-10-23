@@ -82,7 +82,7 @@ Follow the [Cloudflare Tunnel guide](CLOUDFLARE.md). Never port-forward port 888
 3. Install the APK (allow installation from this source if Android asks).
 4. Enter the PC URL and token, tap **Connect**, then start a screen session.
 
-Choose **Click**, **Move**, **Drag**, or **Scroll** mode. The toolbar also provides double-click, fullscreen, quick keys, text entry and quality presets.
+Choose **Click** (tap = click, drag = move the pointer), **Drag**, or **Scroll** mode. The toolbar also provides double-click, fullscreen, quick keys, text entry and quality presets.
 
 ## 6. Tests
 

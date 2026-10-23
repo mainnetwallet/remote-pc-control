@@ -159,8 +159,7 @@ Give the PC a fixed address (DHCP reservation) so the URL does not change.
 
 | Mode | What your finger does |
 |---|---|
-| Click | tap = left click, long-press = right click (web: two fingers = scroll) |
-| Move | drag moves the pointer without clicking |
+| Click | tap = left click, long-press = right click, drag moves the pointer (web: two fingers = scroll) |
 | Drag | drag holds the left button (select text, move windows) |
 | Scroll | drag up/down scrolls the page |
 
