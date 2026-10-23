@@ -3,7 +3,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 type Mode='click'|'drag'|'scroll';
 type Send=(o:object)=>void;
 const MODES:{id:Mode;label:string;hint:string}[]=[
- {id:'click',label:'Click',hint:'Drag = move the pointer · tap = click where the pointer is · long-press = right click · two fingers = scroll'},
+ {id:'click',label:'Click',hint:'Drag anywhere = move the pointer from where it is · tap = click there · long-press = right click · two fingers = scroll'},
  {id:'drag',label:'Drag',hint:'Drag = hold left button (select text, move windows)'},
  {id:'scroll',label:'Scroll',hint:'Drag up/down to scroll the page'},
 ];
@@ -15,14 +15,14 @@ const QUICK:{label:string;msg:object}[]=[
  {label:'Ctrl+C',msg:{type:'hotkey',keys:['CTRL','C']}},{label:'Ctrl+V',msg:{type:'hotkey',keys:['CTRL','V']}},
  {label:'Ctrl+A',msg:{type:'hotkey',keys:['CTRL','A']}},{label:'Ctrl+Z',msg:{type:'hotkey',keys:['CTRL','Z']}},
 ];
-const LIFT_PX=104,LONG_PRESS_MS=500,TAP_SLOP=10,MOVE_INTERVAL_MS=16,SCROLL_STEP_PX=24;
+const LONG_PRESS_MS=500,TAP_SLOP=10,MOVE_INTERVAL_MS=16,SCROLL_STEP_PX=24;
 const clamp01=(v:number)=>Math.min(1,Math.max(0,v));
 
 export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
  const wrap=useRef<HTMLDivElement>(null),img=useRef<HTMLImageElement>(null);
  const [mode,setMode]=useState<Mode>('click'),[full,setFull]=useState(false),[showKeys,setShowKeys]=useState(false);
  const pointers=useRef(new Map<number,{x:number;y:number}>());
- const g=useRef({start:{x:0,y:0},moved:false,long:false,timer:0 as number,down:false,multi:false,lastMove:0,scrollAcc:0,lastPos:{nx:.5,ny:.5}});
+ const g=useRef({start:{x:0,y:0},moved:false,long:false,timer:0 as number,down:false,multi:false,lastMove:0,scrollAcc:0,accX:0,accY:0,lastPos:{nx:.5,ny:.5}});
 
  // Map a touch point to 0..1 coordinates of the *visible picture* (object-fit: contain adds letterbox bars).
  const norm=useCallback((cx:number,cy:number)=>{
@@ -31,9 +31,6 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   const s=Math.min(r.width/nw,r.height/nh),w=nw*s,h=nh*s,ox=r.left+(r.width-w)/2,oy=r.top+(r.height-h)/2;
   const p={nx:clamp01((cx-ox)/w),ny:clamp01((cy-oy)/h)};g.current.lastPos=p;return p;
  },[]);
-
- // Click mode: the pointer sits above the fingertip so the finger never hides it; the gap shrinks to 0 only over the bottom 20%.
- const lifted=(cx:number,cy:number)=>{const el=img.current;if(!el)return norm(cx,cy);const r=el.getBoundingClientRect();const t=clamp01((cy-r.top)/r.height);return norm(cx,cy-LIFT_PX*Math.min(1,(1-t)/0.2))};
 
  useEffect(()=>{const h=()=>setFull(document.fullscreenElement===wrap.current);document.addEventListener('fullscreenchange',h);return()=>document.removeEventListener('fullscreenchange',h)},[]);
  useEffect(()=>()=>window.clearTimeout(g.current.timer),[]);
@@ -55,7 +52,7 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   if(pointers.current.size>=2){ // second finger: switch to two-finger scrolling, cancel anything in flight
    window.clearTimeout(st.timer);endDrag(e);st.multi=true;st.scrollAcc=0;return;
   }
-  st.start={x:e.clientX,y:e.clientY};st.moved=false;st.long=false;st.multi=false;st.scrollAcc=0;
+  st.start={x:e.clientX,y:e.clientY};st.moved=false;st.long=false;st.multi=false;st.scrollAcc=0;st.accX=0;st.accY=0;
   if(mode==='drag'){send({type:'down',button:'left',...norm(e.clientX,e.clientY)});st.down=true}
   if(mode==='click'){st.timer=window.setTimeout(()=>{
    if(!st.moved&&pointers.current.size===1){st.long=true;send({type:'click',button:'right'});navigator.vibrate?.(30)}
@@ -70,9 +67,16 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   }
   if(!st.moved&&Math.hypot(e.clientX-st.start.x,e.clientY-st.start.y)>TAP_SLOP){st.moved=true;window.clearTimeout(st.timer)}
   if(mode==='scroll'){st.scrollAcc+=dy;scrollBy(st);return}
-  if(mode==='click'||mode==='drag'){
+  if(mode==='click'){ // trackpad style: the pointer keeps its place and moves by how far the finger moves, wherever the finger is
+   st.accX+=e.clientX-prev.x;st.accY+=dy;
    const now=performance.now();if(now-st.lastMove<MOVE_INTERVAL_MS)return;st.lastMove=now;
-   send({type:'move',...(mode==='click'?lifted(e.clientX,e.clientY):norm(e.clientX,e.clientY))});
+   const el=img.current;if(!el)return;
+   const r=el.getBoundingClientRect(),nw=el.naturalWidth||r.width,nh=el.naturalHeight||r.height,k=Math.min(r.width/nw,r.height/nh);
+   const p={nx:clamp01(st.lastPos.nx+st.accX/(nw*k)),ny:clamp01(st.lastPos.ny+st.accY/(nh*k))};
+   st.lastPos=p;st.accX=0;st.accY=0;send({type:'move',...p});
+  }else if(mode==='drag'){
+   const now=performance.now();if(now-st.lastMove<MOVE_INTERVAL_MS)return;st.lastMove=now;
+   send({type:'move',...norm(e.clientX,e.clientY)});
   }
  };
  // Finger down the screen (dy>0) scrolls up on the PC, like a phone: the content follows the finger.
