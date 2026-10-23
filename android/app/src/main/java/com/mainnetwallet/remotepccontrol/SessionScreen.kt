@@ -511,6 +511,9 @@ fun SessionScreen(c: RemoteController) {
                         }
                         Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
                         PadButtons(send)
+                        // PC-style keyboard under Left/Right click (same keyboard as the Keyboard button in Fullscreen).
+                        (if (showKeyboard) Button(onClick = { showKeyboard = false }, modifier = Modifier.fillMaxWidth().height(40.dp)) { Text("Keyboard") }
+                        else FilledTonalButton(onClick = { showKeyboard = true }, modifier = Modifier.fillMaxWidth().height(40.dp)) { Text("Keyboard") })
                         SpeedRow(sensitivity) { sensitivity = it }
                     }
                 }
