@@ -6,8 +6,6 @@ View and control your own Windows PC from a phone: live screen, touch-as-mouse, 
 
 > **Use it only on a PC you own.** Never port-forward port 8888 to the internet.
 
-[বাংলা নির্দেশিকা](docs/README.bn.md)
-
 ## Contents
 
 - [Features](#features)
