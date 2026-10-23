@@ -319,29 +319,18 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
-/** Portrait toolbar: two rows that always fit the screen width (no sideways scrolling). */
+/** Portrait toolbar: one row (Quality, Fullscreen, Rotate, Stop) that always fits the screen width. */
 @Composable
 private fun SessionToolbar(
-    mode: TouchMode, onMode: (TouchMode) -> Unit, onDoubleClick: () -> Unit,
     quality: Quality, onQuality: (Quality) -> Unit, onRotate: () -> Unit, onFullscreen: () -> Unit, onStop: () -> Unit
 ) {
     val pad = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
     val label = MaterialTheme.typography.labelMedium
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            TouchMode.values().forEach { m ->
-                val mod = Modifier.weight(1f).height(36.dp)
-                if (m == mode) Button(onClick = { onMode(m) }, modifier = mod, contentPadding = pad) { Text(m.label, style = label, maxLines = 1) }
-                else OutlinedButton(onClick = { onMode(m) }, modifier = mod, contentPadding = pad) { Text(m.label, style = label, maxLines = 1) }
-            }
-            OutlinedButton(onClick = onDoubleClick, modifier = Modifier.weight(1.6f).height(36.dp), contentPadding = pad) { Text("Double-click", style = label, maxLines = 1) }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            QualityMenuButton(quality, onQuality, Modifier.weight(2.2f), compact = true)
-            OutlinedButton(onClick = onFullscreen, modifier = Modifier.weight(1.6f).height(36.dp), contentPadding = pad) { Text("Fullscreen", style = label, maxLines = 1) }
-            RotateButton(onRotate, tonal = false, small = true, modifier = Modifier.weight(1.3f), height = 36.dp)
-            StopButton(onStop, Modifier.weight(0.9f).height(36.dp), pad)
-        }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        QualityMenuButton(quality, onQuality, Modifier.weight(2.2f), compact = true)
+        OutlinedButton(onClick = onFullscreen, modifier = Modifier.weight(1.6f).height(36.dp), contentPadding = pad) { Text("Fullscreen", style = label, maxLines = 1) }
+        RotateButton(onRotate, tonal = false, small = true, modifier = Modifier.weight(1.3f), height = 36.dp)
+        StopButton(onStop, Modifier.weight(0.9f).height(36.dp), pad)
     }
 }
 
@@ -457,7 +446,6 @@ fun SessionScreen(c: RemoteController) {
     val onSendText: () -> Unit = {
         if (typeText.isNotEmpty()) { send(JSONObject().put("type", "type").put("text", typeText.take(500))); typeText = "" }
     }
-    val doubleClick: () -> Unit = { send(JSONObject().put("type", "click").put("count", 2)) }
     val activity = LocalContext.current.findActivity()
     // Back to the normal (sensor / auto-rotate) behaviour when the session ends.
     DisposableEffect(Unit) { onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
@@ -527,7 +515,7 @@ fun SessionScreen(c: RemoteController) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SessionToolbar(
-                    touchMode, { touchMode = it }, doubleClick, c.quality, { c.setQuality(it) }, rotate,
+                    c.quality, { c.setQuality(it) }, rotate,
                     // Fullscreen: landscape with the panel hidden, so the PC picture gets the whole screen (Exit brings the panel back).
                     { showPad = false; activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE },
                     { c.stopScreen() }
