@@ -452,6 +452,52 @@ def test_fast_link_keeps_several_frames_in_flight():
     assert st.link_allows(40_000)                        # 5 MB/s * 0.23 s = 1.15 MB of room
 
 
+def test_shape_keeps_config_on_a_fast_link_and_before_measuring():
+    cfg = StreamConfig(1280, 30, 65)
+    assert _link_state(5_000_000, 40_000).shape(cfg, 1920) == (65, 1280)
+    assert screen._StreamState().shape(cfg, 1920) == (65, 1280)       # no acks yet
+
+
+def test_shape_lowers_quality_first_then_width():
+    cfg = StreamConfig(1280, 30, 65)
+    q, w = _link_state(bw=25_000, full_bytes=50_000).shape(cfg, 1920)  # 2 kB budget per frame = ~4% of a full frame
+    assert q == round(65 * 0.55) and w < 1280 and w >= screen.WIDTH_MIN
+    assert w % screen.WIDTH_STEP == 0
+    q2, w2 = _link_state(bw=450_000, full_bytes=50_000).shape(cfg, 1920)   # ~72% of a full frame fits
+    assert w2 == 1280 and screen.QUALITY_MIN <= q2 < 65                    # only the quality drops
+
+
+def test_shape_never_goes_below_the_floors():
+    cfg = StreamConfig(1280, 30, 65)
+    q, w = _link_state(bw=1, full_bytes=10 ** 7).shape(cfg, 1920)
+    assert q >= screen.QUALITY_MIN and w >= max(screen.WIDTH_MIN, round(1280 * screen.MIN_WIDTH_FACTOR) - screen.WIDTH_STEP)
+
+
+def test_shape_uses_native_width_when_unscaled():
+    cfg = StreamConfig(0, 20, 70)
+    _, w = _link_state(bw=1_000, full_bytes=100_000).shape(cfg, 1920)
+    assert screen.WIDTH_MIN <= w < 1920
+
+
+
+def test_steady_shape_shrinks_at_once_but_recovers_slowly_in_steps():
+    cfg = StreamConfig(1280, 30, 65)
+    slow = _link_state(bw=450_000, full_bytes=50_000)
+    q1, _ = slow.steady_shape(cfg, 1920, 0.0)
+    assert q1 < 65 and q1 % screen.QUALITY_STEP == 0
+    slow.bw = 10_000_000                                   # the link is fast again
+    assert slow.steady_shape(cfg, 1920, 0.5)[0] == q1      # not yet: no bouncing back
+    q2, _ = slow.steady_shape(cfg, 1920, screen.RECOVER_SECONDS + 0.6)
+    assert q2 == min(65, q1 + screen.QUALITY_STEP)         # one step at a time
+    slow.bw = 25_000                                       # worse again: drops immediately
+    assert slow.steady_shape(cfg, 1920, screen.RECOVER_SECONDS + 0.7)[0] < q2
+
+
+def test_steady_shape_never_exceeds_config():
+    cfg = StreamConfig(1280, 30, 65)
+    st = _link_state(bw=5_000_000, full_bytes=40_000)
+    for i in range(10): assert st.steady_shape(cfg, 1920, i * 3.0) == (65, 1280)
+
 def test_note_encoded_predicts_the_full_size_from_a_shrunk_frame():
     cfg = StreamConfig(1280, 30, 65)
     st = screen._StreamState()

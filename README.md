@@ -133,6 +133,7 @@ git pull
 | Variable | Default | Meaning |
 |---|---|---|
 | `REMOTE_PC_TOKEN` | generated | Access password (4+ characters, 12+ recommended; setup generates a long random one). Required. |
+| `REMOTE_PC_LATENCY_FIRST` | `1` | `1`: on a slow link the picture is made smaller at once (and grows back slowly, in steps of 10 quality / 80 px) so the delay stays low. `0`: always exactly the quality and width chosen in the app. |
 | `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `0.0.0.0` / `8888` | Listen address. |
 | `REMOTE_PC_FPS` | `20` | Starting frames per second (1-30); clients can change it live. If you set it in an existing `.env`, change it there too: the file wins over the default. |
 | `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality (25-85); clients can raise it to 90 live. |

@@ -15,6 +15,9 @@ class Settings:
     motion_quality = max(40, min(100, int(os.getenv("REMOTE_PC_MOTION_QUALITY", "100"))))
     # Same moments: frames are also scaled to this percent of their width (50-100; 100 = keep the width).
     motion_width = max(50, min(100, int(os.getenv("REMOTE_PC_MOTION_WIDTH", "100"))))
+    # Latency first: on a slow link the picture is made smaller at once (and grows back slowly, in steps) so a
+    # click shows up without waiting behind big frames. 0 = always send exactly the configured quality and width.
+    latency_first = os.getenv("REMOTE_PC_LATENCY_FIRST", "1").strip() not in ("0", "false", "no", "off")
     # Screen capture: "auto" uses fast DXGI capture when the optional dxcam package works and mss otherwise; "mss" forces mss.
     capture = os.getenv("REMOTE_PC_CAPTURE", "auto").strip().lower()
     # Draw a small pointer on the stream so touch users can see where the mouse is.

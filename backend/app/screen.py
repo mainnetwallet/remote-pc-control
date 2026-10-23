@@ -57,6 +57,8 @@ THROUGHPUT_SAMPLES = 30   # recent per-frame drain-rate samples used to estimate
 LATENCY_BUDGET = 0.08     # seconds a new frame may wait behind earlier ones on the wire (on top of the link's own latency)
 FRAME_TIME_MIN, FRAME_TIME_MAX = 0.08, 0.12   # on a slow link a frame is shrunk until it needs about this long to upload
 BYTES_PER_QUALITY_POW = 1.3   # JPEG size grows roughly with quality^1.3 and with width^2 (used to predict a smaller frame's size)
+QUALITY_STEP = 10        # quality changes in steps of this size (fewer visible jumps)
+RECOVER_SECONDS = 2.0     # the link must stay fast this long before quality/size grow back by one step
 WIDTH_STEP = 80           # congestion-scaled widths are rounded to this, so the picture size does not jitter
 RTT_SAMPLES = 120         # ack round-trip samples kept to estimate the link's base latency
 MIN_RTT_SAMPLES = 4       # need this many samples before the base latency is trusted
@@ -323,6 +325,8 @@ class _StreamState:
         self.inflight_bytes = 0           # bytes of the frames in flight
         self.bw = 0.0                     # measured upload speed in bytes/s (0 = not measured yet)
         self.full_bytes = 0.0             # estimated size of a frame at the configured quality and width
+        self._shown = (0, 0)              # (quality, width) of the last frame shape; width 0 = unscaled
+        self._shown_at = 0.0              # when that shape last changed
         self.rtt = 0.0                    # smoothed seconds between sending a frame and its ack
         self.rtts: collections.deque = collections.deque(maxlen=RTT_SAMPLES)
 
@@ -358,6 +362,45 @@ class _StreamState:
         The first frame of a burst is always allowed; the speed is unknown until two frames were measured."""
         if self.inflight == 0 or self.bw <= 0.0: return True
         return self.inflight_bytes + next_bytes <= self.bw * (self.base_rtt + LATENCY_BUDGET)
+
+    def shape(self, cfg: "StreamConfig", native_width: int) -> tuple[int, int]:
+        """(JPEG quality, max_width) for the next frame: the configured values while the link keeps up, smaller
+        when one frame would need longer than FRAME_TIME to upload. Quality drops first (down to about half),
+        then the picture is scaled down, so a click's result appears at once instead of after a queue of big frames."""
+        width = min(cfg.max_width, native_width) if cfg.max_width else native_width
+        if not self.acks or self.bw <= 0.0 or self.full_bytes <= 0: return cfg.quality, cfg.max_width
+        target = self.bw * min(FRAME_TIME_MAX, max(FRAME_TIME_MIN, 1 / cfg.fps))
+        r = target / self.full_bytes   # fraction of a full-quality frame the link can carry in that time
+        if r >= 1: return cfg.quality, cfg.max_width
+        floor_q = max(QUALITY_MIN, round(cfg.quality * 0.55))
+        q_ratio = (floor_q / cfg.quality) ** BYTES_PER_QUALITY_POW
+        if r >= q_ratio:
+            return max(QUALITY_MIN, round(cfg.quality * r ** (1 / BYTES_PER_QUALITY_POW))), cfg.max_width
+        factor = max(MIN_WIDTH_FACTOR, math.sqrt(r / q_ratio))
+        scaled = max(WIDTH_MIN, round(width * factor / WIDTH_STEP) * WIDTH_STEP)
+        return floor_q, min(width, scaled)
+
+    def steady_shape(self, cfg: "StreamConfig", native_width: int, now: float) -> tuple[int, int]:
+        """shape() without the flicker: the picture gets smaller at once when the link needs it (that is what keeps the
+        delay low), but grows back only slowly and in coarse steps, so quality and size do not bounce up and down."""
+        q, w = self.shape(cfg, native_width)
+        if q < cfg.quality: q = max(QUALITY_MIN, q // QUALITY_STEP * QUALITY_STEP)
+        eff = lambda width: width or native_width          # 0 means "unscaled"
+        cq, cw = self._shown
+        if cq == 0:                                         # first frame
+            self._shown, self._shown_at = (q, w), now
+            return q, w
+        if q < cq or eff(w) < eff(cw):                      # the link got worse: shrink now
+            q, w = min(q, cq), (w if eff(w) < eff(cw) else cw)
+            self._shown, self._shown_at = (q, w), now
+            return q, w
+        if (q > cq or eff(w) > eff(cw)) and now - self._shown_at >= RECOVER_SECONDS:   # fine for a while: one step back
+            q = min(q, cq + QUALITY_STEP)
+            if eff(w) > eff(cw):
+                w = w if eff(cw) + WIDTH_STEP >= eff(w) else cw + WIDTH_STEP
+            self._shown, self._shown_at = (q, w), now
+            return q, w
+        return cq, cw
 
     def note_encoded(self, nbytes: int, quality: int, out_width: int, cfg: "StreamConfig", native_width: int) -> None:
         """Remember how big a frame at the configured quality and width would be, from the frame just encoded."""
@@ -460,7 +503,10 @@ async def stream_frames(ws: WebSocket, grab) -> None:
             digest = (digest, cur)
 
             def shape_for(motion: bool) -> tuple[int, int]:
-                quality, width = cfg.quality, cfg.max_width   # fixed: no automatic quality/resolution changes
+                if state.acks and settings.latency_first:
+                    quality, width = state.steady_shape(cfg, size[0], _now())   # smaller at once on a slow link, back slowly
+                else:
+                    quality, width = cfg.quality, cfg.max_width
                 if motion:
                     quality = max(QUALITY_MIN, round(quality * settings.motion_quality / 100))
                     if settings.motion_width < 100:   # fewer pixels as well: cheaper to scale, encode, upload and decode
