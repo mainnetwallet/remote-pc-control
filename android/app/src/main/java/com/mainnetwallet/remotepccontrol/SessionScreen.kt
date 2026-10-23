@@ -405,7 +405,7 @@ private fun StreamStatsOverlay(c: RemoteController, modifier: Modifier = Modifie
 
 /** The PC picture (or a waiting placeholder) with the stats overlay in its top-left corner. */
 @Composable
-private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier, frameModifier: Modifier, waitingModifier: Modifier) {
+private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier, frameModifier: Modifier, waitingModifier: Modifier, showStats: Boolean = true) {
     val frame = c.frame
     val track = c.videoTrack
     val cursor: () -> Offset? = { if (c.cursorX >= 0f) Offset(c.cursorX, c.cursorY) else null }
@@ -425,7 +425,7 @@ private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier,
             )
         }
         else Box(waitingModifier, contentAlignment = Alignment.Center) { Text("Waiting for the PC screen\u2026", color = Color.White) }
-        StreamStatsOverlay(c, Modifier.align(Alignment.TopStart).padding(6.dp))
+        if (showStats) StreamStatsOverlay(c, Modifier.align(Alignment.TopStart).padding(6.dp))   // landscape hides it: it covered the PC picture
     }
 }
 
@@ -467,7 +467,7 @@ fun SessionScreen(c: RemoteController) {
             Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f).fillMaxHeight()) {
-                        ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize())
+                        ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize(), showStats = false)
                         if (showKeys) Surface(
                             Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp),
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
