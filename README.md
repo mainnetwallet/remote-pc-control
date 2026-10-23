@@ -182,6 +182,15 @@ git pull
 .\scripts\start.ps1
 ```
 
+### Reset `.env` to the latest template
+`setup.ps1` only *adds* new settings. To start over with the tidy, current `.env.example`, back up first (the copy overwrites `.env`, including your password, Gist and TURN values):
+```powershell
+Copy-Item .env .env.backup
+Copy-Item .env.example .env -Force
+.\scripts\set-password.ps1 YourNewPassword    # .env.example holds only a placeholder password
+```
+Then fill in the values you still need (`QUICK_TUNNEL`, `GIST_TOKEN`, `GIST_ID`, `REMOTE_PC_TURN_*`; your old ones are in `.env.backup`), restart `start.ps1`, and delete the backup, because it contains secrets: `Remove-Item .env.backup`.
+
 ## Configuration (`.env`)
 | Variable | Default | Meaning |
 |---|---|---|
@@ -245,3 +254,12 @@ Protocol and input handling live in `backend/app/screen.py`; the WebRTC transpor
 - সবচেয়ে ভালো ফল: একই Wi-Fi বা Tailscale। Cloudflare quick tunnel শুধু TCP বহন করে, তাই শুধু tunnel দিয়ে WebRTC সাধারণত লাগে না। মোবাইল ডেটায় না লাগলে TURN সার্ভার দিন (`.env`-এ `REMOTE_PC_TURN_URL`, `REMOTE_PC_TURN_USER`, `REMOTE_PC_TURN_PASS`)।
 - বন্ধ করতে `.env`-এ `REMOTE_PC_WEBRTC=0`। কোন মোড চলছে বোঝার উপায়: ছবির কোণার লেখা `WebRTC · …` বা `WebSocket · …`।
 - আপডেট: `git pull`, তারপর `.\scripts\setup.ps1`, তারপর `.\scripts\start.ps1`; নতুন APK ইনস্টল করুন।
+
+## বাংলা: `.env` নতুন করে বানানো
+`.env` পুরো রিসেট করতে (আগে backup নিন, কারণ এটা password, Gist ও TURN মান মুছে দেয়):
+```powershell
+Copy-Item .env .env.backup
+Copy-Item .env.example .env -Force
+.\scripts\set-password.ps1 নতুনPassword
+```
+এরপর দরকারি মান (`QUICK_TUNNEL`, `GIST_TOKEN`, `GIST_ID`, `REMOTE_PC_TURN_*`) আবার বসান, `start.ps1` রিস্টার্ট করুন, আর শেষে `Remove-Item .env.backup` দিয়ে backup মুছে দিন।
