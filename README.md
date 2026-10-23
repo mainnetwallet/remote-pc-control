@@ -1,154 +1,98 @@
-# Remote PC Control
+<div align="center">
 
-See and control your own Windows PC from your phone: live screen, touch-as-mouse, keyboard, system monitor and power controls. Works from anywhere through a private Tailscale network **or** a Cloudflare tunnel, from a phone browser or the Android app.
+<img src="assets/banner.svg" alt="Remote PC Control" width="100%">
 
-> Use it only on a PC you own. Never port-forward port 8888 to the internet.
+**See and control your own Windows PC from your phone: live screen, touch-as-mouse, keyboard, system monitor and power controls.**
 
-New here? Follow the step-by-step **[Windows quick start](docs/QUICKSTART_WINDOWS.md)**. For the code map, API routes, transports, tests and build pipeline, see the **[Repository Architecture Guide](docs/ARCHITECTURE.md)**.
+![platform](https://img.shields.io/badge/PC-Windows-0078D4?logo=windows&logoColor=white)
+![python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)
+![node](https://img.shields.io/badge/node-22-339933?logo=node.js&logoColor=white)
+![android](https://img.shields.io/badge/app-Android-3DDC84?logo=android&logoColor=white)
+![transport](https://img.shields.io/badge/transport-WebRTC%20%7C%20WebSocket-6366f1)
 
-### Documentation
-- [Windows quick start](docs/QUICKSTART_WINDOWS.md)
-- [Windows installation and autostart](INSTALL_WINDOWS.md)
-- [Cloudflare Tunnel and Access](docs/CLOUDFLARE.md)
-- [Android app and APK build](android/README.md)
-- [Repository architecture and API reference](docs/ARCHITECTURE.md)
+[Features](#-features) • [Quick Start](#-quick-start) • [Connect](#-connect-your-phone) • [Android App](#-android-app) • [Configuration](#-configuration) • [Commands](#-command-reference) • [Troubleshooting](#-troubleshooting) • [Security](#-security)
 
+</div>
 
-## Command guides — quick reference
+---
 
-Run these in **PowerShell on the Windows PC**. This is the single command reference; detailed explanations and connection options are documented below.
+> ⚠ Use it only on a PC you own. Never port-forward port `8888` to the internet.
 
-### 1. First-time setup
+Works from anywhere through a private **Tailscale** network or a **Cloudflare** tunnel, from a phone browser or the Android app.
+
+## ✨ Features
+
+| | Feature | Description |
+|---|---|---|
+| 🖥 | **Live screen** | WebRTC (H.264 over UDP) first, JPEG-over-WebSocket as automatic fallback; quality changes live |
+| 👆 | **Touch control** | Tap = click, long-press = right click, drag, scroll, double-click, fullscreen/landscape |
+| 🖱 | **Trackpad (Android)** | Laptop-style pad: move, tap, double-tap, two-finger right click/scroll, tap-then-slide drag |
+| ⌨ | **Keyboard** | Text box plus quick keys (Esc, Tab, arrows, Win, Alt+Tab, Ctrl+C/V/A/Z) |
+| 📊 | **Monitor & power** | CPU/RAM/disk/network, lock, sleep, restart, shutdown (with confirmation) |
+| 🔒 | **Security** | Token-protected API and WebSockets, 5-minute lockout after 8 wrong tokens |
+| 📱 | **Clients** | Mobile web dashboard and native Android app (Material 3 dark UI) |
+
+## 🚀 Quick Start
+
+Run in **PowerShell on the Windows PC**. Prerequisites: **Python 3.12 (x64)**, **Node.js 22**, **Git**.
+
 ```powershell
+# 1. First-time setup (installs dependencies, builds dashboard, creates .env)
 cd $HOME
 git clone https://github.com/mainnetwallet/remote-pc-control.git
 cd remote-pc-control
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\setup.ps1
-```
-Run this once to install dependencies, build the dashboard and generate `.env`.
 
-### 2. Show the access token
-```powershell
-cd $HOME\remote-pc-control
+# 2. Show the access token (copy only the value after REMOTE_PC_TOKEN=)
 Get-Content .env | Select-String REMOTE_PC_TOKEN
-```
-Copy only the value after `REMOTE_PC_TOKEN=`. Keep it private.
 
-### 3. Start the server
-```powershell
-cd $HOME\remote-pc-control
+# 3. Start the server (keep this window open, port 8888)
 .\scripts\start.ps1
 ```
-Keep this window open. The server listens on port `8888`.
 
-### 4. Connect from outside your network (Cloudflare quick tunnel)
-Open a **second** PowerShell window:
-```powershell
-cd $HOME\remote-pc-control
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\start-tunnel.ps1
-```
-Open the printed `https://....trycloudflare.com` address on your phone. The link changes when the tunnel restarts. For a permanent tunnel, see [Cloudflare Tunnel and Access](docs/CLOUDFLARE.md). For Tailscale or same-Wi-Fi access, see [Windows quick start](docs/QUICKSTART_WINDOWS.md).
+Step-by-step guides: [Windows quick start](docs/QUICKSTART_WINDOWS.md) · [Install and autostart](INSTALL_WINDOWS.md)
 
-### 5. Update the project
-```powershell
-cd $HOME\remote-pc-control
-git checkout main
-git pull
-.\scripts\setup.ps1
-```
-Then start the server using step 3 above. For a scheduled-task installation, see [Quick update and restart](#quick-update-and-restart-scheduled-task).
+## 🌐 Connect your phone
 
-### 6. Update and restart a scheduled-task installation
-Use this if the server runs as the `RemotePCControl` Windows scheduled task. Change the folder path if your repository is elsewhere.
-```powershell
-cd $HOME\remote-pc-control
-Stop-ScheduledTask -TaskName RemotePCControl
-git pull
-.\scripts\setup.ps1
-Start-ScheduledTask -TaskName RemotePCControl
-```
-This stops and starts only the named scheduled task rather than killing every Python process on the PC.
+| Method | Best for | How |
+|---|---|---|
+| **Cloudflare quick tunnel** | Anywhere, no account | `.\scripts\start-tunnel.ps1` in a second window, open the printed `https://….trycloudflare.com` link |
+| **Tailscale** | Private, stable, lowest latency | Same account on PC and phone, then open `http://<tailscale ip -4>:8888` |
+| **Same Wi-Fi** | Home use | Allow port 8888 on the LAN, open `http://<PC-IPv4>:8888` |
 
-### 7. Run backend tests and build the dashboard
-```powershell
-cd $HOME\remote-pc-control
-.\.venv\Scripts\python.exe -m pytest backend/tests tests -q
-cd frontend
-npm install
-npm run build
-```
+<details>
+<summary><b>Cloudflare quick tunnel details</b></summary>
 
-### 8. Reset `.env` (only when necessary)
-This overwrites current settings and credentials. Back up first:
-```powershell
-cd $HOME\remote-pc-control
-Copy-Item .env .env.backup
-Copy-Item .env.example .env -Force
-.\scripts\set-password.ps1 YourNewPassword
-```
-Restore any settings you still need, restart the server, and securely delete the backup. The detailed notes are in [Reset `.env` to the latest template](#reset-env-to-the-latest-template).
+- Test first: `https://<your-link>/api/health` should return `{"ok":true,...}`.
+- The link changes every time the tunnel restarts. Keep both windows open; `Ctrl+C` stops the tunnel. Do not share the link.
+- Permanent link and login protection: [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md).
 
-**Step-by-step guides:** [Windows quick start](docs/QUICKSTART_WINDOWS.md) · [Windows installation and autostart](INSTALL_WINDOWS.md) · [Cloudflare Tunnel and Access](docs/CLOUDFLARE.md) · [Android app and APK build](android/README.md).
+**One command with automatic link for the Android app:** add to `.env`:
 
-
-## Features
-- **Live screen, low latency**: WebRTC (H.264 video over UDP, input over data channels) first, with the original JPEG-over-WebSocket stream as automatic fallback. See *WebRTC mode*.
-- **Live screen (fallback)** streamed to the phone (JPEG over WebSocket, downscaled, idle-frame skipping, on-screen pointer). Resolution, frame rate and JPEG quality can be changed live from the client (see *Stream quality*).
-- **Touch control**: tap = click, long-press = right click, drag, scroll, double-click, fullscreen/landscape.
-- **Trackpad (Android app)**: laptop-style pad under the screen. One finger = move, tap = click, double-tap = double click, two-finger tap = right click, two-finger slide = scroll, tap-then-slide = drag. Portrait: screen on top, pad below. Landscape: full-window screen with a hideable pad.
-- **Keyboard**: text box plus quick keys (Esc, Tab, arrows, Win, Alt+Tab, Ctrl+C/V/A/Z).
-- **Monitor and power**: CPU/RAM/disk/network, lock, sleep, restart, shutdown (with confirmation).
-- **Security**: token-protected API and WebSockets, lockout after 8 wrong tokens (5 minutes).
-- **Clients**: mobile web dashboard and a native Android app (`android/`): Material 3 dark UI with a Connect screen, a Dashboard (CPU/RAM/disk gauges, network, lock/sleep/restart/shutdown) and the screen session.
-
-## Quick start (Windows PC + phone)
-
-### 1. Prerequisites on the PC
-Install **Python 3.12 (x64)**, **Node.js 22** and **Git**. (Tailscale only if you choose that connection method.)
-
-### 2. Set up the PC
-Run the first-time setup command from the command reference above in a normal PowerShell window, while signed in to the Windows desktop. It creates a virtual environment, installs dependencies, builds the web dashboard and generates a private `.env` with your **access token**. A new `.env` is copied from the full `.env.example` with a fresh password; later setup runs append newly introduced settings without changing existing values or your password. For the optional automatic tunnel link in the Android app, add `QUICK_TUNNEL=1` and a GitHub classic token with only the `gist` scope to `.env`, or pass `-GistToken <token>` and `-GistId <id>` to setup (see A2 below). Never commit `.env`.
-
-### 3. Start the server
-Use step 3 in the command reference above. Leave that PowerShell window open; the server listens on port 8888.
-
-### 4. Connect the phone (pick one method)
-
-**A. Cloudflare quick tunnel (works anywhere, no account needed)**
-
-In a **second** PowerShell window, run step 4 in the command reference above. The first run installs `cloudflared`; if it asks, close the window, open a new one and repeat. It prints a link like `https://xxxx-xxxx.trycloudflare.com`. Open it on the phone (browser, or use it as the *PC URL* in the Android app) and enter the token.
-- Test first: `https://<your-link>/api/health` should show `{"ok":true,...}`.
-- The link **changes every time** the tunnel restarts. Keep both windows open; press `Ctrl+C` in the tunnel window when done. Do not share the link.
-- For a **permanent link** that never changes (and starts with Windows) use a named tunnel: step-by-step in **[docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)**. It needs a domain on your Cloudflare account; the guide also covers Cloudflare Access login protection.
-
-**A2. One command: quick tunnel + automatic link for the Android app**
-
-Add to `.env`:
 ```
 QUICK_TUNNEL=1
 GIST_TOKEN=your-gist-token
 ```
-`GIST_TOKEN` is a GitHub *classic* token with **only the `gist` scope** (<https://github.com/settings/tokens>); do not reuse a repo token. Then just run `.\scripts\start.ps1`. It installs `cloudflared` if needed, starts the tunnel with the server, and writes the new `https://....trycloudflare.com` link to a **secret Gist**. The first run creates the Gist and prints `gist:<id>`.
 
-In the Android app enter `gist:<id>` as *PC URL* once. Every time you tap Connect, the app reads the PC's current link from the Gist, so you never type a link again. (Browser: open the link printed by `start.ps1`.) The tunnel link itself still changes on every run; only the Gist id is fixed. Anyone who knows the Gist id can read the link, but still needs the API token.
+`GIST_TOKEN` is a GitHub *classic* token with **only the `gist` scope** (never reuse a repo token). Run `.\scripts\start.ps1`; it starts the tunnel and writes the current link to a secret Gist. Enter `gist:<id>` once as *PC URL* in the Android app and it always finds the current link.
+</details>
 
-**B. Tailscale (private VPN, stable IP)**
+<details>
+<summary><b>Tailscale and LAN details</b></summary>
 
-Install Tailscale on the PC and phone and sign in to the **same account** on both, with the VPN switched on on the phone. Get the PC's address with `tailscale ip -4`, then open `http://<that-ip>:8888`. The firewall rule created by `setup.ps1` only accepts connections from Tailscale addresses (`100.64.0.0/10`). Run `setup.ps1` from an administrator PowerShell if the rule could not be created.
+- **Tailscale:** the firewall rule from `setup.ps1` only accepts Tailscale addresses (`100.64.0.0/10`). Run `setup.ps1` from an administrator PowerShell if the rule could not be created.
+- **LAN** (administrator PowerShell):
 
-**C. Same Wi-Fi only**
-
-From an administrator PowerShell:
 ```powershell
 New-NetFirewallRule -DisplayName "RemotePCControl LAN" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8888 -RemoteAddress LocalSubnet -Profile Any
 ipconfig
 ```
-Open `http://<PC-IPv4-address>:8888` on a phone on the same Wi-Fi. Give the PC a fixed address (DHCP reservation in your router) so the URL does not change.
 
-### 5. Use it
-Enter the token, tap **Connect**, then **Start screen**. Pick a mode on the toolbar:
+Give the PC a fixed address (DHCP reservation) so the URL does not change.
+</details>
+
+**Use it:** enter the token, tap **Connect**, then **Start screen** and pick a mode:
 
 | Mode | What your finger does |
 |---|---|
@@ -157,137 +101,107 @@ Enter the token, tap **Connect**, then **Start screen**. Pick a mode on the tool
 | Drag | drag holds the left button (select text, move windows) |
 | Scroll | drag up/down scrolls the page |
 
-Also: **Double-click** button, **Fullscreen**, **Keys** (quick keys) and a text box.
+## 📱 Android app
 
-## Android app
-Open **GitHub > Actions > Android APK** (it runs when Android files or this workflow change on `main`, or use *Run workflow*) and download the APK from the run's artifact or from **Releases**. Install it (allow "install unknown apps" if asked). In the app enter the *PC URL* (`https://...trycloudflare.com`, `http://100.x.x.x:8888` or your LAN address) and the token. This is a debug build for personal use, not a Play Store release. Build instructions: [android/README.md](android/README.md).
+Open **GitHub → Actions → Android APK** (or *Run workflow*), download the APK from the artifact or **Releases**, and install it. Enter the *PC URL* (`https://….trycloudflare.com`, `http://100.x.x.x:8888`, LAN address or `gist:<id>`) and the token. Personal-use debug build, not a Play Store release. Build details: [android/README.md](android/README.md).
 
-The app has three screens:
-- **Connect**: PC URL and token. The URL and the password (encrypted with the Android Keystore) are remembered after the first login, so the login screen only appears once; Log out forgets them.
-- **Dashboard**: CPU, memory and disk gauges, network speed (refreshed every 5 s), and power buttons. Sleep, Restart and Shutdown ask for confirmation; Lock does not. It also holds the **Quality** setting and the *Start screen session* button.
-- **Session**: live screen, touch modes, trackpad, keys. A small overlay in the corner of the picture shows the received resolution and the measured/maximum frames per second (for example `1280×720 · 27/30 fps`). **Quality** in the toolbar changes the stream while it is running, and the choice is remembered. The **Rotate** button (circular arrow) switches the phone between portrait and landscape even when Android auto-rotate is off; the normal behaviour returns when the session ends.
+- **Connect:** PC URL and token; the URL and password (Android Keystore encrypted) are remembered until Log out.
+- **Dashboard:** CPU, memory, disk gauges, network speed, power buttons (Sleep, Restart, Shutdown ask for confirmation), Quality setting.
+- **Session:** live screen, touch modes, trackpad, keys, a transport/resolution/fps overlay and a Rotate button.
 
-| Quality | Width | Max FPS | WebRTC bitrate | JPEG quality (fallback) |
+| Quality | Width | Max FPS | WebRTC bitrate | JPEG quality |
 |---|---|---|---|---|
 | Low | 960 px | 20 | 1.5 Mbit/s | 45 |
 | Medium (default) | 1280 px | 30 | 3 Mbit/s | 65 |
 | High | 1920 px | 30 | 6 Mbit/s | 78 |
 | Native | PC resolution | 20 | 10 Mbit/s | 85 |
 
-Frames are drawn with high-quality (bicubic) filtering so text stays sharp when the picture is scaled to the phone screen. Native on a 4K PC needs a fast connection and decodes large images; use High if it stutters.
+## ⚙ Configuration
 
-## Stream quality (protocol)
-The server's `.env` values below are only the *starting* values of every `/ws/screen` connection. A client can change them at any time while streaming:
-```json
-{"type":"config","max_width":1920,"fps":15,"quality":70}
-```
-All fields are optional. `max_width` is `0` (native) or 320-3840, `fps` is 1-30, `quality` is JPEG 25-90; out-of-range numbers are clamped and unusable values are ignored. Settings are per connection. The server answers with a fresh `{"type":"screen","width":W,"height":H,"max_width":..,"fps":..,"quality":..}` (the values now in effect) followed by a new frame. Frames are never upscaled, so `max_width` above the PC's resolution just sends native size. Clients that never send `config` get exactly the `.env` behaviour.
+Settings live in `.env` (restart `start.ps1` after editing). Full template: [`.env.example`](.env.example).
 
-**Motion quality (less lag).** While the picture keeps changing (scrolling, window animations, dragging) the server sends frames at `REMOTE_PC_MOTION_QUALITY` percent (default 100 = off) of the JPEG quality, so they are smaller and reach the phone sooner. As soon as the picture rests for about 0.2 s it sends one full-quality frame, so text is sharp again. Frames are also scaled to `REMOTE_PC_MOTION_WIDTH` percent (default 100 = off) of their width while the picture moves. Set `REMOTE_PC_MOTION_QUALITY=100` and `REMOTE_PC_MOTION_WIDTH=100` in `.env` to turn this off. No client change is needed.
-
-**Fast capture.** `setup.ps1` also tries to install the optional `dxcam` package, which captures the screen through DXGI several times faster than the default `mss`. If it is missing or does not work on your PC (remote desktop session, other monitor layout, no frames) the server prints one line and keeps using `mss` by itself. `REMOTE_PC_CAPTURE=mss` in `.env` forces the old capture.
-
-## WebRTC mode (low latency)
-The default JPEG stream sends one picture per frame over a TCP WebSocket. One slow packet delays everything behind it, and a Cloudflare tunnel adds a relay hop on top. WebRTC sends H.264 video over UDP (old frames are dropped instead of queued) and carries mouse/keyboard input on data channels.
-
-**How it works.** When you tap *Start screen*, the Android app first opens `/ws/rtc` on the same PC address and with the same password. That socket is only used to exchange the connection offer (signaling). The video and the input then travel directly between phone and PC.
-- The WebSocket JPEG stream starts at the same moment, so there is a picture from the first second while WebRTC negotiates. As soon as WebRTC video is really being decoded the app switches to it and closes the JPEG stream.
-- If WebRTC has not delivered video within about 20 seconds, or the PC says WebRTC is unavailable, the app simply keeps the WebSocket stream and shows a small notice. A short network drop (under 5 seconds) does not end a working WebRTC session.
-- The PC encodes with the GPU when it can (NVIDIA `nvenc`, Intel `qsv`, AMD `amf`) and otherwise with libx264 (`ultrafast`, `zerolatency`, no B-frames). A hardware encoder that does not work is skipped automatically.
-- Input uses two data channels with the same JSON messages as `/ws/input`: `input` (unordered, no retransmits) for pointer moves, and `control` (reliable) for clicks, keys, scroll, hotkeys and typed text.
-
-**Which networks give low latency.**
-| Network | Result |
-|---|---|
-| Same Wi-Fi / LAN | direct UDP, lowest latency (about 50 ms or less is realistic) |
-| Tailscale (phone and PC both on it) | direct UDP through the Tailscale addresses |
-| Internet, both sides can reach each other with STUN | direct UDP after NAT punch-through |
-| Mobile data behind CGNAT / strict firewall | needs a **TURN** relay, otherwise the app falls back to the WebSocket stream |
-
-A free **Cloudflare quick tunnel only carries TCP/HTTP**. It can carry the signaling, but it cannot carry the WebRTC video. Over a quick tunnel alone WebRTC usually will not connect and the app falls back to the WebSocket stream, exactly as before. For the best result use Tailscale or the same LAN.
-
-**Settings (`.env`, restart `start.ps1` after changing).**
 | Variable | Default | Meaning |
 |---|---|---|
-| `REMOTE_PC_WEBRTC` | `1` | `0` turns WebRTC off; clients then always use the WebSocket stream. |
-| `REMOTE_PC_RTC_FPS` | `30` | Maximum video frames per second (1-30). |
-| `REMOTE_PC_RTC_BITRATE` | `4000` | Upper video bitrate limit in kbit/s (300-30000). The app's quality preset can lower it for its session. The receiver's own bandwidth estimate can lower the live bitrate, but not below 1 Mbit/s (or this limit if it is lower). |
-| `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, or force `nvenc`, `qsv`, `amf` or `x264`. libx264 is always the last resort. |
-| `REMOTE_PC_STUN_URL` | `stun:stun.l.google.com:19302` | STUN server(s), comma separated. |
-| `REMOTE_PC_TURN_URL` / `_USER` / `_PASS` | empty | Optional TURN relay, see below. |
+| `REMOTE_PC_TOKEN` | generated | Access password (12+ characters recommended). Required |
+| `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `0.0.0.0` / `8888` | Listen address |
+| `REMOTE_PC_WEBRTC` | `1` | WebRTC on/off (WebSocket stream is the fallback) |
+| `REMOTE_PC_RTC_FPS` / `REMOTE_PC_RTC_BITRATE` | `30` / `4000` | WebRTC max fps and bitrate limit (kbit/s) |
+| `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, `nvenc`, `qsv`, `amf` or `x264` |
+| `REMOTE_PC_STUN_URL` | Google STUN | STUN server(s), comma separated |
+| `REMOTE_PC_TURN_URL` / `_USER` / `_PASS` | empty | Optional TURN relay for networks without a direct path |
+| `REMOTE_PC_FPS` / `_JPEG_QUALITY` / `_MAX_WIDTH` | `20` / `55` / `1280` | Starting values of the WebSocket stream |
+| `REMOTE_PC_LATENCY_FIRST` | `1` | Shrink the picture on slow links to keep delay low |
+| `REMOTE_PC_CAPTURE` | `auto` | `mss` forces the classic capture (default uses `dxcam` when available) |
+| `REMOTE_PC_SHOW_CURSOR` | `1` | Draw a pointer on the stream |
 
-**TURN setup (only if the direct connection fails).** TURN relays the video through a server you control, which adds a little delay but works behind CGNAT. You need a small server with a public IP and open UDP port 3478 (and the relay port range). With [coturn](https://github.com/coturn/coturn) a minimal `turnserver.conf` is:
+**Which network gives low latency?** Same Wi-Fi and Tailscale give direct UDP (about 50 ms or less). A free Cloudflare quick tunnel only carries TCP, so WebRTC usually falls back to the WebSocket stream; use Tailscale, the same LAN or a TURN relay for the best result.
+
+Full WebRTC, stream-quality, TURN and protocol reference: **[docs/WEBRTC.md](docs/WEBRTC.md)**.
+
+## 🧰 Command reference
+
+```powershell
+# Update the project
+cd $HOME\remote-pc-control
+git checkout main
+git pull
+.\scripts\setup.ps1
+
+# Update and restart the scheduled-task installation (RemotePCControl)
+Stop-ScheduledTask -TaskName RemotePCControl
+git pull
+.\scripts\setup.ps1
+Start-ScheduledTask -TaskName RemotePCControl
+
+# Run backend tests and build the dashboard
+.\.venv\Scripts\python.exe -m pytest backend/tests tests -q
+cd frontend
+npm install
+npm run build
+
+# Reset .env to the latest template (overwrites password, Gist and TURN settings; back up first)
+Copy-Item .env .env.backup
+Copy-Item .env.example .env -Force
+.\scripts\set-password.ps1 YourNewPassword
 ```
-listening-port=3478
-realm=remote-pc
-lt-cred-mech
-user=pcuser:use-a-long-random-password
-fingerprint
-no-cli
-```
-Then put this in the PC's `.env` and restart:
-```
-REMOTE_PC_TURN_URL=turn:YOUR.SERVER.IP:3478
-REMOTE_PC_TURN_USER=pcuser
-REMOTE_PC_TURN_PASS=use-a-long-random-password
-```
-The PC sends the TURN details only to clients that signed in with the token, and uses them for itself. They are never printed to the log. Use a dedicated TURN user, not a password you use elsewhere.
 
-**Check which transport is active.**
-- Android: the small label in the corner of the picture starts with the transport, for example `WebRTC · 1280×720 · 30 fps · 38 ms`, or `WebSocket · 1280×720 · 20/30 fps`. After a fallback a notice says why.
-- PC: `start.ps1`'s window logs `WebRTC connection connected` (and `WebRTC encoder: h264_nvenc ...` or `libx264`) for every WebRTC session. If the app fell back, there is a `/ws/screen` connection instead and no such lines.
-- Web dashboard: the corner label says `WebRTC` or `WebSocket`; `chrome://webrtc-internals` shows details.
+`setup.ps1` only *adds* new settings to an existing `.env`. After a reset, restore values you still need from the backup and securely delete it.
 
-**Protocol (for other clients).** `/ws/rtc` uses the same first message as the other sockets, `{"token":"..."}`, then JSON: the PC sends `{"type":"ready","ice_servers":[...]}`; the client sends `{"type":"offer","sdp":"..."}` (receive-only video plus data channels `input` and `control`) and gets `{"type":"answer","sdp":"..."}`; trickle candidates go both ways as `{"type":"candidate","candidate":{"candidate":"...","sdpMid":"0","sdpMLineIndex":0}}`. `{"type":"unavailable","reason":"..."}` means: use `/ws/screen`. Over the `control` channel `{"type":"config","max_width":1280,"fps":30,"bitrate":3000,"cursor":true}` changes the video live (bitrate in kbit/s). Details are in the header of `backend/app/webrtc.py`.
+## 🩺 Troubleshooting
 
-## Updating
-Use the **Update the project** and **Start the server** commands in the command reference near the top of this README. `setup.ps1` rebuilds the dashboard and installs new dependencies (including `aiortc` and `av` for WebRTC).
-
-### Reset `.env` to the latest template
-`setup.ps1` only *adds* new settings. If you need to replace `.env` with the current `.env.example`, use the **Reset `.env`** commands in the command reference above. This overwrites your password, Gist and TURN settings, so restore any values you still need from the backup, restart the server, and securely delete the backup because it contains secrets.
-
-## Configuration (`.env`)
-| Variable | Default | Meaning |
-|---|---|---|
-| `REMOTE_PC_TOKEN` | generated | Access password (4+ characters, 12+ recommended; setup generates a long random one). Required. |
-| `REMOTE_PC_LATENCY_FIRST` | `1` | `1`: on a slow link the picture is made smaller at once (and grows back slowly, in steps of 10 quality / 80 px) so the delay stays low. `0`: always exactly the quality and width chosen in the app. |
-| `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `0.0.0.0` / `8888` | Listen address. |
-| `REMOTE_PC_FPS` | `20` | Starting frames per second (1-30); clients can change it live. If you set it in an existing `.env`, change it there too: the file wins over the default. |
-| `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality (25-85); clients can raise it to 90 live. |
-| `REMOTE_PC_MAX_WIDTH` | `1280` | Starting width limit; wider frames are downscaled (`0` = native). Clients can change it live. |
-| `REMOTE_PC_SHOW_CURSOR` | `1` | Draw a pointer on the stream. |
-| `REMOTE_PC_WEBRTC` | `1` | WebRTC live screen on/off (WebSocket stream is the fallback). See *WebRTC mode*. |
-| `REMOTE_PC_RTC_FPS` / `REMOTE_PC_RTC_BITRATE` | `30` / `4000` | WebRTC maximum frames per second and bitrate limit (kbit/s). |
-| `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, `nvenc`, `qsv`, `amf` or `x264`. |
-| `REMOTE_PC_STUN_URL` | Google STUN | STUN server(s), comma separated. |
-| `REMOTE_PC_TURN_URL` / `_USER` / `_PASS` | empty | Optional TURN relay for networks without a direct path. |
-
-Restart `start.ps1` after editing `.env`.
-
-## Troubleshooting
 | Symptom | Fix |
 |---|---|
-| Phone page does not open (Tailscale) | Phone's Tailscale must be on and on the same account. An error mentioning your `192.168.x.x` address means the phone is not using Tailscale. |
-| Tunnel link shows 502 / bad gateway | `start.ps1` is not running. Start it in its own window. |
-| New tunnel link not reachable yet | Wait 1-2 minutes and retry. |
-| Black screen / stream error | The PC is locked or a UAC prompt is open. Unlock the desktop. |
-| `python` or `npm` not found | Install Python 3.12 and Node.js 22, then open a new PowerShell. |
-| Locked out ("Too many failed attempts") | Wait 5 minutes and use the correct token. |
-| App always says "WebSocket" and never "WebRTC" | The phone and PC have no direct UDP path (Cloudflare quick tunnel only, mobile CGNAT). Use Tailscale or the same Wi-Fi, or set up TURN. Also check `.env` has `REMOTE_PC_WEBRTC=1` and that `setup.ps1` printed no warning about `aiortc`. |
-| WebRTC works on Wi-Fi but not over mobile data | Add a TURN relay (see *WebRTC mode*). |
-| Windows asks to allow python.exe through the firewall | Allow it on the private network only if you use WebRTC on your LAN; Tailscale does not need it. |
-| `aiortc is not installed` in the app notice | Run `.\scripts\setup.ps1 -Force`, then restart `start.ps1`. The WebSocket stream keeps working meanwhile. |
-| `git clone` says folder exists | Use the existing folder: `cd $HOME\remote-pc-control`, then `git pull`. |
+| Page does not open (Tailscale) | Phone's Tailscale must be on and on the same account |
+| Tunnel shows 502 / bad gateway | `start.ps1` is not running; start it in its own window |
+| New tunnel link not reachable yet | Wait 1-2 minutes and retry |
+| Black screen / stream error | PC is locked or a UAC prompt is open; unlock the desktop |
+| `python` or `npm` not found | Install Python 3.12 and Node.js 22, then open a new PowerShell |
+| "Too many failed attempts" | Wait 5 minutes and use the correct token |
+| App always shows "WebSocket" | No direct UDP path; use Tailscale or the same Wi-Fi, or set up TURN. Check `REMOTE_PC_WEBRTC=1` |
+| `aiortc is not installed` | Run `.\scripts\setup.ps1 -Force`, then restart `start.ps1` |
+| `git clone` says folder exists | `cd $HOME\remote-pc-control`, then `git pull` |
 
-## Security and limitations
-- Anyone with the token (and a reachable URL) can control the PC. Keep the token and tunnel link private; revoke any credential you have pasted into chats or tickets.
-- Prefer Tailscale or Cloudflare Access (see [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)) over a bare public link. Never expose port 8888 directly.
-- The agent runs in the logged-in desktop session. It cannot capture or control the Windows sign-in screen or UAC prompts and does not bypass Windows authentication. Use Windows Remote Desktop or a reviewed remote-access product to sign in.
-- Wake-on-LAN over mobile data needs a separately authenticated always-on LAN relay (API reports it as not configured).
-- JPEG streaming is simple and bandwidth-hungry; tune FPS, quality and width for your connection. WebRTC needs a direct UDP path or a TURN relay (see *WebRTC mode*); a free Cloudflare quick tunnel cannot carry its video.
+## 🔒 Security
 
-## Development
-The test and dashboard-build commands are listed in the command reference near the top of this README.
+- Anyone with the token and a reachable URL can control the PC. Keep both private and revoke any credential pasted into chats or tickets.
+- Prefer Tailscale or Cloudflare Access ([docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)) over a bare public link. Never expose port 8888 directly.
+- The agent runs in the logged-in desktop session. It cannot capture or control the Windows sign-in screen or UAC prompts and does not bypass Windows authentication.
+- Wake-on-LAN over mobile data needs a separately authenticated always-on LAN relay (reported as not configured).
+- Never commit `.env`.
 
-Protocol and input handling live in `backend/app/screen.py`; the WebRTC transport is `backend/app/webrtc.py` (signaling, session, video track, data channels) and `backend/app/webrtc_encoder.py` (H.264 encoder selection); the touch UI is `frontend/src/RemoteScreen.tsx` (web). The Android app lives in `android/app/src/main/java/com/mainnetwallet/remotepccontrol/` (`MainActivity.kt` entry and navigation, `RemoteController.kt` networking/state, `ConnectScreen.kt`, `DashboardScreen.kt`, `SessionScreen.kt`, `Trackpad.kt`, `Theme.kt`, `Components.kt`).
+## 🛠 Development
 
+```text
+backend/    FastAPI server (screen.py, webrtc.py, webrtc_encoder.py)
+frontend/   React web dashboard (touch UI: src/RemoteScreen.tsx)
+android/    Native Android app (Kotlin, Material 3)
+scripts/    setup, start, tunnel, autostart, firewall scripts
+installer/  Windows installer (Inno Setup)
+docs/       Quick start, Cloudflare, WebRTC, architecture
+```
+
+Code map, API routes, tests and build pipeline: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## 📚 Documentation
+
+[Windows quick start](docs/QUICKSTART_WINDOWS.md) · [Install and autostart](INSTALL_WINDOWS.md) · [Cloudflare Tunnel and Access](docs/CLOUDFLARE.md) · [WebRTC and stream details](docs/WEBRTC.md) · [Android app](android/README.md) · [Architecture](docs/ARCHITECTURE.md)
