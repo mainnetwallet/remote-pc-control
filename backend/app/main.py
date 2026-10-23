@@ -7,11 +7,14 @@ from .config import settings, validate_settings
 from .security import require_auth
 from . import monitor, control
 from .screen import screen_socket, input_socket
-from .webrtc import rtc_socket, shutdown_all as rtc_shutdown
+import threading
+from .webrtc import rtc_socket, shutdown_all as rtc_shutdown, warm_up as rtc_warm_up
 app=FastAPI(title="Remote PC Control",docs_url=None,redoc_url=None)
 class PowerRequest(BaseModel): confirm: bool=False
 @app.on_event("startup")
-def startup(): validate_settings()
+def startup():
+    validate_settings()
+    threading.Thread(target=rtc_warm_up,name="rtc-warm-up",daemon=True).start()   # first WebRTC connection after boot must not be slow
 @app.on_event("shutdown")
 async def shutdown(): await rtc_shutdown()   # close WebRTC sessions: tracks, capture handles, peer connections
 @app.get("/api/health")

@@ -115,6 +115,28 @@ def unavailable_reason() -> str | None:
     return None
 
 
+def warm_up() -> None:
+    """Prepare everything the first WebRTC connection needs, in the background right after the server starts.
+
+    After a PC restart the first connection used to be slow (aiortc / PyAV / numpy imports from a cold disk, the failing
+    NVENC attempt, the Intel encoder opening) and the phone gave up after its timeout and stayed on the WebSocket
+    stream. Now these costs are paid before anybody connects. Never raises: a problem only means no head start."""
+    if unavailable_reason() is not None: return
+    try:
+        import aiortc, av  # noqa: F401
+        from aiortc.codecs import h264, vpx  # noqa: F401
+        from aiortc import RTCPeerConnection, RTCRtpSender  # noqa: F401
+        for mod in ("mss", "numpy", "PIL.Image", "pynput.mouse", "pynput.keyboard", "dxcam"):
+            try: __import__(mod)
+            except Exception: pass   # optional (dxcam) or not usable here: it is reported when really needed
+        from . import webrtc_encoder
+        started = time.perf_counter()
+        used = webrtc_encoder.probe_backends(webrtc_encoder.install())
+        log.info("WebRTC ready in %.1f s (video encoder: %s)", time.perf_counter() - started, used)
+    except Exception as exc:
+        log.info("WebRTC warm-up skipped (%s: %s)", type(exc).__name__, exc)
+
+
 def create_peer_connection():
     """The PC's RTCPeerConnection, configured with the ICE servers from the settings."""
     from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection

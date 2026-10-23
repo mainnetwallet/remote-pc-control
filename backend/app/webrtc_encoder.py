@@ -175,3 +175,34 @@ def install():
 def _default_cap() -> int:
     from .config import settings
     return int(settings.rtc_bitrate) * 1000
+
+
+def probe_backends(encoder_cls=None, width: int = 1280, height: int = 720) -> str | None:
+    """Open (and test-encode one frame with) each encoder in turn, best first, and remember the ones that do not work in
+    encoder_cls.failed. Returns the backend that will be used, or None when probing was not possible.
+
+    Done once at server start: otherwise the FIRST WebRTC connection after a PC restart pays for the failing hardware
+    encoder attempts (a driver that is still waking up can take seconds) and the phone gives up waiting for video."""
+    import av
+    from .config import settings
+    cls = encoder_cls or install()
+    for name in backend_order(settings.rtc_encoder, cls.failed, av.codecs_available):
+        if name == "x264": return name   # always available: nothing to learn
+        try:
+            ctx = av.CodecContext.create(FFMPEG_NAMES[name], "w")
+            ctx.width, ctx.height, ctx.bit_rate = width, height, INITIAL_BITRATE
+            ctx.pix_fmt = "nv12" if name == "qsv" else "yuv420p"
+            ctx.framerate = fractions.Fraction(30, 1); ctx.time_base = fractions.Fraction(1, 30)
+            ctx.gop_size = GOP_FRAMES; ctx.max_b_frames = 0
+            ctx.options = codec_options(name)
+            ctx.open()
+            frame = av.VideoFrame(width, height, "yuv420p")
+            for plane in frame.planes: plane.update(bytes(plane.buffer_size))
+            frame.pts = 0
+            list(ctx.encode(frame)); list(ctx.encode(None))
+            return name
+        except Exception as exc:
+            cls.failed.add(name)
+            log.info("WebRTC encoder %s unavailable at start-up (%s: %s)", FFMPEG_NAMES[name], type(exc).__name__, exc)
+    return "x264"
+

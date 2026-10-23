@@ -94,7 +94,7 @@ class RtcStatsInfo(val rttMs: Int, val fps: Int, val kbps: Int, val decodeMs: In
 
 // The WebSocket stream shows the picture from the first second, so WebRTC may take its time to negotiate. If it has
 // not delivered decoded video by then (no direct UDP path, decoder problem...), it is dropped and the WebSocket stream stays.
-private const val RTC_CONNECT_TIMEOUT_MS = 10_000L
+private const val RTC_CONNECT_TIMEOUT_MS = 20_000L
 
 /**
  * All connection state and networking. UI reads the Compose state properties; the activity is not

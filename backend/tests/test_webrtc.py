@@ -754,3 +754,33 @@ def test_encoder_bitrate_follows_the_receiver_within_floor_and_cap():
     webrtc_encoder.Limits.set("t", 600_000)
     assert enc.target_bitrate == 600_000                                  # a low cap lowers the floor too
     webrtc_encoder.Limits.set("t", None)
+
+
+# ---------------------------------------------------------------- start-up warm-up
+
+def test_warm_up_does_nothing_when_webrtc_is_unavailable(monkeypatch):
+    monkeypatch.setattr(settings, "webrtc", False)
+    called = []
+    monkeypatch.setattr(webrtc_encoder, "probe_backends", lambda *a, **k: called.append(1))
+    webrtc.warm_up()
+    assert called == []
+
+
+def test_warm_up_never_raises(monkeypatch):
+    monkeypatch.setattr(webrtc, "unavailable_reason", lambda: None)
+    def boom(*a, **k): raise RuntimeError("driver exploded")
+    monkeypatch.setattr(webrtc_encoder, "install", boom)
+    webrtc.warm_up()   # must only log
+
+
+def test_probe_marks_a_broken_hardware_encoder_as_failed(monkeypatch):
+    av = pytest.importorskip("av")
+    class Cls: failed = set()
+    monkeypatch.setattr(av, "codecs_available", {"h264_nvenc", "libx264"}, raising=False)
+    real_create = av.CodecContext.create
+    def create(name, mode):
+        if name == "h264_nvenc": raise PermissionError("Operation not permitted")
+        return real_create(name, mode)
+    monkeypatch.setattr(av.CodecContext, "create", staticmethod(create), raising=False)
+    assert webrtc_encoder.probe_backends(Cls) == "x264"
+    assert Cls.failed == {"nvenc"}
