@@ -216,6 +216,19 @@ Full WebRTC, stream-quality, TURN and protocol reference: **[docs/WEBRTC.md](doc
 | `aiortc is not installed` | Run `.\scripts\setup.ps1 -Force`, then restart `start.ps1` |
 | `git clone` says folder exists | `cd $HOME\remote-pc-control`, then `git pull` |
 
+### Controlling elevated windows (Task Manager, Registry Editor, admin terminals)
+
+Windows blocks input from a normal process into elevated windows, so run the agent as administrator. In an **Administrator PowerShell**:
+
+```powershell
+git pull
+.\scripts\install-autostart.ps1 -Admin
+Stop-ScheduledTask -TaskName RemotePCControl
+Start-ScheduledTask -TaskName RemotePCControl
+```
+
+The agent then has full admin rights, so use a strong password. The UAC secure desktop still cannot be controlled.
+
 ## 🔒 Security
 
 - Anyone with the token and a reachable URL can control the PC. Keep both private and revoke any credential pasted into chats or tickets.
