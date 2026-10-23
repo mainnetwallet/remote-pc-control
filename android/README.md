@@ -1,55 +1,36 @@
-# Android App
+# Remote PC Control — Android app
 
-Native Kotlin + Jetpack Compose client for Remote PC Control.
+Native Kotlin + Jetpack Compose companion app for the Remote PC Control Windows agent.
 
-## Install and connect
+## Build APK
+Open the `android/` directory in Android Studio (JDK 17; Android SDK 35), wait for Gradle sync, then select **Build > Build APK(s)**. The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
-1. Download the Android APK from GitHub Actions or the repository's Releases.
-2. Install it on your phone.
-3. Start the Windows agent using the [Windows quick start](../docs/QUICKSTART_WINDOWS.md).
-4. Enter the PC URL and the `REMOTE_PC_TOKEN` from the PC's `.env`.
-5. Tap **Connect**, then start a screen session.
+Or run from this directory: `gradle assembleDebug` with Gradle 8.11.1 or newer installed.
 
-Use Tailscale or the same trusted Wi-Fi for private access. A Cloudflare URL is supported for signaling and the WebSocket stream; the quick tunnel alone cannot carry WebRTC video. Do not expose port 8888 directly to the internet.
+## Connect
+1. Install and start the Windows agent using the repository's Windows setup guide.
+2. Make the PC reachable from the phone: Tailscale/WireGuard (`http://100.x.x.x:8888`), the same Wi-Fi (`http://<PC-LAN-IP>:8888`) or a Cloudflare tunnel (`https://....trycloudflare.com`, see the main README).
+3. Enter the PC base URL and the API token from the PC's `.env`.
 
-## Build the APK
+4. Tap Connect. The Dashboard shows system metrics and the power buttons, and opens a live screen session.
 
-Open the `android/` folder in Android Studio with JDK 17 and Android SDK 35, sync Gradle, then choose **Build > Build APK(s)**.
+In the screen session use the toolbar modes Click / Move / Drag / Scroll, the Double-click button, the **Quality** menu (Low / Medium / High / Native, applied live) and the quick-key bar. The corner overlay shows the stream resolution and frames per second.
 
-Or run from this directory with Gradle 8.11.1 or newer:
+Do not expose port 8888 directly to the public internet. After the first successful login the password is stored encrypted (Android Keystore) so the app signs in by itself at start; tap Log out to forget it. The app requires a trusted private network because the current agent setup may use HTTP/WebSocket rather than TLS.
 
-```powershell
-gradle assembleDebug
-```
+The app can only control the logged-in interactive Windows desktop. It cannot bypass Windows sign-in, UAC secure desktop, or other OS security boundaries. Sleep, restart and shutdown require confirmation.
 
-The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+## Code layout
+`MainActivity.kt` (entry and navigation), `RemoteController.kt` (HTTP, WebSocket, session state and quality presets), `Rtc.kt` (WebRTC peer/signaling/data channels), `SecureStore.kt` (Android Keystore encryption), `ConnectScreen.kt`, `DashboardScreen.kt`, `SessionScreen.kt`, `Trackpad.kt`, `Theme.kt`, and `Components.kt`. The app uses Jetpack Compose and Material 3.
 
-## Screen controls
+## WebRTC live screen
 
-- **Click / Move / Drag / Scroll:** choose how touch gestures control the PC.
-- **Trackpad:** move the pointer, click, drag, and scroll.
-- **Keys:** send common keys or enter text.
-- **Quality:** change stream quality while the session is active.
-- **Stop:** end the screen session.
+The live screen first tries WebRTC (low-latency H.264 video over UDP, input over data channels) through the PC's
+`/ws/rtc` endpoint. If the PC has no WebRTC, the network blocks UDP, or nothing connects within about 20 seconds, the
+app switches to the old WebSocket JPEG stream by itself and shows a short notice. The corner label of the live
+screen shows which transport is active (`WebRTC` or `WebSocket`), the frame rate and, for WebRTC, the round-trip time.
 
-The screen overlay shows the active transport, resolution, and frame rate. WebRTC may also show round-trip time. If WebRTC cannot connect, the app falls back to JPEG over WebSocket.
-
-## Transport notes
-
-WebRTC sends H.264 video over UDP and input over data channels. A direct route usually works best over the same Wi-Fi or Tailscale. Mobile carrier NAT or strict firewalls may require a TURN relay configured on the PC with `REMOTE_PC_TURN_URL`, `REMOTE_PC_TURN_USER`, and `REMOTE_PC_TURN_PASS`.
-
-A Cloudflare quick tunnel carries HTTP/WebSocket traffic but not WebRTC media. Cloudflare Access browser login is not supported by the Android app.
-
-## Security
-
-The app stores the access token encrypted with the Android Keystore after login. Use **Log out** to clear saved credentials. Anyone with the token and network access can control the PC, so keep it private.
-
-The app controls only the logged-in interactive desktop. It cannot bypass Windows sign-in, UAC secure desktop, or other operating-system security boundaries. Power actions require confirmation.
-
-## Code map
-
-- `MainActivity.kt` — app entry and navigation
-- `RemoteController.kt` — connection, state, and quality presets
-- `ConnectScreen.kt`, `DashboardScreen.kt`, `SessionScreen.kt` — app screens
-- `Trackpad.kt` — touchpad controls
-- `Theme.kt`, `Components.kt` — theme and shared UI
+Library: `io.getstream:stream-webrtc-android` (package `org.webrtc`). The Quality presets map to bitrate/size/fps
+(Low 1500, Medium 3000, High 6000, Native 10000 kbit/s). Over a Cloudflare quick tunnel only the signaling travels
+through the tunnel; the video needs a direct path (same Wi-Fi, Tailscale, or TURN set on the PC with
+`REMOTE_PC_TURN_URL`, see the root README).
