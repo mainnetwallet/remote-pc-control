@@ -60,7 +60,22 @@ git pull
 ```
 Then start the server using step 3 above. For a scheduled-task installation, see [Quick update and restart](#quick-update-and-restart-scheduled-task).
 
-### 6. Run backend tests and build the dashboard
+### 6. Update and restart a scheduled-task installation
+Use this if the server runs as the `RemotePCControl` Windows scheduled task. Change the folder path if your repository is elsewhere.
+```powershell
+cd $HOME\remote-pc-control
+git pull
+.\.venv\Scripts\python.exe -m pytest backend/tests tests -q
+cd frontend
+npm install
+npm run build
+cd ..
+Stop-ScheduledTask -TaskName RemotePCControl
+Start-ScheduledTask -TaskName RemotePCControl
+```
+This stops and starts only the named scheduled task rather than killing every Python process on the PC. Run the setup script first if dependencies changed.
+
+### 7. Run backend tests and build the dashboard
 ```powershell
 cd $HOME\remote-pc-control
 .\.venv\Scripts\python.exe -m pytest backend/tests tests -q
@@ -69,7 +84,7 @@ npm install
 npm run build
 ```
 
-### 7. Reset `.env` (only when necessary)
+### 8. Reset `.env` (only when necessary)
 This overwrites current settings and credentials. Back up first:
 ```powershell
 cd $HOME\remote-pc-control
@@ -232,16 +247,6 @@ The PC sends the TURN details only to clients that signed in with the token, and
 ## Updating
 Use the **Update the project** and **Start the server** commands in the command reference near the top of this README. `setup.ps1` rebuilds the dashboard and installs new dependencies (including `aiortc` and `av` for WebRTC).
 
-### Quick update and restart (scheduled task)
-If the server runs as the `RemotePCControl` scheduled task, pull the latest code, stop the running Python processes and start the task again:
-```powershell
-cd C:\Users\mainw\remote-pc-control
-git pull
-Get-Process python | Stop-Process -Force
-Start-ScheduledTask -TaskName RemotePCControl
-```
-Note: `Get-Process python | Stop-Process -Force` stops *every* Python process on the PC, not only this server.
-
 ### Reset `.env` to the latest template
 `setup.ps1` only *adds* new settings. If you need to replace `.env` with the current `.env.example`, use the **Reset `.env`** commands in the command reference above. This overwrites your password, Gist and TURN settings, so restore any values you still need from the backup, restart the server, and securely delete the backup because it contains secrets.
 
@@ -290,27 +295,3 @@ The test and dashboard-build commands are listed in the command reference near t
 
 Protocol and input handling live in `backend/app/screen.py`; the WebRTC transport is `backend/app/webrtc.py` (signaling, session, video track, data channels) and `backend/app/webrtc_encoder.py` (H.264 encoder selection); the touch UI is `frontend/src/RemoteScreen.tsx` (web). The Android app lives in `android/app/src/main/java/com/mainnetwallet/remotepccontrol/` (`MainActivity.kt` entry and navigation, `RemoteController.kt` networking/state, `ConnectScreen.kt`, `DashboardScreen.kt`, `SessionScreen.kt`, `Trackpad.kt`, `Theme.kt`, `Components.kt`).
 
----
-
-## বাংলা সারসংক্ষেপ
-1. PC-তে Python 3.12, Node.js 22 ও Git ইনস্টল করুন।
-2. উপরের **Command guides**-এ দেওয়া First-time setup কমান্ড চালিয়ে token নিরাপদে সংরক্ষণ করুন।
-3. Server চালু করে ফোনে সংযোগ দিতে Cloudflare, Tailscale বা একই Wi-Fi পদ্ধতি বেছে নিন।
-4. Token দিয়ে Connect করে Start screen চাপুন। Click/Move/Drag/Scroll mode দিয়ে mouse নিয়ন্ত্রণ করুন।
-5. কাজ শেষে tunnel window-তে `Ctrl+C` চাপুন। Link ও token কাউকে দেবেন না.
-
-## বাংলা: WebRTC (কম delay)
-- নতুন WebRTC মোডে ভিডিও UDP-তে সরাসরি ফোন ↔ PC যায় (H.264), তাই delay অনেক কম। Mouse/keyboard-এর input-ও একই সংযোগের data channel দিয়ে যায়।
-- অ্যাপে *Start screen* চাপলে আগে WebRTC চেষ্টা হয়। প্রায় ২০ সেকেন্ডে না লাগলে অ্যাপ নিজে থেকেই পুরোনো WebSocket (JPEG) স্ট্রিমে চলে যায় এবং ছোট একটা নোটিশ দেখায়।
-- সবচেয়ে ভালো ফল: একই Wi-Fi বা Tailscale। Cloudflare quick tunnel শুধু TCP বহন করে, তাই শুধু tunnel দিয়ে WebRTC সাধারণত লাগে না। মোবাইল ডেটায় না লাগলে TURN সার্ভার দিন (`.env`-এ `REMOTE_PC_TURN_URL`, `REMOTE_PC_TURN_USER`, `REMOTE_PC_TURN_PASS`)।
-- বন্ধ করতে `.env`-এ `REMOTE_PC_WEBRTC=0`। কোন মোড চলছে বোঝার উপায়: ছবির কোণার লেখা `WebRTC · …` বা `WebSocket · …`।
-- আপডেট: `git pull`, তারপর `.\scripts\setup.ps1`, তারপর `.\scripts\start.ps1`; নতুন APK ইনস্টল করুন।
-
-## বাংলা: `.env` নতুন করে বানানো
-`.env` পুরো রিসেট করতে (আগে backup নিন, কারণ এটা password, Gist ও TURN মান মুছে দেয়):
-```powershell
-Copy-Item .env .env.backup
-Copy-Item .env.example .env -Force
-.\scripts\set-password.ps1 নতুনPassword
-```
-এরপর দরকারি মান (`QUICK_TUNNEL`, `GIST_TOKEN`, `GIST_ID`, `REMOTE_PC_TURN_*`) আবার বসান, `start.ps1` রিস্টার্ট করুন, আর শেষে `Remove-Item .env.backup` দিয়ে backup মুছে দিন।
