@@ -320,13 +320,11 @@ private fun SessionToolbar(
 }
 
 @Composable
-private fun StopButton(onStop: () -> Unit, small: Boolean = false) {
+private fun StopButton(onStop: () -> Unit) {
     Button(
-        onClick = onStop,
-        modifier = if (small) Modifier.height(32.dp) else Modifier,
-        contentPadding = if (small) menuPadding else compactPadding,
+        onClick = onStop, contentPadding = compactPadding,
         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)
-    ) { Text("Stop", style = if (small) MaterialTheme.typography.labelSmall else LocalTextStyle.current) }
+    ) { Text("Stop") }
 }
 
 /** Small tonal button (32 dp high) used inside the landscape Controls menu. */
@@ -418,7 +416,7 @@ fun SessionScreen(c: RemoteController) {
     var sensitivity by rememberSaveable { mutableStateOf(1.5f) }
     var showPad by rememberSaveable { mutableStateOf(true) }
     var showKeys by rememberSaveable { mutableStateOf(false) }
-    var showControls by rememberSaveable { mutableStateOf(false) }   // landscape panel: Touch/Keys/Hide + Quality/Rotate/Stop rows (hidden until tapped)
+    var showControls by rememberSaveable { mutableStateOf(false) }   // landscape: Touch/Keys/Hide/Rotate shown left of the Controls button (hidden until tapped)
     var typeText by rememberSaveable { mutableStateOf("") }
     val send: (JSONObject) -> Unit = { c.sendInput(it) }
     val onSendText: () -> Unit = {
@@ -438,47 +436,46 @@ fun SessionScreen(c: RemoteController) {
                 if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         }
         if (maxWidth > maxHeight) {
-            // Landscape: PC screen on the left, a separate control panel on the right (nothing is drawn over the picture).
+            // Landscape: PC screen on the left, a separate trackpad panel on the right.
+            // The Controls button sits at the top-right; tapping it lines up Touch, Keys, Hide and Rotate to its left.
+            // Quality and Stop are only in the portrait toolbar.
             val panelWidth = (windowWidth * 0.28f).coerceIn(230.dp, 340.dp)
-            Row(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize())
-                    if (showKeys) Surface(
-                        Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
-                    ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
-                    if (!showPad) Row(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilledTonalButton(onClick = { showPad = true }, contentPadding = compactPadding) { Text("Trackpad") }
-                        FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
-                        FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
-                        QualityMenuButton(c.quality, { c.setQuality(it) })
-                        RotateButton(rotate, tonal = true)
-                        StopButton({ c.stopScreen() })
+            Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
+                Row(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize())
+                        if (showKeys) Surface(
+                            Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
+                        ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
+                        if (!showPad) Row(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilledTonalButton(onClick = { showPad = true }, contentPadding = compactPadding) { Text("Trackpad") }
+                            FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
+                            FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
+                            RotateButton(rotate, tonal = true)
+                        }
+                    }
+                    if (showPad) Column(
+                        Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Spacer(Modifier.height(32.dp))   // room for the Controls row drawn on top
+                        Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
+                        PadButtons(send)
+                        SpeedRow(sensitivity) { sensitivity = it }
                     }
                 }
-                if (showPad) Column(
-                    Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                if (showPad) Row(
+                    Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Controls button sits on the right side of the panel; one tap shows the compact rows, another hides them.
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        MenuButton(if (showControls) "Controls ▴" else "Controls ▾", { showControls = !showControls })
-                    }
                     if (showControls) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                            MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() })
-                            MenuButton("Keys", { showKeys = !showKeys })
-                            MenuButton("Hide", { showPad = false })
-                        }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-                            QualityMenuButton(c.quality, { c.setQuality(it) }, small = true)
-                            RotateButton(rotate, tonal = true, small = true)
-                            StopButton({ c.stopScreen() }, small = true)
-                        }
+                        MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() })
+                        MenuButton("Keys", { showKeys = !showKeys })
+                        MenuButton("Hide", { showPad = false })
+                        RotateButton(rotate, tonal = true, small = true)
                     }
-                    Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
-                    PadButtons(send)
-                    SpeedRow(sensitivity) { sensitivity = it }
+                    MenuButton(if (showControls) "Controls \u25B4" else "Controls \u25BE", { showControls = !showControls })
                 }
             }
         } else {

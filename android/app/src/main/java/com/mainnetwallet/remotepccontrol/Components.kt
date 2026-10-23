@@ -24,7 +24,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -91,14 +90,10 @@ fun QualityPicker(selected: Quality, onSelect: (Quality) -> Unit, modifier: Modi
 
 /** Compact "Quality: Medium" button with a drop-down, used in the session toolbars. */
 @Composable
-fun QualityMenuButton(quality: Quality, onSelect: (Quality) -> Unit, small: Boolean = false) {
+fun QualityMenuButton(quality: Quality, onSelect: (Quality) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        FilledTonalButton(
-            onClick = { expanded = true },
-            modifier = if (small) Modifier.height(32.dp) else Modifier,
-            contentPadding = if (small) menuPadding else compactPadding
-        ) { Text("Quality: ${quality.label}", style = if (small) MaterialTheme.typography.labelSmall else LocalTextStyle.current) }
+        FilledTonalButton(onClick = { expanded = true }, contentPadding = compactPadding) { Text("Quality: ${quality.label}") }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             Quality.values().forEach { q ->
                 DropdownMenuItem(
