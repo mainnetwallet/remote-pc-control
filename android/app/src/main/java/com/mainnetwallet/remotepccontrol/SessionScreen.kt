@@ -327,6 +327,14 @@ private fun StopButton(onStop: () -> Unit) {
     ) { Text("Stop") }
 }
 
+/** 32 dp button for the bottom strip under the PC screen; the active touch mode is highlighted. */
+@Composable
+private fun StripButton(text: String, selected: Boolean, onClick: () -> Unit) {
+    val m = Modifier.height(32.dp)
+    if (selected) Button(onClick = onClick, modifier = m, contentPadding = menuPadding) { Text(text, style = MaterialTheme.typography.labelMedium) }
+    else FilledTonalButton(onClick = onClick, modifier = m, contentPadding = menuPadding) { Text(text, style = MaterialTheme.typography.labelMedium) }
+}
+
 /** Small tonal button (32 dp high) used inside the landscape Controls menu. */
 @Composable
 private fun MenuButton(text: String, onClick: () -> Unit) {
@@ -381,7 +389,7 @@ private fun StreamStatsOverlay(c: RemoteController, modifier: Modifier = Modifie
 
 /** The PC picture (or a waiting placeholder) with the stats overlay in its top-left corner. */
 @Composable
-private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier, frameModifier: Modifier, waitingModifier: Modifier) {
+private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier, frameModifier: Modifier, waitingModifier: Modifier, showStats: Boolean = true) {
     val frame = c.frame
     val track = c.videoTrack
     val cursor: () -> Offset? = { if (c.cursorX >= 0f) Offset(c.cursorX, c.cursorY) else null }
@@ -401,7 +409,7 @@ private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier,
             )
         }
         else Box(waitingModifier, contentAlignment = Alignment.Center) { Text("Waiting for the PC screen\u2026", color = Color.White) }
-        StreamStatsOverlay(c, Modifier.align(Alignment.TopStart).padding(6.dp))
+        if (showStats) StreamStatsOverlay(c, Modifier.align(Alignment.TopStart).padding(6.dp))
     }
 }
 
@@ -442,20 +450,34 @@ fun SessionScreen(c: RemoteController) {
             val panelWidth = (windowWidth * 0.28f).coerceIn(230.dp, 340.dp)
             Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
                 Row(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize())
-                        if (showKeys) Surface(
-                            Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
-                        ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
-                        if (!showPad) Row(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // Panel hidden: the touch modes in one row (Off, Click, Move, Scroll, Drag) plus Hide.
-                            // The active mode is highlighted; Hide brings the panel back exactly as it was.
-                            listOf(TouchMode.OFF, TouchMode.CLICK, TouchMode.MOVE, TouchMode.SCROLL, TouchMode.DRAG).forEach { m ->
-                                if (m == touchMode) Button(onClick = { touchMode = m }, contentPadding = compactPadding) { Text(m.label) }
-                                else FilledTonalButton(onClick = { touchMode = m }, contentPadding = compactPadding) { Text(m.label) }
+                    // PC screen with a thin strip underneath: the WebRTC/WebSocket label and (panel hidden) the touch buttons
+                    // live in the strip, so nothing is drawn over the PC picture.
+                    Column(Modifier.weight(1f).fillMaxHeight()) {
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize(), showStats = false)
+                            if (showKeys) Surface(
+                                Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
+                            ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
+                        }
+                        Row(
+                            Modifier.fillMaxWidth().height(38.dp).padding(horizontal = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            StreamStatsOverlay(c)
+                            Spacer(Modifier.weight(1f))
+                            if (!showPad) Row(
+                                Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Panel hidden: touch modes, left/right click buttons and Hide (Hide brings the panel back as it was).
+                                listOf(TouchMode.OFF, TouchMode.CLICK, TouchMode.MOVE, TouchMode.SCROLL, TouchMode.DRAG).forEach { m ->
+                                    StripButton(m.label, m == touchMode, { touchMode = m })
+                                }
+                                StripButton("Left click", false, { send(JSONObject().put("type", "click").put("button", "left")) })
+                                StripButton("Right click", false, { send(JSONObject().put("type", "click").put("button", "right")) })
+                                StripButton("Hide", false, { showPad = true })
                             }
-                            FilledTonalButton(onClick = { showPad = true }, contentPadding = compactPadding) { Text("Hide") }
                         }
                     }
                     if (showPad) Column(
