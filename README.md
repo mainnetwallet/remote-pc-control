@@ -46,6 +46,7 @@ Keep this window open. The server listens on port `8888`.
 Open a **second** PowerShell window:
 ```powershell
 cd $HOME\remote-pc-control
+Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\start-tunnel.ps1
 ```
 Open the printed `https://....trycloudflare.com` address on your phone. The link changes when the tunnel restarts. For a permanent tunnel, see [Cloudflare Tunnel and Access](docs/CLOUDFLARE.md). For Tailscale or same-Wi-Fi access, see [Windows quick start](docs/QUICKSTART_WINDOWS.md).
