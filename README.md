@@ -16,9 +16,9 @@ New here? Follow the step-by-step **[Windows quick start](docs/QUICKSTART_WINDOW
 
 ## Command guides — quick reference
 
-Use these commands in **PowerShell** on the Windows PC. The full explanations and connection choices remain in the guides below.
+Run these in **PowerShell on the Windows PC**. This is the single command reference; detailed explanations and connection options are documented below.
 
-### 1. Install / first-time setup
+### 1. First-time setup
 ```powershell
 cd $HOME
 git clone https://github.com/mainnetwallet/remote-pc-control.git
@@ -26,55 +26,57 @@ cd remote-pc-control
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\setup.ps1
 ```
+Run this once to install dependencies, build the dashboard and generate `.env`.
 
-### 2. Show your access token
+### 2. Show the access token
 ```powershell
 cd $HOME\remote-pc-control
 Get-Content .env | Select-String REMOTE_PC_TOKEN
 ```
 Copy only the value after `REMOTE_PC_TOKEN=`. Keep it private.
 
-### 3. Start the PC server
+### 3. Start the server
 ```powershell
 cd $HOME\remote-pc-control
 .\scripts\start.ps1
 ```
-Keep this PowerShell window open. The server listens on port `8888`.
+Keep this window open. The server listens on port `8888`.
 
-### 4. Start a Cloudflare quick tunnel
+### 4. Connect from outside your network (Cloudflare quick tunnel)
 Open a **second** PowerShell window:
 ```powershell
 cd $HOME\remote-pc-control
-Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\start-tunnel.ps1
 ```
-Open the printed `https://....trycloudflare.com` address on your phone. The address changes when the tunnel restarts. For a permanent tunnel, see [Cloudflare Tunnel and Access](docs/CLOUDFLARE.md).
+Open the printed `https://....trycloudflare.com` address on your phone. The link changes when the tunnel restarts. For a permanent tunnel, see [Cloudflare Tunnel and Access](docs/CLOUDFLARE.md). For Tailscale or same-Wi-Fi access, see [Windows quick start](docs/QUICKSTART_WINDOWS.md).
 
-### 5. Update the code
+### 5. Update the project
 ```powershell
 cd $HOME\remote-pc-control
 git checkout main
 git pull
 .\scripts\setup.ps1
 ```
-Then start the server with `.\scripts\start.ps1`. If it is running as a scheduled task, follow [Quick update and restart](#quick-update-and-restart-scheduled-task) instead.
+Then start the server using step 3 above. For a scheduled-task installation, see [Quick update and restart](#quick-update-and-restart-scheduled-task).
 
-### 6. Run tests / build the dashboard
+### 6. Run backend tests and build the dashboard
 ```powershell
+cd $HOME\remote-pc-control
 .\.venv\Scripts\python.exe -m pytest backend/tests tests -q
 cd frontend
 npm install
 npm run build
 ```
 
-### 7. Reset `.env` only if needed
-This replaces your current settings and credentials, so back up first:
+### 7. Reset `.env` (only when necessary)
+This overwrites current settings and credentials. Back up first:
 ```powershell
+cd $HOME\remote-pc-control
 Copy-Item .env .env.backup
 Copy-Item .env.example .env -Force
 .\scripts\set-password.ps1 YourNewPassword
 ```
-Restore the settings you still need, restart the server, then securely delete the backup. See [Reset `.env` to the latest template](#reset-env-to-the-latest-template) for the full instructions.
+Restore any settings you still need, restart the server, and securely delete the backup. The detailed notes are in [Reset `.env` to the latest template](#reset-env-to-the-latest-template).
 
 **Step-by-step guides:** [Windows quick start](docs/QUICKSTART_WINDOWS.md) · [Windows installation and autostart](INSTALL_WINDOWS.md) · [Cloudflare Tunnel and Access](docs/CLOUDFLARE.md) · [Android app and APK build](android/README.md).
 
@@ -94,38 +96,17 @@ Restore the settings you still need, restart the server, then securely delete th
 ### 1. Prerequisites on the PC
 Install **Python 3.12 (x64)**, **Node.js 22** and **Git**. (Tailscale only if you choose that connection method.)
 
-### 2. Get the code and set it up
-Open PowerShell (normal user, in your logged-in desktop session):
-```powershell
-cd $HOME
-git clone https://github.com/mainnetwallet/remote-pc-control.git
-cd remote-pc-control
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\setup.ps1
-```
-`setup.ps1` creates a virtual environment, installs dependencies, builds the web dashboard and generates a private `.env` containing your **access token**. A new `.env` is a copy of the full `.env.example` with a fresh password; on later runs `setup.ps1` appends any setting that `.env.example` gained (never changing your existing values or password). For the optional automatic tunnel link in the Android app, add `QUICK_TUNNEL=1` and a GitHub classic token with only the `gist` scope to `.env`, or pass `-GistToken <token>` and `-GistId <id>` to setup (see A2 below). Save the token somewhere safe; never commit `.env`. To show it again later:
-```powershell
-Get-Content .env | Select-String REMOTE_PC_TOKEN
-```
-(Copy only the text after `REMOTE_PC_TOKEN=`.)
+### 2. Set up the PC
+Run the first-time setup command from the command reference above in a normal PowerShell window, while signed in to the Windows desktop. It creates a virtual environment, installs dependencies, builds the web dashboard and generates a private `.env` with your **access token**. A new `.env` is copied from the full `.env.example` with a fresh password; later setup runs append newly introduced settings without changing existing values or your password. For the optional automatic tunnel link in the Android app, add `QUICK_TUNNEL=1` and a GitHub classic token with only the `gist` scope to `.env`, or pass `-GistToken <token>` and `-GistId <id>` to setup (see A2 below). Never commit `.env`.
 
 ### 3. Start the server
-```powershell
-.\scripts\start.ps1
-```
-Leave this window open. The server listens on port 8888.
+Use step 3 in the command reference above. Leave that PowerShell window open; the server listens on port 8888.
 
 ### 4. Connect the phone (pick one method)
 
 **A. Cloudflare quick tunnel (works anywhere, no account needed)**
 
-In a **second** PowerShell window:
-```powershell
-cd $HOME\remote-pc-control
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\start-tunnel.ps1
-```
-The first run installs `cloudflared`; if it asks, close the window, open a new one and run the same command again. It prints a link like `https://xxxx-xxxx.trycloudflare.com`. Open it on the phone (browser, or use it as the *PC URL* in the Android app) and enter the token.
+In a **second** PowerShell window, run step 4 in the command reference above. The first run installs `cloudflared`; if it asks, close the window, open a new one and repeat. It prints a link like `https://xxxx-xxxx.trycloudflare.com`. Open it on the phone (browser, or use it as the *PC URL* in the Android app) and enter the token.
 - Test first: `https://<your-link>/api/health` should show `{"ok":true,...}`.
 - The link **changes every time** the tunnel restarts. Keep both windows open; press `Ctrl+C` in the tunnel window when done. Do not share the link.
 - For a **permanent link** that never changes (and starts with Windows) use a named tunnel: step-by-step in **[docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)**. It needs a domain on your Cloudflare account; the guide also covers Cloudflare Access login protection.
@@ -248,13 +229,7 @@ The PC sends the TURN details only to clients that signed in with the token, and
 **Protocol (for other clients).** `/ws/rtc` uses the same first message as the other sockets, `{"token":"..."}`, then JSON: the PC sends `{"type":"ready","ice_servers":[...]}`; the client sends `{"type":"offer","sdp":"..."}` (receive-only video plus data channels `input` and `control`) and gets `{"type":"answer","sdp":"..."}`; trickle candidates go both ways as `{"type":"candidate","candidate":{"candidate":"...","sdpMid":"0","sdpMLineIndex":0}}`. `{"type":"unavailable","reason":"..."}` means: use `/ws/screen`. Over the `control` channel `{"type":"config","max_width":1280,"fps":30,"bitrate":3000,"cursor":true}` changes the video live (bitrate in kbit/s). Details are in the header of `backend/app/webrtc.py`.
 
 ## Updating
-```powershell
-cd $HOME\remote-pc-control
-git checkout main
-git pull
-.\scripts\setup.ps1     # rebuilds the dashboard / installs new dependencies (WebRTC needs aiortc and av; setup installs them)
-.\scripts\start.ps1
-```
+Use the **Update the project** and **Start the server** commands in the command reference near the top of this README. `setup.ps1` rebuilds the dashboard and installs new dependencies (including `aiortc` and `av` for WebRTC).
 
 ### Quick update and restart (scheduled task)
 If the server runs as the `RemotePCControl` scheduled task, pull the latest code, stop the running Python processes and start the task again:
@@ -267,13 +242,7 @@ Start-ScheduledTask -TaskName RemotePCControl
 Note: `Get-Process python | Stop-Process -Force` stops *every* Python process on the PC, not only this server.
 
 ### Reset `.env` to the latest template
-`setup.ps1` only *adds* new settings. To start over with the tidy, current `.env.example`, back up first (the copy overwrites `.env`, including your password, Gist and TURN values):
-```powershell
-Copy-Item .env .env.backup
-Copy-Item .env.example .env -Force
-.\scripts\set-password.ps1 YourNewPassword    # .env.example holds only a placeholder password
-```
-Then fill in the values you still need (`QUICK_TUNNEL`, `GIST_TOKEN`, `GIST_ID`, `REMOTE_PC_TURN_*`; your old ones are in `.env.backup`), restart `start.ps1`, and delete the backup, because it contains secrets: `Remove-Item .env.backup`.
+`setup.ps1` only *adds* new settings. If you need to replace `.env` with the current `.env.example`, use the **Reset `.env`** commands in the command reference above. This overwrites your password, Gist and TURN settings, so restore any values you still need from the backup, restart the server, and securely delete the backup because it contains secrets.
 
 ## Configuration (`.env`)
 | Variable | Default | Meaning |
@@ -316,21 +285,18 @@ Restart `start.ps1` after editing `.env`.
 - JPEG streaming is simple and bandwidth-hungry; tune FPS, quality and width for your connection. WebRTC needs a direct UDP path or a TURN relay (see *WebRTC mode*); a free Cloudflare quick tunnel cannot carry its video.
 
 ## Development
-```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests tests -q   # backend tests
-cd frontend; npm install; npm run build                        # web dashboard
-```
+The test and dashboard-build commands are listed in the command reference near the top of this README.
+
 Protocol and input handling live in `backend/app/screen.py`; the WebRTC transport is `backend/app/webrtc.py` (signaling, session, video track, data channels) and `backend/app/webrtc_encoder.py` (H.264 encoder selection); the touch UI is `frontend/src/RemoteScreen.tsx` (web). The Android app lives in `android/app/src/main/java/com/mainnetwallet/remotepccontrol/` (`MainActivity.kt` entry and navigation, `RemoteController.kt` networking/state, `ConnectScreen.kt`, `DashboardScreen.kt`, `SessionScreen.kt`, `Trackpad.kt`, `Theme.kt`, `Components.kt`).
 
 ---
 
 ## বাংলা সারসংক্ষেপ
-1. PC-তে Python 3.12, Node.js 22, Git ইনস্টল করুন।
-2. PowerShell-এ: `git clone https://github.com/mainnetwallet/remote-pc-control.git`, তারপর `cd remote-pc-control`, `Set-ExecutionPolicy -Scope Process Bypass`, `.\scripts\setup.ps1`। শেষে যে token দেখাবে সেটা সেভ করুন।
-3. `.\scripts\start.ps1` চালান (window খোলা রাখুন)।
-4. নতুন PowerShell window-তে `.\scripts\start-tunnel.ps1` চালান। যে `https://...trycloudflare.com` লিংক আসবে সেটা ফোনে খুলুন (লিংক প্রতিবার বদলায়)।
-5. Token দিয়ে Connect করে Start screen চাপুন। Click/Move/Drag/Scroll mode দিয়ে আঙুলে mouse চালান।
-6. কাজ শেষে tunnel window-তে `Ctrl+C` চাপুন। লিংক ও token কাউকে দেবেন না।
+1. PC-তে Python 3.12, Node.js 22 ও Git ইনস্টল করুন।
+2. উপরের **Command guides**-এ দেওয়া First-time setup কমান্ড চালিয়ে token নিরাপদে সংরক্ষণ করুন।
+3. Server চালু করে ফোনে সংযোগ দিতে Cloudflare, Tailscale বা একই Wi-Fi পদ্ধতি বেছে নিন।
+4. Token দিয়ে Connect করে Start screen চাপুন। Click/Move/Drag/Scroll mode দিয়ে mouse নিয়ন্ত্রণ করুন।
+5. কাজ শেষে tunnel window-তে `Ctrl+C` চাপুন। Link ও token কাউকে দেবেন না.
 
 ## বাংলা: WebRTC (কম delay)
 - নতুন WebRTC মোডে ভিডিও UDP-তে সরাসরি ফোন ↔ PC যায় (H.264), তাই delay অনেক কম। Mouse/keyboard-এর input-ও একই সংযোগের data channel দিয়ে যায়।
