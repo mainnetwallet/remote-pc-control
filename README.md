@@ -183,6 +183,16 @@ git pull
 .\scripts\start.ps1
 ```
 
+### Quick update and restart (scheduled task)
+If the server runs as the `RemotePCControl` scheduled task, pull the latest code, stop the running Python processes and start the task again:
+```powershell
+cd C:\Users\mainw\remote-pc-control
+git pull
+Get-Process python | Stop-Process -Force
+Start-ScheduledTask -TaskName RemotePCControl
+```
+Note: `Get-Process python | Stop-Process -Force` stops *every* Python process on the PC, not only this server.
+
 ### Reset `.env` to the latest template
 `setup.ps1` only *adds* new settings. To start over with the tidy, current `.env.example`, back up first (the copy overwrites `.env`, including your password, Gist and TURN values):
 ```powershell
