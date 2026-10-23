@@ -1,64 +1,36 @@
-# Remote PC Control: Android app
+# Remote PC Control — Android app
 
-Native Kotlin and Jetpack Compose client for the Remote PC Control Windows agent.
+Native Kotlin + Jetpack Compose companion app for the Remote PC Control Windows agent.
 
-| | |
-|---|---|
-| Package | `com.mainnetwallet.remotepccontrol` |
-| Min / target SDK | 26 / 35 |
-| UI | Jetpack Compose, Material 3 (dark) |
-| WebRTC | `io.getstream:stream-webrtc-android` (package `org.webrtc`) |
+## Build APK
+Open the `android/` directory in Android Studio (JDK 17; Android SDK 35), wait for Gradle sync, then select **Build > Build APK(s)**. The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Build
-
-Prebuilt debug APKs are published on the repository's **Releases** page by the *Android APK* workflow.
-
-To build locally, open `android/` in Android Studio (JDK 17, Android SDK 35), wait for Gradle sync and select **Build > Build APK(s)**. The output is `app/build/outputs/apk/debug/app-debug.apk`.
-
-From the command line, with Gradle 8.11.1 or newer:
-
-```
-cd android
-gradle assembleDebug
-```
+Or run from this directory: `gradle assembleDebug` with Gradle 8.11.1 or newer installed.
 
 ## Connect
+1. Install and start the Windows agent using the repository's Windows setup guide.
+2. Make the PC reachable from the phone: Tailscale/WireGuard (`http://100.x.x.x:8888`), the same Wi-Fi (`http://<PC-LAN-IP>:8888`) or a Cloudflare tunnel (`https://....trycloudflare.com`, see the main README).
+3. Enter the PC base URL and the API token from the PC's `.env`.
 
-1. Install and start the Windows agent ([Windows quick start](../docs/QUICKSTART_WINDOWS.md)).
-2. Make the PC reachable from the phone:
-   - Tailscale: `http://100.x.x.x:8888`
-   - Same Wi-Fi: `http://<PC-LAN-IP>:8888`
-   - Cloudflare tunnel: `https://....trycloudflare.com`, or `gist:<id>` for the [automatic link](../README.md#automatic-link-for-the-android-app)
-3. Enter the PC URL and the access token from the PC's `.env`, then tap **Connect**.
+4. Tap Connect. The Dashboard shows system metrics and the power buttons, and opens a live screen session.
 
-The Dashboard shows system metrics and power buttons (Sleep, Restart and Shutdown ask for confirmation) and opens the live screen session.
+In the screen session use the toolbar modes Click / Move / Drag / Scroll, the Double-click button, the **Quality** menu (Low / Medium / High / Native, applied live) and the quick-key bar. The corner overlay shows the stream resolution and frames per second.
 
-In the session, use the Click / Move / Drag / Scroll modes, the Double-click button, the trackpad, the quick-key bar and the **Quality** menu (Low, Medium, High, Native; applied live). The corner overlay shows the transport, resolution and frame rate.
+Do not expose port 8888 directly to the public internet. After the first successful login the password is stored encrypted (Android Keystore) so the app signs in by itself at start; tap Log out to forget it. The app requires a trusted private network because the current agent setup may use HTTP/WebSocket rather than TLS.
 
-After the first successful login the password is stored encrypted with the Android Keystore, and the app signs in automatically at start. **Log out** forgets it.
+The app can only control the logged-in interactive Windows desktop. It cannot bypass Windows sign-in, UAC secure desktop, or other OS security boundaries. Sleep, restart and shutdown require confirmation.
 
-## Security notes
-
-- Do not expose port 8888 directly to the internet. Use Tailscale, the same network, or a Cloudflare tunnel.
-- The agent may serve plain HTTP and WebSocket without TLS, so use the app only on a trusted private network or through an `https://` tunnel.
-- The app controls only the signed-in interactive desktop. It cannot bypass Windows sign-in or the UAC secure desktop.
+## Code layout
+`MainActivity.kt` (edge-to-edge setup, navigation), `RemoteController.kt` (state, HTTP/WebSocket, Quality presets), `ConnectScreen.kt`, `DashboardScreen.kt`, `SessionScreen.kt`, `Trackpad.kt`, `Theme.kt` (Material 3 dark theme), `Components.kt` (shared widgets, window-insets helper). Only stable Compose / Material 3 APIs are used (no `@OptIn(Experimental...)`), because the APK is built by GitHub Actions.
 
 ## WebRTC live screen
 
-The live screen first tries WebRTC (H.264 video over UDP, input over data channels) through the PC's `/ws/rtc` endpoint. If the PC has no WebRTC, UDP is blocked, or no video arrives within about 20 seconds, the app switches to the WebSocket JPEG stream and shows a notice. The overlay shows the active transport, the frame rate and, for WebRTC, the round-trip time.
+The live screen first tries WebRTC (low-latency H.264 video over UDP, input over data channels) through the PC's
+`/ws/rtc` endpoint. If the PC has no WebRTC, the network blocks UDP, or nothing connects within about 6 seconds, the
+app switches to the old WebSocket JPEG stream by itself and shows a short notice. The corner label of the live
+screen shows which transport is active (`WebRTC` or `WebSocket`), the frame rate and, for WebRTC, the round-trip time.
 
-Quality presets map to these WebRTC bitrates: Low 1500, Medium 3000, High 6000 and Native 10000 kbit/s. Over a Cloudflare quick tunnel only signaling passes through the tunnel; the video needs a direct path (same Wi-Fi, Tailscale) or a TURN relay configured on the PC. See [WebRTC mode](../README.md#webrtc-mode).
-
-## Code layout
-
-| File | Role |
-|---|---|
-| `MainActivity.kt` | Edge-to-edge setup and navigation |
-| `RemoteController.kt` | State, HTTP and WebSocket clients, quality presets, transport fallback |
-| `Rtc.kt` | WebRTC client |
-| `ConnectScreen.kt`, `DashboardScreen.kt`, `SessionScreen.kt` | Screens |
-| `Trackpad.kt` | Trackpad gestures |
-| `SecureStore.kt` | Encrypted credential storage |
-| `Theme.kt`, `Components.kt` | Material 3 theme and shared widgets |
-
-Only stable Compose and Material 3 APIs are used (no `@OptIn(Experimental...)`), because the APK is built by GitHub Actions.
+Library: `io.getstream:stream-webrtc-android` (package `org.webrtc`). The Quality presets map to bitrate/size/fps
+(Low 1500, Medium 3000, High 6000, Native 10000 kbit/s). Over a Cloudflare quick tunnel only the signaling travels
+through the tunnel; the video needs a direct path (same Wi-Fi, Tailscale, or TURN set on the PC with
+`REMOTE_PC_TURN_URL`, see the root README).
