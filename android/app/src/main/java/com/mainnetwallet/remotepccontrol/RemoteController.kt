@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
@@ -36,6 +37,7 @@ private const val DEFAULT_URL = "gist:b1b39edd1c382e1a39a3156293d3eba1"
 private const val PREF_TOKEN = "pc_token_enc"   // password, encrypted with an Android Keystore key (see SecureStore)
 private const val PREF_URL = "pc_url"        // the token is never stored, only the address
 private const val PREF_QUALITY = "quality"
+private const val LOCAL_CURSOR_NS = 250_000_000L   // after the finger moved the pointer, trust our own prediction this long
 
 /** Live-screen quality presets. Each one is sent to the PC as {"type":"config","max_width","fps","quality"}. */
 enum class Quality(val label: String, val maxWidth: Int, val fps: Int, val jpeg: Int, val hint: String) {
@@ -45,7 +47,9 @@ enum class Quality(val label: String, val maxWidth: Int, val fps: Int, val jpeg:
     NATIVE("Native", 0, 20, 85, "The PC's full resolution, up to 20 fps. Needs a fast link.");
 
     fun configMessage(): String = JSONObject()
-        .put("type", "config").put("max_width", maxWidth).put("fps", fps).put("quality", jpeg).toString()
+        .put("type", "config").put("max_width", maxWidth).put("fps", fps).put("quality", jpeg)
+        .put("cursor", true)   // the app draws the pointer itself: frames come without it (older PCs ignore this)
+        .toString()
 }
 
 class Notice(val text: String, val isError: Boolean)
@@ -104,6 +108,19 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
         private set
     var quality by mutableStateOf(Quality.values().firstOrNull { it.name == prefs.getString(PREF_QUALITY, null) } ?: Quality.MEDIUM)
         private set
+
+    /**
+     * Pointer position as 0..1 of the PC screen (-1 = unknown). The PC streams it on the small input socket and the
+     * trackpad moves it at once, so the pointer follows the finger without waiting for a screen frame.
+     */
+    var cursorX by mutableFloatStateOf(-1f)
+        private set
+    var cursorY by mutableFloatStateOf(-1f)
+        private set
+    private var pcWidth = 0
+    private var pcHeight = 0
+    private var cursorFromServer = false   // only predict locally when the PC really streams the pointer
+    private var localCursorUntilNs = 0L
 
     /** Counts received frames; the session overlay turns it into frames per second. */
     val frameCounter = AtomicInteger()
@@ -233,6 +250,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
         val gen = ++sessionGen
         val wsBase = normalizedBase().replaceFirst("https://", "wss://").replaceFirst("http://", "ws://")
         frameCounter.set(0); frame = null; streamInfo = null
+        cursorX = -1f; cursorY = -1f; cursorFromServer = false; localCursorUntilNs = 0L
         screenOpen = true
         screenSocket = wsClient.newWebSocket(Request.Builder().url("$wsBase/ws/screen").build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -272,6 +290,16 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 webSocket.send(JSONObject().put("token", token.trim()).toString())
             }
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                if (gen != sessionGen) return
+                try {
+                    val o = JSONObject(text)
+                    when (o.optString("type")) {
+                        "ready" -> webSocket.send("{\"type\":\"watch_cursor\",\"on\":true}")
+                        "cursor" -> onServerCursor(o)
+                    }
+                } catch (_: Exception) { }
+            }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 if (gen != sessionGen) return
                 notice = Notice("Input connection failed: ${t.message ?: "network error"}", true)
@@ -285,9 +313,37 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
         inputSocket?.close(1000, "User closed screen")
         screenSocket = null; inputSocket = null
         screenOpen = false; frame = null; streamInfo = null
+        cursorX = -1f; cursorY = -1f; cursorFromServer = false
     }
 
-    fun sendInput(o: JSONObject) { inputSocket?.send(o.toString()) }
+    fun sendInput(o: JSONObject) {
+        inputSocket?.send(o.toString())
+        predictCursor(o)
+    }
+
+    private fun onServerCursor(o: JSONObject) {
+        pcWidth = o.optInt("w", pcWidth); pcHeight = o.optInt("h", pcHeight)
+        cursorFromServer = true
+        // While the finger is moving the pointer is already drawn where it will be; the PC's older answer would drag it back.
+        if (System.nanoTime() < localCursorUntilNs) return
+        cursorX = o.optDouble("nx", 0.0).toFloat(); cursorY = o.optDouble("ny", 0.0).toFloat()
+    }
+
+    /** Moves the drawn pointer right away with the same movement the PC is about to apply. */
+    private fun predictCursor(o: JSONObject) {
+        if (!cursorFromServer) return
+        when (o.optString("type")) {
+            "rel" -> if (pcWidth > 0 && pcHeight > 0 && cursorX >= 0f) {
+                cursorX = (cursorX + o.optInt("dx") / pcWidth.toFloat()).coerceIn(0f, 1f)
+                cursorY = (cursorY + o.optInt("dy") / pcHeight.toFloat()).coerceIn(0f, 1f)
+                localCursorUntilNs = System.nanoTime() + LOCAL_CURSOR_NS
+            }
+            "move", "click", "down", "up" -> if (o.has("nx") && o.has("ny")) {
+                cursorX = o.optDouble("nx").toFloat(); cursorY = o.optDouble("ny").toFloat()
+                localCursorUntilNs = System.nanoTime() + LOCAL_CURSOR_NS
+            }
+        }
+    }
 
     /** Called when the activity goes away: drop the sockets without touching UI state. */
     fun shutdown() {

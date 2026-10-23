@@ -40,10 +40,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -123,7 +127,10 @@ fun KeysPanel(send: (JSONObject) -> Unit, typeText: String, onTypeText: (String)
  * so a touch maps 1:1 onto the picture.
  */
 @Composable
-fun ScreenView(frame: Bitmap, mode: TouchMode, send: (JSONObject) -> Unit, onPosition: (Double, Double) -> Unit, modifier: Modifier = Modifier) {
+fun ScreenView(
+    frame: Bitmap, mode: TouchMode, send: (JSONObject) -> Unit, onPosition: (Double, Double) -> Unit, modifier: Modifier = Modifier,
+    cursor: () -> Offset? = { null }   // pointer as 0..1 of the picture; read while drawing, so moving it never recomposes
+) {
     fun emit(type: String, p: Offset, size: androidx.compose.ui.unit.IntSize, button: String? = null) {
         if (size.width == 0 || size.height == 0) return
         val nx = (p.x / size.width).coerceIn(0f, 1f).toDouble()
@@ -177,10 +184,26 @@ fun ScreenView(frame: Bitmap, mode: TouchMode, send: (JSONObject) -> Unit, onPos
                         }
                     )
                 }
+                .drawWithContent { drawContent(); drawPointer(cursor()) }
         )
     }
 }
 
+
+/** The mouse pointer (same arrow the PC agent used to bake into the frames), drawn on top of the picture. */
+private fun DrawScope.drawPointer(p: Offset?) {
+    if (p == null) return
+    val s = maxOf(size.width / 80f, 9.dp.toPx())
+    val x = p.x * size.width
+    val y = p.y * size.height
+    val arrow = Path().apply {
+        moveTo(x, y); lineTo(x, y + s * 1.6f); lineTo(x + s * 0.45f, y + s * 1.25f); lineTo(x + s * 0.8f, y + s * 1.9f)
+        lineTo(x + s * 1.1f, y + s * 1.75f); lineTo(x + s * 0.75f, y + s * 1.15f); lineTo(x + s * 1.25f, y + s * 1.1f)
+        close()
+    }
+    drawPath(arrow, Color.White)
+    drawPath(arrow, Color.Black, style = Stroke(width = 1.2f.dp.toPx()))
+}
 
 @Composable
 private fun SessionToolbar(
@@ -241,7 +264,10 @@ private fun StreamStatsOverlay(info: StreamInfo?, frameCounter: AtomicInteger, m
 private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier, frameModifier: Modifier, waitingModifier: Modifier) {
     val frame = c.frame
     Box(modifier) {
-        if (frame != null) ScreenView(frame, mode, { c.sendInput(it) }, { _, _ -> }, frameModifier)
+        if (frame != null) ScreenView(
+            frame, mode, { c.sendInput(it) }, { _, _ -> }, frameModifier,
+            cursor = { if (c.cursorX >= 0f) Offset(c.cursorX, c.cursorY) else null }
+        )
         else Box(waitingModifier, contentAlignment = Alignment.Center) { Text("Waiting for the PC screen\u2026", color = Color.White) }
         StreamStatsOverlay(c.streamInfo, c.frameCounter, Modifier.align(Alignment.TopStart).padding(6.dp))
     }

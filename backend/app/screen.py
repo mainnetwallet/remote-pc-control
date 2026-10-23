@@ -14,7 +14,12 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
           link is congested, so the picture and the pointer never lag behind. Clients that never ack get the
           old fixed-rate stream. The in-flight window grows with the measured link round-trip time (up to
           MAX_WINDOW frames) so a high-latency link such as a tunnel can still reach the configured fps.
-  /ws/input   client -> server:
+          Optional "cursor":true in a config message: the client draws the pointer itself (see watch_cursor below),
+          so frames are sent without the baked-in pointer and a pointer-only move no longer re-encodes the screen.
+  /ws/input   server -> client after {"type":"watch_cursor","on":true}: {"type":"cursor","nx":0..1,"ny":0..1,"w":px,"h":px}
+          up to 60 times a second while the pointer moves, plus a heartbeat every 0.25 s (w/h = the PC's native
+          size). It travels on this small socket so it never waits behind a screen frame.
+              client -> server:
       {"type":"move",   "nx":0..1, "ny":0..1}                    cursor to a normalized position
       {"type":"rel",    "dx":int, "dy":int}                       move the pointer by pixel deltas from where it is
                                                                   (clamped to the monitor and to +-500 per message)
@@ -42,6 +47,8 @@ MAX_IN_FLIGHT = 2         # minimum number of frames sent but not yet acknowledg
 MAX_WINDOW = 6            # the window grows up to this many frames on high-latency links (see flight_window)
 RTT_SAMPLES = 120         # ack round-trip samples kept to estimate the link's base latency
 MIN_RTT_SAMPLES = 4       # need this many samples before the base latency is trusted
+CURSOR_INTERVAL = 1 / 60  # how often the pointer position is sampled for watch_cursor clients
+CURSOR_HEARTBEAT = 0.25   # resend the unchanged position this often so a client can correct itself
 ACK_TIMEOUT = 1.0         # no ack for this long: assume the frames were lost and carry on
 KEEPALIVE_SECONDS = 3.0   # resend the last frame so idle screens don't hit client read timeouts
 MAX_SCROLL = 20
@@ -213,7 +220,7 @@ def _capture_source():
             px, py = pointer.position
             if mon["left"] <= px < mon["left"] + mon["width"] and mon["top"] <= py < mon["top"] + mon["height"]:
                 cur = (px - mon["left"], py - mon["top"])
-        return shot.raw, shot.size, cur, zlib.crc32(shot.raw) ^ hash(cur)
+        return shot.raw, shot.size, cur, zlib.crc32(shot.raw)   # digest = pixels only; the pointer is compared separately
 
     def close():
         sct = held.pop("sct", None)
@@ -243,6 +250,7 @@ class _StreamState:
         self.wake = asyncio.Event()       # config change / disconnect: cuts the frame-interval sleep short
         self.ack_wake = asyncio.Event()   # an ack arrived (or config change / disconnect): re-check the in-flight window
         self.acks = False                 # the client sends acks, so flow control and quality adaptation are on
+        self.overlay = False              # the client draws the pointer itself: leave it out of the frames
         self.inflight = 0                 # frames sent and not yet acknowledged
         self.sent_at: collections.deque = collections.deque()
         self.rtt = 0.0                    # smoothed seconds between sending a frame and its ack
@@ -289,6 +297,7 @@ async def _read_client(ws: WebSocket, state: _StreamState) -> None:
                 state.ack_wake.set()
             elif isinstance(d, dict) and d.get("type") == "config":
                 state.config = state.config.updated(d)
+                if "cursor" in d: state.overlay = d["cursor"] is True
                 state.dirty = True; state.wake.set(); state.ack_wake.set()
     except Exception:
         pass
@@ -333,6 +342,8 @@ async def stream_frames(ws: WebSocket, grab) -> None:
             if grabbed is None:
                 grabbed = await loop.run_in_executor(cap_pool, grab)
             raw, size, cur, digest = grabbed
+            if state.overlay: cur = None   # the client draws the pointer: it must not trigger or appear in frames
+            digest = (digest, cur)
             if digest != last_digest:
                 if cycle >= interval * 0.9:   # PC-bound: capture the next frame while this one is encoded and sent
                     prefetch_done[0] = None
@@ -381,6 +392,29 @@ async def screen_socket(ws: WebSocket):
     except Exception as exc:
         try: await ws.send_json({"type": "error", "message": type(exc).__name__}); await ws.close(code=1011)
         except Exception: pass
+
+
+def cursor_message(pos, mon: dict) -> dict:
+    """The {"type":"cursor"} message for a pointer at absolute screen position pos on monitor mon."""
+    nx = (pos[0] - mon["left"]) / max(1, mon["width"] - 1)
+    ny = (pos[1] - mon["top"]) / max(1, mon["height"] - 1)
+    return {"type": "cursor", "nx": round(min(1.0, max(0.0, nx)), 4), "ny": round(min(1.0, max(0.0, ny)), 4),
+            "w": mon["width"], "h": mon["height"]}
+
+
+async def _push_cursor(ws: WebSocket, mouse_ctl, mon: dict) -> None:
+    """Tell a watch_cursor client where the pointer is: on every change (at most 60/s) and as a heartbeat."""
+    loop = asyncio.get_running_loop()
+    last, last_at = None, 0.0
+    try:
+        while True:
+            pos = tuple(mouse_ctl.position)
+            now = loop.time()
+            if pos != last or now - last_at >= CURSOR_HEARTBEAT:
+                await ws.send_json(cursor_message(pos, mon)); last, last_at = pos, now
+            await asyncio.sleep(CURSOR_INTERVAL)
+    except Exception:
+        pass   # the socket is gone; the input loop notices on its own
 
 
 def key_map(keyboard) -> dict:
@@ -448,7 +482,7 @@ def coalesce_input(messages: list[dict]) -> list[dict]:
 
 async def input_socket(ws: WebSocket):
     await ws.accept()
-    pump_task = None
+    pump_task = None; cursor_task = None
     try:
         if not await _authenticate(ws): return
         enable_dpi_awareness()
@@ -482,6 +516,12 @@ async def input_socket(ws: WebSocket):
                 except (json.JSONDecodeError, RecursionError): continue
                 if isinstance(d, dict): batch.append(d)
             for d in coalesce_input(batch):
+                if d.get("type") == "watch_cursor":
+                    if d.get("on") is not False and cursor_task is None:
+                        cursor_task = asyncio.create_task(_push_cursor(ws, m, mon))
+                    elif d.get("on") is False and cursor_task is not None:
+                        cursor_task.cancel(); cursor_task = None
+                    continue
                 try: handle_input(d, mon, m, k, mouse, keys)
                 except Exception: pass   # a bad message must not kill the whole session
             if gone and not inbox: raise gone[0]
@@ -492,3 +532,4 @@ async def input_socket(ws: WebSocket):
         except Exception: pass
     finally:
         if pump_task: pump_task.cancel()
+        if cursor_task: cursor_task.cancel()

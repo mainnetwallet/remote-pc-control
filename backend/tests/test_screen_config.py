@@ -343,3 +343,77 @@ def test_capture_is_released_on_the_capture_thread():
         await asyncio.wait_for(task, 3)
     asyncio.run(run())
     assert seen["grab"] == seen["close"] != threading.get_ident()
+
+
+# ---- pointer: separate cursor stream, frames without the pointer for clients that draw it -----
+
+def test_cursor_message_is_normalized_and_clamped():
+    mon = {"left": 0, "top": 0, "width": 1920, "height": 1080}
+    assert screen.cursor_message((0, 0), mon) == {"type": "cursor", "nx": 0.0, "ny": 0.0, "w": 1920, "h": 1080}
+    assert screen.cursor_message((1919, 1079), mon)["nx"] == 1.0
+    assert screen.cursor_message((960, 540), mon)["nx"] == round(960 / 1919, 4)
+    assert screen.cursor_message((-50, 99999), mon)["nx"] == 0.0 and screen.cursor_message((-50, 99999), mon)["ny"] == 1.0
+    off = {"left": -1920, "top": 0, "width": 1920, "height": 1080}
+    assert screen.cursor_message((-1920, 0), off)["nx"] == 0.0
+
+
+def test_cursor_is_pushed_on_change_and_as_heartbeat(monkeypatch):
+    monkeypatch.setattr(screen, "CURSOR_HEARTBEAT", 0.15)
+    class Mouse: position = (10, 20)
+    mon = {"left": 0, "top": 0, "width": 101, "height": 201}
+    async def run():
+        ws = _FakeWS(); m = Mouse()
+        task = asyncio.create_task(screen._push_cursor(ws, m, mon))
+        await asyncio.sleep(0.1)
+        first = len(ws.sent)
+        m.position = (50, 100); await asyncio.sleep(0.1)
+        moved = ws.sent[first:]
+        await asyncio.sleep(0.4)                                  # idle: only heartbeats
+        idle = len(ws.sent) - first - len(moved)
+        task.cancel()
+        return first, moved, idle
+    first, moved, idle = asyncio.run(run())
+    assert first == 1                                             # initial position, then nothing while unchanged
+    assert moved and moved[0]["nx"] == 0.5 and moved[0]["ny"] == 0.5
+    assert 1 <= idle <= 4                                         # a few heartbeats, not 60/s
+
+
+def _cursor_grab():
+    """Same pixels every time, the pointer moves: what dragging a finger on the trackpad looks like."""
+    n = [0]
+    def grab():
+        n[0] += 1
+        return RAW, (W, H), (n[0] % 50, 5), 7
+    return grab
+
+
+def _decode_top_left(jpeg):
+    return Image.open(io.BytesIO(jpeg)).convert("RGB").getpixel((1, 1))
+
+
+def test_pointer_only_changes_still_stream_frames_for_old_clients(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 30)
+    async def run():
+        ws = _FakeWS()
+        task = asyncio.create_task(screen.stream_frames(ws, _cursor_grab()))
+        await asyncio.sleep(0.4)
+        ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(task, 3)
+        return len(_frames(ws))
+    assert asyncio.run(run()) > 3
+
+
+def test_overlay_clients_get_no_frames_for_pointer_only_changes_and_no_baked_pointer(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 30)
+    async def run():
+        ws = _FakeWS()
+        task = asyncio.create_task(screen.stream_frames(ws, _cursor_grab()))
+        ws.say('{"type":"config","cursor":true}')
+        await asyncio.sleep(0.5)
+        ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(task, 3)
+        return _frames(ws)
+    frames = asyncio.run(run())
+    assert 1 <= len(frames) <= 3                      # the config answer, not one frame per pointer move
+    pix = Image.open(io.BytesIO(frames[-1])).convert("RGB")
+    assert len({pix.getpixel((x, 5)) for x in range(0, 40)}) == 1   # no white arrow drawn into the picture

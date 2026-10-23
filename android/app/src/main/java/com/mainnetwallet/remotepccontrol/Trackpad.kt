@@ -24,7 +24,10 @@ import kotlin.math.abs
 
 private const val TAP_TIMEOUT_MS = 300L          // finger down -> up shorter than this is a tap
 private const val DOUBLE_TAP_WINDOW_MS = 300L    // a touch this soon after a tap is a double tap / tap-then-slide
-private const val MOVE_INTERVAL_MS = 16L         // about 60 pointer updates per second
+private const val MOVE_INTERVAL_MS = 8L          // up to about 120 pointer updates per second (the PC merges bursts)
+private const val START_MOVE_DP = 2f             // the pointer starts following the finger after this much travel (a tap may wobble)
+private const val ACCEL_PER_DP_MS = 1.5f         // extra pointer gain per dp/ms of finger speed: slow = precise, fast flick = far
+private const val ACCEL_MAX = 2.5f               // the extra gain never exceeds this (total gain 3.5x)
 private const val MAX_REL_STEP = 500             // the server clamps "rel" to +-500 per message
 private const val PAD_PC_PX_PER_DP = 2f          // PC pixels per dp of finger travel at speed 1.0
 
@@ -45,6 +48,7 @@ fun Trackpad(sensitivity: Float, send: (JSONObject) -> Unit, modifier: Modifier 
                 var lastTapUpMs = 0L   // survives between gestures (needed for double tap / tap-then-slide)
                 val slop = viewConfiguration.touchSlop
                 val scrollStepPx = 14.dp.toPx()
+                val startMovePx = START_MOVE_DP.dp.toPx()
                 awaitEachGesture {
                     val first = awaitFirstDown(requireUnconsumed = false)
                     val downMs = first.uptimeMillis
@@ -54,6 +58,7 @@ fun Trackpad(sensitivity: Float, send: (JSONObject) -> Unit, modifier: Modifier 
                     var prevPressed = 1
                     var releaseMs = 0L
                     var moved = false        // one finger went past touch slop
+                    var moveStarted = false  // one finger went past the (much smaller) distance after which the pointer follows it
                     var scrolled = false     // two fingers went past touch slop
                     var dragging = false     // left button is held down
                     var pendingX = 0f; var pendingY = 0f
@@ -74,7 +79,7 @@ fun Trackpad(sensitivity: Float, send: (JSONObject) -> Unit, modifier: Modifier 
                     try {
                         while (true) {
                             // While a throttled move is waiting, wake up on a timer so the last bit is not held back.
-                            val waiting = moved && (abs(pendingX) >= 1f || abs(pendingY) >= 1f)
+                            val waiting = (moved || moveStarted) && (abs(pendingX) >= 1f || abs(pendingY) >= 1f)
                             val event = if (waiting) withTimeoutOrNull(MOVE_INTERVAL_MS) { awaitPointerEvent() } else awaitPointerEvent()
                             if (event == null) { flush(true); continue }
                             val pressed = event.changes.filter { it.pressed }
@@ -86,13 +91,17 @@ fun Trackpad(sensitivity: Float, send: (JSONObject) -> Unit, modifier: Modifier 
                             if (maxPointers == 1) {
                                 val c = pressed[0]
                                 val d = c.positionChange()
-                                val pxToPc = speedNow * PAD_PC_PX_PER_DP / density
+                                val dtMs = (c.uptimeMillis - c.previousUptimeMillis).coerceAtLeast(1L)
+                                val speedDpMs = d.getDistance() / density / dtMs
+                                val gain = 1f + minOf(ACCEL_MAX, speedDpMs * ACCEL_PER_DP_MS)
+                                val pxToPc = speedNow * PAD_PC_PX_PER_DP / density * gain
                                 pendingX += d.x * pxToPc; pendingY += d.y * pxToPc
+                                if (!moveStarted && (c.position - first.position).getDistance() > startMovePx) moveStarted = true
                                 if (!moved && (c.position - first.position).getDistance() > slop) {
                                     moved = true
                                     if (tapDrag) { dragging = true; sendNow(JSONObject().put("type", "down").put("button", "left")) }
                                 }
-                                if (moved) flush(false)
+                                if (moved || moveStarted) flush(false)
                             } else if (maxPointers == 2 && pressed.size == 2) {
                                 var sx = 0f; var sy = 0f
                                 pressed.forEach { val d = it.positionChange(); sx += d.x; sy += d.y }
@@ -119,9 +128,12 @@ fun Trackpad(sensitivity: Float, send: (JSONObject) -> Unit, modifier: Modifier 
                             sendNow(JSONObject().put("type", "up").put("button", "left")); dragging = false
                         } else if (maxPointers == 1) {
                             if (moved) flush(true)
-                            else if (heldMs <= TAP_TIMEOUT_MS) {
-                                sendNow(JSONObject().put("type", "click").put("button", "left"))
-                                if (!tapDrag) lastTapUpMs = releaseMs
+                            else {
+                                if (moveStarted) flush(true)
+                                if (heldMs <= TAP_TIMEOUT_MS) {
+                                    sendNow(JSONObject().put("type", "click").put("button", "left"))
+                                    if (!tapDrag) lastTapUpMs = releaseMs
+                                }
                             }
                         } else if (maxPointers == 2 && !scrolled && heldMs <= TAP_TIMEOUT_MS) {
                             sendNow(JSONObject().put("type", "click").put("button", "right"))
