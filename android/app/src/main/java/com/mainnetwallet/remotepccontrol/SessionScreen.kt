@@ -405,6 +405,7 @@ fun SessionScreen(c: RemoteController) {
     var sensitivity by rememberSaveable { mutableStateOf(1.5f) }
     var showPad by rememberSaveable { mutableStateOf(true) }
     var showKeys by rememberSaveable { mutableStateOf(false) }
+    var showControls by rememberSaveable { mutableStateOf(false) }   // landscape panel: Touch/Keys/Hide + Quality/Rotate/Stop rows (hidden until tapped)
     var typeText by rememberSaveable { mutableStateOf("") }
     val send: (JSONObject) -> Unit = { c.sendInput(it) }
     val onSendText: () -> Unit = {
@@ -446,15 +447,21 @@ fun SessionScreen(c: RemoteController) {
                     Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
-                        FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
-                        FilledTonalButton(onClick = { showPad = false }, contentPadding = compactPadding) { Text("Hide") }
+                    // One tap shows the control rows, another tap hides them again.
+                    FilledTonalButton(onClick = { showControls = !showControls }, contentPadding = compactPadding) {
+                        Text(if (showControls) "Controls ▴" else "Controls ▾")
                     }
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        QualityMenuButton(c.quality) { c.setQuality(it) }
-                        RotateButton(rotate, tonal = true)
-                        StopButton { c.stopScreen() }
+                    if (showControls) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
+                            FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
+                            FilledTonalButton(onClick = { showPad = false }, contentPadding = compactPadding) { Text("Hide") }
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            QualityMenuButton(c.quality) { c.setQuality(it) }
+                            RotateButton(rotate, tonal = true)
+                            StopButton { c.stopScreen() }
+                        }
                     }
                     Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
                     PadButtons(send)
