@@ -10,3 +10,5 @@ __pycache__/
 *.spec
 
 *.egg-info/
+cloudflared.log
+cloudflared.out.log

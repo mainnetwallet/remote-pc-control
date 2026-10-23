@@ -68,7 +68,7 @@ fun ConnectScreen(c: RemoteController) {
             AppCard(Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = c.baseUrl, onValueChange = { c.baseUrl = it },
-                    label = { Text("PC URL") }, placeholder = { Text("http://192.168.110.48:8888") },
+                    label = { Text("PC URL") }, placeholder = { Text("https://… , http://… or gist:<id>") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next)
                 )
@@ -96,6 +96,10 @@ fun ConnectScreen(c: RemoteController) {
                     color = if (c.notice.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            Text(
+                "Tip: enter gist:<id> (printed by start.ps1) and the app reads the PC's current tunnel link by itself.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Text(
                 "Never port-forward the PC agent. The token stays in app memory only; just the address is remembered. " +
                     "Screen and input control work in the logged-in desktop session.",

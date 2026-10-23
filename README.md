@@ -56,6 +56,17 @@ The first run installs `cloudflared`; if it asks, close the window, open a new o
 - The link **changes every time** the tunnel restarts. Keep both windows open; press `Ctrl+C` in the tunnel window when done. Do not share the link.
 - For a **permanent link** that never changes (and starts with Windows) use a named tunnel: step-by-step in **[docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)**. It needs a domain on your Cloudflare account; the guide also covers Cloudflare Access login protection.
 
+**A2. One command: quick tunnel + automatic link for the Android app**
+
+Add to `.env`:
+```
+QUICK_TUNNEL=1
+GIST_TOKEN=your-gist-token
+```
+`GIST_TOKEN` is a GitHub *classic* token with **only the `gist` scope** (<https://github.com/settings/tokens>); do not reuse a repo token. Then just run `.\scripts\start.ps1`. It installs `cloudflared` if needed, starts the tunnel with the server, and writes the new `https://....trycloudflare.com` link to a **secret Gist**. The first run creates the Gist and prints `gist:<id>`.
+
+In the Android app enter `gist:<id>` as *PC URL* once. Every time you tap Connect, the app reads the PC's current link from the Gist, so you never type a link again. (Browser: open the link printed by `start.ps1`.) The tunnel link itself still changes on every run; only the Gist id is fixed. Anyone who knows the Gist id can read the link, but still needs the API token.
+
 **B. Tailscale (private VPN, stable IP)**
 
 Install Tailscale on the PC and phone and sign in to the **same account** on both, with the VPN switched on on the phone. Get the PC's address with `tailscale ip -4`, then open `http://<that-ip>:8888`. The firewall rule created by `setup.ps1` only accepts connections from Tailscale addresses (`100.64.0.0/10`). Run `setup.ps1` from an administrator PowerShell if the rule could not be created.

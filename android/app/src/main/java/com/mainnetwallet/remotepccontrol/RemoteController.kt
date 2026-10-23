@@ -108,9 +108,37 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     private var inputSocket: WebSocket? = null
     private var sessionGen = 0   // callbacks of an older session must not touch the current one
 
+    // When the address field holds a Gist reference ("gist:<id>"), this is the current tunnel URL read from it.
+    private var resolvedBase: String? = null
+
+    private fun gistId(input: String): String? =
+        Regex("""^(?:gist:|https?://gist\.github\.com/(?:[^/]+/)?)([0-9a-fA-F]{20,40})/?$""").find(input.trim())?.groupValues?.get(1)
+
     private fun normalizedBase(): String {
-        val raw = baseUrl.trim().trimEnd('/')
+        val raw = (if (gistId(baseUrl) != null) resolvedBase.orEmpty() else baseUrl).trim().trimEnd('/')
         return if (raw.isEmpty() || "://" in raw) raw else "http://$raw"
+    }
+
+    /** Reads the PC's current link from the secret Gist (file pc-url.txt) that start.ps1 keeps updated. */
+    private fun resolveGist(onDone: (String?) -> Unit) {
+        val id = gistId(baseUrl)
+        if (id == null) { resolvedBase = null; onDone(null); return }
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    val req = Request.Builder().url("https://api.github.com/gists/$id")
+                        .header("Accept", "application/vnd.github+json").build()
+                    http.newCall(req).execute().use { r ->
+                        if (!r.isSuccessful) return@use null to "Could not read the Gist (HTTP ${r.code})"
+                        val files = JSONObject(r.body?.string().orEmpty()).getJSONObject("files")
+                        val url = files.optJSONObject("pc-url.txt")?.optString("content").orEmpty().trim()
+                        if (url.startsWith("https://")) url to null else null to "Gist has no PC link yet. Is start.ps1 running?"
+                    }
+                } catch (e: Exception) { null to ("Could not read the Gist: " + (e.message ?: "network error")) }
+            }
+            resolvedBase = result.first
+            onDone(result.second)
+        }
     }
 
     private fun call(path: String, method: String = "GET", body: String? = null, onResult: (Boolean, String) -> Unit) {
@@ -133,16 +161,19 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
 
     fun connect() {
         if (busy) return
-        if (normalizedBase().isEmpty() || token.isBlank()) { notice = Notice("PC URL and API token are required.", true); return }
+        if (baseUrl.isBlank() || token.isBlank()) { notice = Notice("PC URL and API token are required.", true); return }
         busy = true
-        call("/api/v1/status") { ok, text ->
-            busy = false
-            connected = ok; reachable = ok
-            if (ok) {
-                status = PcStatus.parse(text)
-                prefs.edit().putString(PREF_URL, baseUrl.trim()).apply()
-                notice = Notice("", false)
-            } else notice = Notice("Connection failed: $text", true)
+        resolveGist { gistError ->
+            if (gistError != null) { busy = false; connected = false; reachable = false; notice = Notice(gistError, true); return@resolveGist }
+            call("/api/v1/status") { ok, text ->
+                busy = false
+                connected = ok; reachable = ok
+                if (ok) {
+                    status = PcStatus.parse(text)
+                    prefs.edit().putString(PREF_URL, baseUrl.trim()).apply()
+                    notice = Notice("", false)
+                } else notice = Notice("Connection failed: $text", true)
+            }
         }
     }
 
