@@ -32,7 +32,7 @@ private val wsClient = http.newBuilder()
     .pingInterval(20, TimeUnit.SECONDS)
     .build()
 
-private const val DEFAULT_URL = "http://192.168.110.48:8888"
+private const val DEFAULT_URL = "gist:b1b39edd1c382e1a39a3156293d3eba1"
 private const val PREF_URL = "pc_url"        // the token is never stored, only the address
 private const val PREF_QUALITY = "quality"
 
