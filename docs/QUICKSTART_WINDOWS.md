@@ -1,6 +1,4 @@
-# Windows quick start
-
-Run the agent on Windows and connect the Android app.
+# Quick start: run the agent on Windows and connect the Android app
 
 ## 1. Get the code
 
@@ -10,14 +8,15 @@ git clone https://github.com/mainnetwallet/remote-pc-control.git
 cd remote-pc-control
 ```
 
-If the folder already exists, update it instead:
+Already cloned? Update it instead:
 
 ```powershell
 cd $HOME\remote-pc-control
 git pull origin main
 ```
 
-If `git pull` stops because of local changes or a stash conflict, run `git status`. Files containing `<<<<<<<` markers must be restored before the agent can start:
+If `git pull` stops because of local changes or a stash conflict, check `git status`.
+Files with `<<<<<<<` markers must be restored before the agent can start:
 
 ```powershell
 git restore --staged --worktree --source=HEAD -- <conflicted file>
@@ -30,20 +29,27 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\setup.ps1
 ```
 
-This creates `.venv`, installs the Python packages, builds the dashboard and creates `.env` with a generated access token. The token is printed once; save it.
+This creates `.venv`, installs the Python packages and builds the dashboard.
 
-Re-running the script is safe: packages are reinstalled only when `pyproject.toml` changes, and the dashboard is rebuilt only when its sources change. Use `-Force` to redo everything.
+Re-running it is safe and fast: packages are only reinstalled when `pyproject.toml` changes, and the dashboard is only rebuilt when its sources change. Use `.\scripts\setup.ps1 -Force` to redo everything.
 
-## 3. Check or change the access token
+## 3. Create the API token
 
-The agent refuses to start unless `.env` contains `REMOTE_PC_TOKEN` with at least 4 characters. A longer token is safer; the generated one has 64 characters.
+The agent refuses to start unless `.env` contains a unique `REMOTE_PC_TOKEN` of at least 32 bytes.
 
 ```powershell
-Get-Content .env | Select-String REMOTE_PC_TOKEN    # show the current token
-.\scripts\set-password.ps1                           # choose your own (4+ characters, no spaces)
+cp .env.example .env
+
+$bytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+$token = ($bytes | ForEach-Object { $_.ToString("x2") }) -join ""
+(Get-Content .env) -replace '^REMOTE_PC_TOKEN=.*', "REMOTE_PC_TOKEN=$token" | Set-Content .env
+
+$token.Length   # must print 64
+$token          # enter this in the phone app
 ```
 
-Anyone who has the token can control your PC. `.env` is git-ignored; never commit it.
+Keep the token private: anyone who has it can control your PC. `.env` is git-ignored; never commit it.
 
 ## 4. Start the agent
 
@@ -51,22 +57,28 @@ Anyone who has the token can control your PC. `.env` is git-ignored; never commi
 .\scripts\start.ps1
 ```
 
-Expected output:
+You should see:
 
 ```
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8888
 ```
 
-Stop it with `Ctrl+C`. To start it automatically at sign-in, see [Start with Windows](../README.md#start-with-windows).
+Stop it with `Ctrl+C`.
 
 ## 5. Connect the Android app
 
-1. Install the latest APK from the repository's **Releases** page (`RemotePCControl-Android-android-build-<N>.apk`). Allow *Install unknown apps* if asked.
-2. Find the PC's IPv4 address with `ipconfig`, for example `192.168.x.x`.
-3. In the app, enter `http://<PC_IP>:8888` and the token.
-4. The phone and PC must be on the same Wi-Fi network. For access from outside, use Tailscale or see [CLOUDFLARE.md](CLOUDFLARE.md).
-5. If the app cannot connect, allow the port in Windows Firewall (administrator PowerShell):
+1. Install the latest APK from the repository's **Releases** page
+   (`RemotePCControl-Android-android-build-<N>.apk`). Allow "Install unknown apps" if asked.
+2. Find the PC's IP address:
+   ```powershell
+   ipconfig
+   ```
+   Use the **IPv4 Address**, for example `192.168.x.x`.
+3. In the app enter `http://<PC_IP>:8888` and the token from step 3.
+4. The phone and the PC must be on the same Wi-Fi network. For access from outside, see
+   [CLOUDFLARE.md](CLOUDFLARE.md) or use Tailscale.
+5. If the app cannot connect, allow the port in Windows Firewall (Administrator PowerShell):
    ```powershell
    New-NetFirewallRule -DisplayName "RemotePCControl" -Direction Inbound -Protocol TCP -LocalPort 8888 -Action Allow -Profile Private
    ```
@@ -81,6 +93,6 @@ Stop it with `Ctrl+C`. To start it automatically at sign-in, see [Start with Win
 
 | Problem | Fix |
 |---|---|
-| `Set REMOTE_PC_TOKEN in .env` | The token is missing, still the `replace-...` placeholder, or shorter than 4 characters. Run `.\scripts\set-password.ps1`. |
+| `Set a unique REMOTE_PC_TOKEN (32+ bytes) in .env` | The token is missing, still the placeholder, or shorter than 32 bytes. Redo step 3 and check `$token.Length` prints 64. |
 | `SyntaxError ... <<<<<<<` in a `.py` file | A merge or stash conflict left markers in the file. Restore it with `git restore` as shown in step 1. |
-| App cannot reach the PC | Check that both devices are on the same Wi-Fi, the IP and port 8888 are correct, the firewall rule exists and the agent is running. |
+| App cannot reach the PC | Same Wi-Fi? Correct IP and port 8888? Firewall rule added? Agent still running? |
