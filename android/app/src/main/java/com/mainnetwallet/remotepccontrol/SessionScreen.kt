@@ -1,6 +1,11 @@
 package com.mainnetwallet.remotepccontrol
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -11,12 +16,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -43,14 +51,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
@@ -59,6 +72,8 @@ import org.webrtc.RendererCommon
 import org.webrtc.SurfaceViewRenderer
 import org.webrtc.VideoTrack
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.cos
+import kotlin.math.sin
 
 enum class TouchMode(val label: String, val hint: String) {
     OFF("Off", "Screen is view-only; use the trackpad"),
@@ -236,10 +251,58 @@ private fun DrawScope.drawPointer(p: Offset?) {
     drawPath(arrow, Color.Black, style = Stroke(width = 1.2f.dp.toPx()))
 }
 
+/** Circular arrow ("rotate screen") drawn with a Canvas, so no icon library is needed. */
+@Composable
+private fun RotateIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(18.dp)) {
+        val s = size.minDimension
+        val center = Offset(s / 2f, s / 2f)
+        val r = s * 0.36f
+        val start = -60f
+        val sweep = 270f
+        drawArc(
+            color, start, sweep, false,
+            topLeft = Offset(center.x - r, center.y - r), size = Size(2 * r, 2 * r),
+            style = Stroke(width = s * 0.1f, cap = StrokeCap.Round)
+        )
+        // Arrow head at the end of the arc, pointing in the direction of travel (clockwise).
+        val a = Math.toRadians((start + sweep).toDouble())
+        val rx = cos(a).toFloat(); val ry = sin(a).toFloat()      // radial direction
+        val tx = -ry; val ty = rx                                 // tangent (clockwise)
+        val ex = center.x + r * rx; val ey = center.y + r * ry
+        val head = s * 0.24f
+        val arrow = Path().apply {
+            moveTo(ex + tx * head, ey + ty * head)
+            lineTo(ex + rx * head * 0.8f, ey + ry * head * 0.8f)
+            lineTo(ex - rx * head * 0.8f, ey - ry * head * 0.8f)
+            close()
+        }
+        drawPath(arrow, color)
+    }
+}
+
+/** Toggles the phone between portrait and landscape, even when auto-rotate is off in Android. */
+@Composable
+private fun RotateButton(onClick: () -> Unit, tonal: Boolean) {
+    val content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
+        RotateIcon(LocalContentColor.current, Modifier.semantics { contentDescription = "Rotate screen" })
+        Spacer(Modifier.width(4.dp))
+        Text("Rotate")
+    }
+    if (tonal) FilledTonalButton(onClick = onClick, contentPadding = compactPadding, content = content)
+    else OutlinedButton(onClick = onClick, contentPadding = compactPadding, content = content)
+}
+
+private fun Context.findActivity(): Activity? {
+    var c: Context? = this
+    while (c is ContextWrapper) { if (c is Activity) return c; c = c.baseContext }
+    return null
+}
+
 @Composable
 private fun SessionToolbar(
     mode: TouchMode, onMode: (TouchMode) -> Unit, onDoubleClick: () -> Unit,
-    quality: Quality, onQuality: (Quality) -> Unit, onStop: () -> Unit
+    quality: Quality, onQuality: (Quality) -> Unit, onRotate: () -> Unit, onStop: () -> Unit
 ) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         TouchMode.values().forEach { m ->
@@ -248,6 +311,7 @@ private fun SessionToolbar(
         }
         OutlinedButton(onClick = onDoubleClick, contentPadding = compactPadding) { Text("Double-click") }
         QualityMenuButton(quality, onQuality)
+        RotateButton(onRotate, tonal = false)
         StopButton(onStop)
     }
 }
@@ -347,10 +411,18 @@ fun SessionScreen(c: RemoteController) {
         if (typeText.isNotEmpty()) { send(JSONObject().put("type", "type").put("text", typeText.take(500))); typeText = "" }
     }
     val doubleClick: () -> Unit = { send(JSONObject().put("type", "click").put("count", 2)) }
+    val activity = LocalContext.current.findActivity()
+    // Back to the normal (sensor / auto-rotate) behaviour when the session ends.
+    DisposableEffect(Unit) { onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val windowWidth = maxWidth
         val windowHeight = maxHeight   // read here: BoxWithConstraints' scope is not reachable from inside Column
+        val isLandscape = maxWidth > maxHeight
+        val rotate: () -> Unit = {
+            activity?.requestedOrientation =
+                if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
         if (maxWidth > maxHeight) {
             // Landscape: PC screen on the left, a separate control panel on the right (nothing is drawn over the picture).
             val panelWidth = (windowWidth * 0.28f).coerceIn(230.dp, 340.dp)
@@ -366,6 +438,7 @@ fun SessionScreen(c: RemoteController) {
                         FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
                         FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
                         QualityMenuButton(c.quality) { c.setQuality(it) }
+                        RotateButton(rotate, tonal = true)
                         StopButton { c.stopScreen() }
                     }
                 }
@@ -378,8 +451,9 @@ fun SessionScreen(c: RemoteController) {
                         FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
                         FilledTonalButton(onClick = { showPad = false }, contentPadding = compactPadding) { Text("Hide") }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                         QualityMenuButton(c.quality) { c.setQuality(it) }
+                        RotateButton(rotate, tonal = true)
                         StopButton { c.stopScreen() }
                     }
                     Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
@@ -392,7 +466,7 @@ fun SessionScreen(c: RemoteController) {
                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding().padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                SessionToolbar(touchMode, { touchMode = it }, doubleClick, c.quality, { c.setQuality(it) }, { c.stopScreen() })
+                SessionToolbar(touchMode, { touchMode = it }, doubleClick, c.quality, { c.setQuality(it) }, rotate, { c.stopScreen() })
                 ScreenArea(
                     c, touchMode,
                     Modifier.fillMaxWidth().weight(1f).background(Color.Black, RoundedCornerShape(6.dp)),
