@@ -90,10 +90,14 @@ fun QualityPicker(selected: Quality, onSelect: (Quality) -> Unit, modifier: Modi
 
 /** Compact "Quality: Medium" button with a drop-down, used in the session toolbars. */
 @Composable
-fun QualityMenuButton(quality: Quality, onSelect: (Quality) -> Unit) {
+fun QualityMenuButton(quality: Quality, onSelect: (Quality) -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
-        FilledTonalButton(onClick = { expanded = true }, contentPadding = compactPadding) { Text("Quality: ${quality.label}") }
+    Box(modifier) {
+        if (compact) FilledTonalButton(
+            onClick = { expanded = true }, modifier = Modifier.fillMaxWidth().height(36.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+        ) { Text("Quality: ${quality.label}", style = MaterialTheme.typography.labelMedium, maxLines = 1) }
+        else FilledTonalButton(onClick = { expanded = true }, contentPadding = compactPadding) { Text("Quality: ${quality.label}") }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             Quality.values().forEach { q ->
                 DropdownMenuItem(

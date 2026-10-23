@@ -301,13 +301,13 @@ private fun RotateIcon(color: Color, modifier: Modifier = Modifier) {
 
 /** Toggles the phone between portrait and landscape, even when auto-rotate is off in Android. */
 @Composable
-private fun RotateButton(onClick: () -> Unit, tonal: Boolean, small: Boolean = false, modifier: Modifier = Modifier) {
+private fun RotateButton(onClick: () -> Unit, tonal: Boolean, small: Boolean = false, modifier: Modifier = Modifier, height: androidx.compose.ui.unit.Dp = 32.dp) {
     val content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         RotateIcon(LocalContentColor.current, Modifier.semantics { contentDescription = "Rotate screen" })
         Spacer(Modifier.width(4.dp))
         Text("Rotate", style = if (small) MaterialTheme.typography.labelSmall else LocalTextStyle.current)
     }
-    val size = if (small) modifier.height(32.dp) else modifier
+    val size = if (small) modifier.height(height) else modifier
     val pad = if (small) menuPadding else compactPadding
     if (tonal) FilledTonalButton(onClick = onClick, modifier = size, contentPadding = pad, content = content)
     else OutlinedButton(onClick = onClick, modifier = size, contentPadding = pad, content = content)
@@ -319,29 +319,38 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
+/** Portrait toolbar: two rows that always fit the screen width (no sideways scrolling). */
 @Composable
 private fun SessionToolbar(
     mode: TouchMode, onMode: (TouchMode) -> Unit, onDoubleClick: () -> Unit,
-    quality: Quality, onQuality: (Quality) -> Unit, onRotate: () -> Unit, onStop: () -> Unit
+    quality: Quality, onQuality: (Quality) -> Unit, onRotate: () -> Unit, onFullscreen: () -> Unit, onStop: () -> Unit
 ) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        TouchMode.values().forEach { m ->
-            if (m == mode) Button(onClick = { onMode(m) }, contentPadding = compactPadding) { Text(m.label) }
-            else OutlinedButton(onClick = { onMode(m) }, contentPadding = compactPadding) { Text(m.label) }
+    val pad = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+    val label = MaterialTheme.typography.labelMedium
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            TouchMode.values().forEach { m ->
+                val mod = Modifier.weight(1f).height(36.dp)
+                if (m == mode) Button(onClick = { onMode(m) }, modifier = mod, contentPadding = pad) { Text(m.label, style = label, maxLines = 1) }
+                else OutlinedButton(onClick = { onMode(m) }, modifier = mod, contentPadding = pad) { Text(m.label, style = label, maxLines = 1) }
+            }
+            OutlinedButton(onClick = onDoubleClick, modifier = Modifier.weight(1.6f).height(36.dp), contentPadding = pad) { Text("Double-click", style = label, maxLines = 1) }
         }
-        OutlinedButton(onClick = onDoubleClick, contentPadding = compactPadding) { Text("Double-click") }
-        QualityMenuButton(quality, onQuality)
-        RotateButton(onRotate, tonal = false)
-        StopButton(onStop)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            QualityMenuButton(quality, onQuality, Modifier.weight(2.2f), compact = true)
+            OutlinedButton(onClick = onFullscreen, modifier = Modifier.weight(1.6f).height(36.dp), contentPadding = pad) { Text("Fullscreen", style = label, maxLines = 1) }
+            RotateButton(onRotate, tonal = false, small = true, modifier = Modifier.weight(1.3f), height = 36.dp)
+            StopButton(onStop, Modifier.weight(0.9f).height(36.dp), pad)
+        }
     }
 }
 
 @Composable
-private fun StopButton(onStop: () -> Unit) {
+private fun StopButton(onStop: () -> Unit, modifier: Modifier = Modifier, pad: PaddingValues = compactPadding) {
     Button(
-        onClick = onStop, contentPadding = compactPadding,
+        onClick = onStop, modifier = modifier, contentPadding = pad,
         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)
-    ) { Text("Stop") }
+    ) { Text("Stop", style = if (pad === compactPadding) LocalTextStyle.current else MaterialTheme.typography.labelMedium, maxLines = 1) }
 }
 
 /** Full-width 32 dp button for the slim column beside the PC picture; the active touch mode is highlighted. */
@@ -517,7 +526,12 @@ fun SessionScreen(c: RemoteController) {
                 Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding().padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                SessionToolbar(touchMode, { touchMode = it }, doubleClick, c.quality, { c.setQuality(it) }, rotate, { c.stopScreen() })
+                SessionToolbar(
+                    touchMode, { touchMode = it }, doubleClick, c.quality, { c.setQuality(it) }, rotate,
+                    // Fullscreen: landscape with the panel hidden, so the PC picture gets the whole screen (Exit brings the panel back).
+                    { showPad = false; activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE },
+                    { c.stopScreen() }
+                )
                 ScreenArea(
                     c, touchMode,
                     Modifier.fillMaxWidth().weight(1f).background(Color.Black, RoundedCornerShape(6.dp)),
