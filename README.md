@@ -206,6 +206,7 @@ Full WebRTC, stream-quality, TURN and protocol reference: **[docs/WEBRTC.md](doc
 | Symptom | Fix |
 |---|---|
 | Page does not open (Tailscale) | Phone's Tailscale must be on and on the same account |
+| Port 8888 already in use | `start.ps1` now stops the old server (and the `RemotePCControl` task) by itself; just run it again |
 | Tunnel shows 502 / bad gateway | `start.ps1` is not running; start it in its own window |
 | New tunnel link not reachable yet | Wait 1-2 minutes and retry |
 | Black screen / stream error | PC is locked or a UAC prompt is open; unlock the desktop |

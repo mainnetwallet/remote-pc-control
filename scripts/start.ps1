@@ -4,6 +4,34 @@ Set-Location $Root
 if (-not (Test-Path ".venv\Scripts\python.exe")) { throw "Run .\scripts\setup.ps1 first." }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# Free port 8888 first: stop an older copy of this server (and its autostart task) so start.ps1 can always start fresh.
+# Only processes that belong to this project are stopped; any other program using the port is left alone.
+$Port = 8888
+function Stop-OldServer {
+  $task = Get-ScheduledTask -TaskName "RemotePCControl" -ErrorAction SilentlyContinue
+  if ($task -and $task.State -eq "Running") {
+    Write-Host "Stopping scheduled task RemotePCControl (it would restart the old server)..." -ForegroundColor Yellow
+    Stop-ScheduledTask -TaskName "RemotePCControl" -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+  }
+  $owners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+    Select-Object -ExpandProperty OwningProcess -Unique)
+  foreach ($procId in $owners) {
+    $info = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue
+    $cmd = if ($info) { "$($info.ExecutablePath) $($info.CommandLine)" } else { "" }
+    $ours = ($cmd.IndexOf($Root, [StringComparison]::OrdinalIgnoreCase) -ge 0) -or ($cmd -match 'uvicorn.*app\.main:app')
+    if (-not $ours) { throw "Port $Port is used by another program (PID $procId). Close it, then run start.ps1 again." }
+    Write-Host "Stopping old server (PID $procId)..." -ForegroundColor Yellow
+    Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+  }
+  for ($i = 0; $i -lt 20; $i++) {
+    if (-not (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)) { return }
+    Start-Sleep -Milliseconds 500
+  }
+  throw "Port $Port is still in use. Close the program using it, then run start.ps1 again."
+}
+Stop-OldServer
+
 # Optional settings in .env:
 #   QUICK_TUNNEL=1       start a free Cloudflare quick tunnel together with the server
 #   GIST_TOKEN=...       GitHub token (scope: gist only). The new tunnel link is written to a secret Gist
