@@ -10,6 +10,13 @@ WINDOW_SECONDS = 300
 _fails: dict[str, deque] = defaultdict(deque)
 _lock = threading.Lock()
 
+# Extra guard for short passwords: attackers who rotate IP addresses still share one global budget.
+# After GLOBAL_MAX_FAILS wrong tokens (from anyone) within GLOBAL_WINDOW_SECONDS every login is refused
+# until the window passes, even with the right token.
+GLOBAL_MAX_FAILS = 40
+GLOBAL_WINDOW_SECONDS = 600
+_global_fails: deque = deque()
+
 
 def client_key(headers, client) -> str:
     # Behind a Cloudflare tunnel every request comes from localhost; Cloudflare puts the real client IP here.
@@ -21,11 +28,14 @@ def is_blocked(key: str) -> bool:
     with _lock:
         dq = _fails[key]
         while dq and now - dq[0] > WINDOW_SECONDS: dq.popleft()
-        return len(dq) >= MAX_FAILS
+        while _global_fails and now - _global_fails[0] > GLOBAL_WINDOW_SECONDS: _global_fails.popleft()
+        return len(dq) >= MAX_FAILS or len(_global_fails) >= GLOBAL_MAX_FAILS
 
 
 def record_fail(key: str) -> None:
-    with _lock: _fails[key].append(time.monotonic())
+    with _lock:
+        now = time.monotonic()
+        _fails[key].append(now); _global_fails.append(now)
 
 
 def record_success(key: str) -> None:
@@ -33,7 +43,7 @@ def record_success(key: str) -> None:
 
 
 def reset_all() -> None:
-    with _lock: _fails.clear()
+    with _lock: _fails.clear(); _global_fails.clear()
 
 
 def token_ok(candidate: str) -> bool:

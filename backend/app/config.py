@@ -14,6 +14,10 @@ class Settings:
     show_cursor = os.getenv("REMOTE_PC_SHOW_CURSOR", "1") not in ("0", "false", "False")
 
 settings = Settings()
+MIN_TOKEN_LEN = 4   # short passwords are allowed; longer is safer (12+ recommended, setup.ps1 generates 64 chars)
+
 def validate_settings():
-    if len(settings.token.encode()) < 32 or settings.token.startswith("replace-"):
-        raise RuntimeError("Set a unique REMOTE_PC_TOKEN (32+ bytes) in .env")
+    if len(settings.token) < MIN_TOKEN_LEN or settings.token.startswith("replace-"):
+        raise RuntimeError(f"Set REMOTE_PC_TOKEN in .env (at least {MIN_TOKEN_LEN} characters)")
+    if len(settings.token) < 12:
+        print("WARNING: REMOTE_PC_TOKEN is short. Anyone who finds the link could guess it; use 12+ characters if the PC is reachable from the internet.")

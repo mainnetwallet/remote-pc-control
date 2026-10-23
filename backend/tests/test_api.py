@@ -49,3 +49,20 @@ def test_websocket_lockout():
     with TestClient(app) as c, c.websocket_connect("/ws/input") as ws:
         with pytest.raises(WebSocketDisconnect) as e: ws.receive_text()
         assert e.value.code == 4429
+
+
+def test_short_password_allowed_but_not_shorter(monkeypatch):
+    from app import config
+    monkeypatch.setattr(config.settings, "token", "ab12"); config.validate_settings()
+    monkeypatch.setattr(config.settings, "token", "abc")
+    import pytest
+    with pytest.raises(RuntimeError): config.validate_settings()
+
+
+def test_global_lockout_across_different_ips():
+    from app import security
+    good = "Bearer " + settings.token
+    with TestClient(app) as c:
+        for i in range(security.GLOBAL_MAX_FAILS):
+            c.get("/api/v1/status", headers={"Authorization": "Bearer bad", "CF-Connecting-IP": f"10.0.{i // 200}.{i % 200}"})
+        assert c.get("/api/v1/status", headers={"Authorization": good, "CF-Connecting-IP": "77.7.7.7"}).status_code == 429

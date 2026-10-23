@@ -128,7 +128,7 @@ git pull
 ## Configuration (`.env`)
 | Variable | Default | Meaning |
 |---|---|---|
-| `REMOTE_PC_TOKEN` | generated | Access secret (32+ chars). Required. |
+| `REMOTE_PC_TOKEN` | generated | Access password (4+ characters, 12+ recommended; setup generates a long random one). Required. |
 | `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `0.0.0.0` / `8888` | Listen address. |
 | `REMOTE_PC_FPS` | `10` | Starting frames per second (1-30); clients can change it live. |
 | `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality (25-85); clients can raise it to 90 live. |
