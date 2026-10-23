@@ -153,6 +153,10 @@ fun ScreenView(
     cursor: () -> Offset? = { null },   // pointer as 0..1 of the picture; read while drawing, so moving it never recomposes
     content: @Composable () -> Unit     // the picture itself: a Bitmap (WebSocket stream) or the WebRTC video
 ) {
+    // Click mode: the pointer sits above the fingertip so the finger never hides it; the gap shrinks to 0 at the bottom edge so every spot stays reachable.
+    val liftPx = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.toPx() }
+    fun lifted(p: Offset, size: androidx.compose.ui.unit.IntSize): Offset =
+        if (size.height == 0) p else Offset(p.x, p.y - liftPx * (1f - (p.y / size.height).coerceIn(0f, 1f)))
     fun emit(type: String, p: Offset, size: androidx.compose.ui.unit.IntSize, button: String? = null) {
         if (size.width == 0 || size.height == 0) return
         val nx = (p.x / size.width).coerceIn(0f, 1f).toDouble()
@@ -184,7 +188,7 @@ fun ScreenView(
                     detectDragGestures(
                         onDragStart = { p ->
                             last = p; scrollAcc = 0f
-                            if (mode == TouchMode.DRAG) emit("down", p, size, "left") else if (mode == TouchMode.CLICK) emit("move", p, size)
+                            if (mode == TouchMode.DRAG) emit("down", p, size, "left") else if (mode == TouchMode.CLICK) emit("move", lifted(p, size), size)
                         },
                         onDragEnd = { if (mode == TouchMode.DRAG) emit("up", last, size, "left") },
                         onDragCancel = { if (mode == TouchMode.DRAG) emit("up", last, size, "left") },
@@ -198,7 +202,7 @@ fun ScreenView(
                                 if (steps != 0) { send(JSONObject().put("type", "scroll").put("dy", steps)); scrollAcc -= steps * stepPx }
                             } else {
                                 val now = System.nanoTime()
-                                if (now - lastSentNs >= 16_000_000L) { lastSentNs = now; emit("move", change.position, size) }
+                                if (now - lastSentNs >= 16_000_000L) { lastSentNs = now; emit("move", if (mode == TouchMode.CLICK) lifted(change.position, size) else change.position, size) }
                             }
                         }
                     )
