@@ -7,10 +7,13 @@ from .config import settings, validate_settings
 from .security import require_auth
 from . import monitor, control
 from .screen import screen_socket, input_socket
+from .webrtc import rtc_socket, shutdown_all as rtc_shutdown
 app=FastAPI(title="Remote PC Control",docs_url=None,redoc_url=None)
 class PowerRequest(BaseModel): confirm: bool=False
 @app.on_event("startup")
 def startup(): validate_settings()
+@app.on_event("shutdown")
+async def shutdown(): await rtc_shutdown()   # close WebRTC sessions: tracks, capture handles, peer connections
 @app.get("/api/health")
 def health(): return {"ok":True,"service":"remote-pc-control"}
 @app.get("/api/v1/status",dependencies=[Depends(require_auth)])
@@ -31,6 +34,8 @@ def wol_status(): return {"supported":False,"configured":False,"detail":"Require
 def wol_wake(): raise HTTPException(501,"Configure a separately authenticated always-on LAN relay first")
 @app.websocket("/ws/screen")
 async def ws_screen(ws:WebSocket): await screen_socket(ws)
+@app.websocket("/ws/rtc")
+async def ws_rtc(ws:WebSocket): await rtc_socket(ws)
 @app.websocket("/ws/input")
 async def ws_input(ws:WebSocket): await input_socket(ws)
 static_dir=Path(__file__).resolve().parent/"static"

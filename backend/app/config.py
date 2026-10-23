@@ -23,6 +23,22 @@ class Settings:
     # Draw a small pointer on the stream so touch users can see where the mouse is.
     show_cursor = os.getenv("REMOTE_PC_SHOW_CURSOR", "1") not in ("0", "false", "False")
 
+    # --- WebRTC transport (/ws/rtc). The WebSocket JPEG stream stays available as the fallback. ---
+    # 1 (default) = offer WebRTC; 0 = /ws/rtc answers "unavailable" and clients use the WebSocket stream.
+    webrtc = os.getenv("REMOTE_PC_WEBRTC", "1").strip().lower() not in ("0", "false", "no", "off")
+    # Max frames per second of the WebRTC video (1-30).
+    rtc_fps = max(1, min(30, int(os.getenv("REMOTE_PC_RTC_FPS", "30") or "30")))
+    # Upper limit of the video bitrate in kbit/s (the link's own estimate can only lower it). 300-30000.
+    rtc_bitrate = max(300, min(30000, int(os.getenv("REMOTE_PC_RTC_BITRATE", "4000") or "4000")))
+    # H.264 encoder: auto (try nvenc, qsv, amf, then libx264) or force one of nvenc / qsv / amf / x264.
+    rtc_encoder = os.getenv("REMOTE_PC_RTC_ENCODER", "auto").strip().lower()
+    # ICE servers. STUN finds the public address (comma separated list). TURN relays the video when a direct
+    # connection is impossible (CGNAT, strict firewalls); it is only used when REMOTE_PC_TURN_URL is set.
+    stun_urls = [u.strip() for u in os.getenv("REMOTE_PC_STUN_URL", "stun:stun.l.google.com:19302").split(",") if u.strip()]
+    turn_url = os.getenv("REMOTE_PC_TURN_URL", "").strip()
+    turn_user = os.getenv("REMOTE_PC_TURN_USER", "").strip()
+    turn_pass = os.getenv("REMOTE_PC_TURN_PASS", "")
+
 settings = Settings()
 MIN_TOKEN_LEN = 4   # short passwords are allowed; longer is safer (12+ recommended, setup.ps1 generates 64 chars)
 
