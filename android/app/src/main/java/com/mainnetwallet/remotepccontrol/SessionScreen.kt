@@ -31,6 +31,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -51,8 +52,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import org.json.JSONObject
+import org.webrtc.RendererCommon
+import org.webrtc.SurfaceViewRenderer
+import org.webrtc.VideoTrack
 import java.util.concurrent.atomic.AtomicInteger
 
 enum class TouchMode(val label: String, val hint: String) {
@@ -128,8 +133,9 @@ fun KeysPanel(send: (JSONObject) -> Unit, typeText: String, onTypeText: (String)
  */
 @Composable
 fun ScreenView(
-    frame: Bitmap, mode: TouchMode, send: (JSONObject) -> Unit, onPosition: (Double, Double) -> Unit, modifier: Modifier = Modifier,
-    cursor: () -> Offset? = { null }   // pointer as 0..1 of the picture; read while drawing, so moving it never recomposes
+    aspect: Float, mode: TouchMode, send: (JSONObject) -> Unit, onPosition: (Double, Double) -> Unit, modifier: Modifier = Modifier,
+    cursor: () -> Offset? = { null },   // pointer as 0..1 of the picture; read while drawing, so moving it never recomposes
+    content: @Composable () -> Unit     // the picture itself: a Bitmap (WebSocket stream) or the WebRTC video
 ) {
     fun emit(type: String, p: Offset, size: androidx.compose.ui.unit.IntSize, button: String? = null) {
         if (size.width == 0 || size.height == 0) return
@@ -141,13 +147,9 @@ fun ScreenView(
         send(o)
     }
     Box(modifier, contentAlignment = Alignment.Center) {
-        Image(
-            bitmap = remember(frame) { frame.asImageBitmap() },
-            filterQuality = FilterQuality.High,   // bicubic scaling: sharp text when the frame is shown larger or smaller than sent
-            contentDescription = "Live Windows desktop. Touch to control the mouse.",
-            contentScale = ContentScale.FillBounds,
+        Box(
             // Keys are the mode only (never the frame): restarting on every frame would cancel taps in flight.
-            modifier = Modifier.aspectRatio(frame.width.toFloat() / frame.height.toFloat())
+            modifier = Modifier.aspectRatio(aspect)
                 .background(Color.Black, RoundedCornerShape(6.dp))
                 .pointerInput(mode) {
                     if (mode != TouchMode.CLICK) return@pointerInput
@@ -185,8 +187,37 @@ fun ScreenView(
                     )
                 }
                 .drawWithContent { drawContent(); drawPointer(cursor()) }
-        )
+        ) { content() }
     }
+}
+
+/** The WebRTC video of the PC screen, drawn by a hardware-scaled SurfaceViewRenderer. */
+@Composable
+private fun RtcVideo(track: VideoTrack?, onSize: (Int, Int) -> Unit) {
+    var renderer by remember { mutableStateOf<SurfaceViewRenderer?>(null) }
+    DisposableEffect(track, renderer) {
+        val r = renderer
+        if (track != null && r != null) track.addSink(r)
+        onDispose { if (track != null && r != null) track.removeSink(r) }
+    }
+    AndroidView(
+        factory = { ctx ->
+            SurfaceViewRenderer(ctx).apply {
+                init(RtcEngine.egl.eglBaseContext, object : RendererCommon.RendererEvents {
+                    override fun onFirstFrameRendered() {}
+                    override fun onFrameResolutionChanged(videoWidth: Int, videoHeight: Int, rotation: Int) {
+                        // The picture's real shape: keeps touch positions exact even before the PC's size message arrives.
+                        if (rotation % 180 == 0) onSize(videoWidth, videoHeight) else onSize(videoHeight, videoWidth)
+                    }
+                })
+                setEnableHardwareScaler(true)
+                setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
+                renderer = this
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+        onRelease = { it.release(); renderer = null }
+    )
 }
 
 
@@ -238,22 +269,35 @@ private fun QuickKeyBar(send: (JSONObject) -> Unit) {
     }
 }
 
-/** Small corner label: resolution of the frames being received and measured / maximum frames per second. */
+/** Small corner label: transport, resolution, frames per second and (WebRTC) round-trip time. */
 @Composable
-private fun StreamStatsOverlay(info: StreamInfo?, frameCounter: AtomicInteger, modifier: Modifier = Modifier) {
+private fun StreamStatsOverlay(c: RemoteController, modifier: Modifier = Modifier) {
     var fps by remember { mutableIntStateOf(0) }
-    LaunchedEffect(frameCounter) {
-        var last = frameCounter.get()
+    LaunchedEffect(c.frameCounter) {
+        var last = c.frameCounter.get()
         while (true) {
             delay(1000)
-            val now = frameCounter.get()
+            val now = c.frameCounter.get()
             fps = now - last; last = now
         }
     }
-    if (info == null) return
-    val cap = if (info.targetFps > 0) "/${info.targetFps}" else ""
+    val info = c.streamInfo
+    val rtc = c.rtcStats
+    val label = when {
+        c.transport == "WebRTC" -> {
+            val size = if (info != null) "${info.width}\u00D7${info.height} \u00B7 " else ""
+            val rtt = if (rtc != null && rtc.rttMs >= 0) " \u00B7 ${rtc.rttMs} ms" else ""
+            "WebRTC \u00B7 $size${rtc?.fps ?: 0} fps$rtt"
+        }
+        c.transport == "Connecting" -> "Connecting\u2026"
+        info != null -> {
+            val cap = if (info.targetFps > 0) "/${info.targetFps}" else ""
+            "WebSocket \u00B7 ${info.width}\u00D7${info.height} \u00B7 $fps$cap fps"
+        }
+        else -> return
+    }
     Text(
-        "${info.width}\u00D7${info.height} \u00B7 $fps$cap fps",
+        label,
         color = Color.White, style = MaterialTheme.typography.labelSmall,
         modifier = modifier.background(Color(0x99000000), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 3.dp)
     )
@@ -263,13 +307,25 @@ private fun StreamStatsOverlay(info: StreamInfo?, frameCounter: AtomicInteger, m
 @Composable
 private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier, frameModifier: Modifier, waitingModifier: Modifier) {
     val frame = c.frame
+    val track = c.videoTrack
+    val cursor: () -> Offset? = { if (c.cursorX >= 0f) Offset(c.cursorX, c.cursorY) else null }
     Box(modifier) {
-        if (frame != null) ScreenView(
-            frame, mode, { c.sendInput(it) }, { _, _ -> }, frameModifier,
-            cursor = { if (c.cursorX >= 0f) Offset(c.cursorX, c.cursorY) else null }
-        )
+        if (track != null) ScreenView(
+            c.videoAspect, mode, { c.sendInput(it) }, { _, _ -> }, frameModifier, cursor = cursor
+        ) { RtcVideo(track) { w, h -> c.onVideoSize(w, h) } }
+        else if (frame != null) ScreenView(
+            frame.width.toFloat() / frame.height.toFloat(), mode, { c.sendInput(it) }, { _, _ -> }, frameModifier, cursor = cursor
+        ) {
+            Image(
+                bitmap = remember(frame) { frame.asImageBitmap() },
+                filterQuality = FilterQuality.High,   // bicubic scaling: sharp text when the frame is shown larger or smaller than sent
+                contentDescription = "Live Windows desktop. Touch to control the mouse.",
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
         else Box(waitingModifier, contentAlignment = Alignment.Center) { Text("Waiting for the PC screen\u2026", color = Color.White) }
-        StreamStatsOverlay(c.streamInfo, c.frameCounter, Modifier.align(Alignment.TopStart).padding(6.dp))
+        StreamStatsOverlay(c, Modifier.align(Alignment.TopStart).padding(6.dp))
     }
 }
 

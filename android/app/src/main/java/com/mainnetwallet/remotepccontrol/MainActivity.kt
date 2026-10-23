@@ -54,7 +54,7 @@ private fun RemotePcApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // The activity is not recreated on rotation (manifest configChanges), so this state and the sockets survive it.
-    val c = remember { RemoteController(scope, context.getSharedPreferences("remote_pc", Context.MODE_PRIVATE)) }
+    val c = remember { RemoteController(scope, context.getSharedPreferences("remote_pc", Context.MODE_PRIVATE), context.applicationContext) }
     var confirm by remember { mutableStateOf<PowerAction?>(null) }
     val view = LocalView.current
 

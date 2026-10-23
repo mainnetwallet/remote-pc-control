@@ -22,3 +22,15 @@ The app can only control the logged-in interactive Windows desktop. It cannot by
 
 ## Code layout
 `MainActivity.kt` (edge-to-edge setup, navigation), `RemoteController.kt` (state, HTTP/WebSocket, Quality presets), `ConnectScreen.kt`, `DashboardScreen.kt`, `SessionScreen.kt`, `Trackpad.kt`, `Theme.kt` (Material 3 dark theme), `Components.kt` (shared widgets, window-insets helper). Only stable Compose / Material 3 APIs are used (no `@OptIn(Experimental...)`), because the APK is built by GitHub Actions.
+
+## WebRTC live screen
+
+The live screen first tries WebRTC (low-latency H.264 video over UDP, input over data channels) through the PC's
+`/ws/rtc` endpoint. If the PC has no WebRTC, the network blocks UDP, or nothing connects within about 6 seconds, the
+app switches to the old WebSocket JPEG stream by itself and shows a short notice. The corner label of the live
+screen shows which transport is active (`WebRTC` or `WebSocket`), the frame rate and, for WebRTC, the round-trip time.
+
+Library: `io.getstream:stream-webrtc-android` (package `org.webrtc`). The Quality presets map to bitrate/size/fps
+(Low 1500, Medium 3000, High 6000, Native 10000 kbit/s). Over a Cloudflare quick tunnel only the signaling travels
+through the tunnel; the video needs a direct path (same Wi-Fi, Tailscale, or TURN set on the PC with
+`REMOTE_PC_TURN_URL`, see the root README).

@@ -1,5 +1,6 @@
 package com.mainnetwallet.remotepccontrol
 
+import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -9,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -19,6 +21,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
+import org.webrtc.VideoTrack
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -40,11 +43,17 @@ private const val PREF_QUALITY = "quality"
 private const val LOCAL_CURSOR_NS = 250_000_000L   // after the finger moved the pointer, trust our own prediction this long
 
 /** Live-screen quality presets. Each one is sent to the PC as {"type":"config","max_width","fps","quality"}. */
-enum class Quality(val label: String, val maxWidth: Int, val fps: Int, val jpeg: Int, val hint: String) {
-    LOW("Low", 960, 20, 45, "960 px wide, up to 20 fps. Saves data."),
-    MEDIUM("Medium", 1280, 30, 65, "1280 px wide, up to 30 fps."),
-    HIGH("High", 1920, 30, 78, "1920 px wide, up to 30 fps."),
-    NATIVE("Native", 0, 20, 85, "The PC's full resolution, up to 20 fps. Needs a fast link.");
+enum class Quality(val label: String, val maxWidth: Int, val fps: Int, val jpeg: Int, val kbps: Int, val hint: String) {
+    LOW("Low", 960, 20, 45, 1500, "960 px wide, up to 20 fps. Saves data."),
+    MEDIUM("Medium", 1280, 30, 65, 3000, "1280 px wide, up to 30 fps."),
+    HIGH("High", 1920, 30, 78, 6000, "1920 px wide, up to 30 fps."),
+    NATIVE("Native", 0, 20, 85, 10000, "The PC's full resolution, up to 20 fps. Needs a fast link.");
+
+    /** The same preset for the WebRTC video: bitrate (kbit/s) instead of JPEG quality. */
+    fun rtcConfigMessage(): String = JSONObject()
+        .put("type", "config").put("max_width", maxWidth).put("fps", fps).put("bitrate", kbps)
+        .put("cursor", true)
+        .toString()
 
     fun configMessage(): String = JSONObject()
         .put("type", "config").put("max_width", maxWidth).put("fps", fps).put("quality", jpeg)
@@ -80,11 +89,16 @@ class PcStatus(
 /** Size of the frames being received and the frame-rate cap the PC applies (0 = unknown, older PC agent). */
 class StreamInfo(val width: Int, val height: Int, val targetFps: Int)
 
+/** Live numbers of the WebRTC session (roundtrip ms, frames/s, kbit/s received, decode ms per frame). */
+class RtcStatsInfo(val rttMs: Int, val fps: Int, val kbps: Int, val decodeMs: Int)
+
+private const val RTC_CONNECT_TIMEOUT_MS = 6000L   // no WebRTC connection by then: use the WebSocket stream
+
 /**
  * All connection state and networking. UI reads the Compose state properties; the activity is not
  * recreated on rotation (manifest configChanges), so sockets and frames survive it.
  */
-class RemoteController(private val scope: CoroutineScope, private val prefs: SharedPreferences) {
+class RemoteController(private val scope: CoroutineScope, private val prefs: SharedPreferences, private val appContext: Context) {
     var baseUrl by mutableStateOf(prefs.getString(PREF_URL, DEFAULT_URL) ?: DEFAULT_URL)
     var token by mutableStateOf(prefs.getString(PREF_TOKEN, null)?.let { SecureStore.decrypt(it) } ?: "")
     /** True while the app signs in by itself with the saved password right after start. */
@@ -105,6 +119,17 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     var frame by mutableStateOf<Bitmap?>(null)
         private set
     var streamInfo by mutableStateOf<StreamInfo?>(null)
+        private set
+    /** "WebRTC", "WebSocket", or "Connecting" while WebRTC is being tried. */
+    var transport by mutableStateOf("")
+        private set
+    /** The PC video while WebRTC is active (null for the WebSocket stream, which uses [frame]). */
+    var videoTrack by mutableStateOf<VideoTrack?>(null)
+        private set
+    /** Width / height of the WebRTC video, from the PC's screen message. */
+    var videoAspect by mutableFloatStateOf(16f / 9f)
+        private set
+    var rtcStats by mutableStateOf<RtcStatsInfo?>(null)
         private set
     var quality by mutableStateOf(Quality.values().firstOrNull { it.name == prefs.getString(PREF_QUALITY, null) } ?: Quality.MEDIUM)
         private set
@@ -127,6 +152,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
 
     private var screenSocket: WebSocket? = null
     private var inputSocket: WebSocket? = null
+    private var rtc: RtcClient? = null
     private var sessionGen = 0   // callbacks of an older session must not touch the current one
 
     // When the address field holds a Gist reference ("gist:<id>"), this is the current tunnel URL read from it.
@@ -242,16 +268,68 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     fun setQuality(q: Quality) {
         quality = q
         prefs.edit().putString(PREF_QUALITY, q.name).apply()
-        screenSocket?.send(q.configMessage())   // applied live, the PC answers with the new frame size
+        val r = rtc
+        if (r != null) r.sendControl(q.rtcConfigMessage())   // WebRTC: bitrate, size and fps are applied live
+        else screenSocket?.send(q.configMessage())   // applied live, the PC answers with the new frame size
     }
 
     fun startScreen() {
         if (!connected || screenOpen) return
         val gen = ++sessionGen
-        val wsBase = normalizedBase().replaceFirst("https://", "wss://").replaceFirst("http://", "ws://")
-        frameCounter.set(0); frame = null; streamInfo = null
+        frameCounter.set(0); frame = null; streamInfo = null; videoTrack = null; rtcStats = null
         cursorX = -1f; cursorY = -1f; cursorFromServer = false; localCursorUntilNs = 0L
         screenOpen = true
+        startRtc(gen)
+    }
+
+    private fun wsRoot() = normalizedBase().replaceFirst("https://", "wss://").replaceFirst("http://", "ws://")
+
+    /** Tries WebRTC first; any failure (or no connection within a few seconds) switches to the WebSocket stream. */
+    private fun startRtc(gen: Int) {
+        transport = "Connecting"
+        val listener = object : RtcListener {
+            override fun onVideo(track: VideoTrack) { if (gen == sessionGen) videoTrack = track }
+            override fun onConnected() { if (gen == sessionGen) { transport = "WebRTC"; notice = Notice("", false) } }
+            override fun onFailed(reason: String) {
+                scope.launch { if (gen == sessionGen) fallBackToWebSocket(gen, reason) }
+            }
+            override fun onScreen(width: Int, height: Int, fps: Int) {
+                if (gen != sessionGen) return
+                streamInfo = StreamInfo(width, height, fps)
+                if (width > 0 && height > 0) videoAspect = width.toFloat() / height.toFloat()
+            }
+            override fun onCursor(o: JSONObject) { if (gen == sessionGen) onServerCursor(o) }
+            override fun onStats(rttMs: Int, fps: Int, kbps: Int, decodeMs: Int) {
+                if (gen == sessionGen) { rtcStats = RtcStatsInfo(rttMs, fps, kbps, decodeMs); frameCounter.set(fps) }
+            }
+        }
+        val client = try { RtcClient(appContext, wsClient, wsRoot(), token.trim(), listener) } catch (e: Throwable) { null }
+        if (client == null) { startWebSocketStream(gen); return }
+        rtc = client
+        try { client.start(quality.rtcConfigMessage()) } catch (e: Throwable) { fallBackToWebSocket(gen, e.message ?: "WebRTC error"); return }
+        scope.launch {
+            delay(RTC_CONNECT_TIMEOUT_MS)
+            if (gen == sessionGen && rtc === client && transport == "Connecting") fallBackToWebSocket(gen, "no connection in time")
+        }
+    }
+
+    /** The decoded video's real size (from the renderer): its aspect ratio sizes the touch area. */
+    fun onVideoSize(width: Int, height: Int) {
+        if (width > 0 && height > 0) videoAspect = width.toFloat() / height.toFloat()
+    }
+
+    private fun fallBackToWebSocket(gen: Int, reason: String) {
+        if (gen != sessionGen || !screenOpen) return
+        val wasConnected = transport == "WebRTC"
+        rtc?.close(); rtc = null
+        videoTrack = null; rtcStats = null; streamInfo = null
+        notice = Notice(if (wasConnected) "WebRTC lost ($reason), using WebSocket" else "WebRTC unavailable ($reason), using WebSocket", false)
+        startWebSocketStream(gen)
+    }
+
+    private fun startWebSocketStream(gen: Int) {
+        val wsBase = wsRoot()
+        transport = "WebSocket"
         screenSocket = wsClient.newWebSocket(Request.Builder().url("$wsBase/ws/screen").build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 webSocket.send(JSONObject().put("token", token.trim()).toString())
@@ -309,15 +387,17 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
 
     fun stopScreen() {
         sessionGen++
+        rtc?.close(); rtc = null
         screenSocket?.close(1000, "User closed screen")
         inputSocket?.close(1000, "User closed screen")
         screenSocket = null; inputSocket = null
-        screenOpen = false; frame = null; streamInfo = null
+        screenOpen = false; frame = null; streamInfo = null; videoTrack = null; rtcStats = null; transport = ""
         cursorX = -1f; cursorY = -1f; cursorFromServer = false
     }
 
     fun sendInput(o: JSONObject) {
-        inputSocket?.send(o.toString())
+        val r = rtc
+        if (r == null || !r.sendInput(o)) inputSocket?.send(o.toString())   // data channels first, the old socket otherwise
         predictCursor(o)
     }
 
@@ -348,6 +428,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     /** Called when the activity goes away: drop the sockets without touching UI state. */
     fun shutdown() {
         sessionGen++
+        rtc?.close(); rtc = null
         screenSocket?.cancel(); inputSocket?.cancel()
     }
 }
