@@ -79,7 +79,7 @@ import kotlin.math.sin
 
 enum class TouchMode(val label: String, val hint: String) {
     OFF("Off", "Screen is view-only; use the trackpad"),
-    CLICK("Click", "Tap = click · long-press = right click · drag = move the pointer"),
+    CLICK("Click", "Drag = move the pointer · tap = click where the pointer is · long-press = right click"),
     DRAG("Drag", "Drag = hold the left button (select, move windows)"),
     SCROLL("Scroll", "Drag up/down to scroll the page")
 }
@@ -170,8 +170,9 @@ fun ScreenView(
                 .pointerInput(mode) {
                     if (mode != TouchMode.CLICK) return@pointerInput
                     detectTapGestures(
-                        onTap = { p -> emit("click", p, size, "left") },
-                        onLongPress = { p -> emit("click", p, size, "right") }
+                        // Click where the pointer already is (no position sent): the finger only moves the pointer, it never jumps it.
+                        onTap = { send(JSONObject().put("type", "click").put("button", "left")) },
+                        onLongPress = { send(JSONObject().put("type", "click").put("button", "right")) }
                     )
                 }
                 .pointerInput(mode) {

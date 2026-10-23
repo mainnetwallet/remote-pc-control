@@ -3,7 +3,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 type Mode='click'|'drag'|'scroll';
 type Send=(o:object)=>void;
 const MODES:{id:Mode;label:string;hint:string}[]=[
- {id:'click',label:'Click',hint:'Tap = click · long-press = right click · drag = move the pointer · two fingers = scroll'},
+ {id:'click',label:'Click',hint:'Drag = move the pointer · tap = click where the pointer is · long-press = right click · two fingers = scroll'},
  {id:'drag',label:'Drag',hint:'Drag = hold left button (select text, move windows)'},
  {id:'scroll',label:'Scroll',hint:'Drag up/down to scroll the page'},
 ];
@@ -55,7 +55,7 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   st.start={x:e.clientX,y:e.clientY};st.moved=false;st.long=false;st.multi=false;st.scrollAcc=0;
   if(mode==='drag'){send({type:'down',button:'left',...norm(e.clientX,e.clientY)});st.down=true}
   if(mode==='click'){st.timer=window.setTimeout(()=>{
-   if(!st.moved&&pointers.current.size===1){st.long=true;send({type:'click',button:'right',...norm(st.start.x,st.start.y)});navigator.vibrate?.(30)}
+   if(!st.moved&&pointers.current.size===1){st.long=true;send({type:'click',button:'right'});navigator.vibrate?.(30)}
   },LONG_PRESS_MS)}
  };
 
@@ -80,7 +80,7 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   pointers.current.delete(e.pointerId);window.clearTimeout(st.timer);
   if(st.multi){if(pointers.current.size===0)st.multi=false;return}
   if(mode==='drag'){endDrag(e);return}
-  if(mode==='click'&&!st.moved&&!st.long&&e.type==='pointerup')send({type:'click',button:'left',...norm(e.clientX,e.clientY)});
+  if(mode==='click'&&!st.moved&&!st.long&&e.type==='pointerup')send({type:'click',button:'left'});
  };
  const onCancel=(e:React.PointerEvent)=>{pointers.current.delete(e.pointerId);window.clearTimeout(g.current.timer);endDrag(e);g.current.multi=pointers.current.size>0};
  const onWheel=(e:React.WheelEvent)=>{if(e.deltaY)send({type:'scroll',dy:e.deltaY>0?-2:2})};
