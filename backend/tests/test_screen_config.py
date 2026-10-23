@@ -417,3 +417,84 @@ def test_overlay_clients_get_no_frames_for_pointer_only_changes_and_no_baked_poi
     assert 1 <= len(frames) <= 3                      # the config answer, not one frame per pointer move
     pix = Image.open(io.BytesIO(frames[-1])).convert("RGB")
     assert len({pix.getpixel((x, 5)) for x in range(0, 40)}) == 1   # no white arrow drawn into the picture
+
+
+# ---- bandwidth-aware flow control (click result must not wait behind a queue of big frames) ----------
+
+def _link_state(bw, full_bytes, rtt=0.05):
+    st = screen._StreamState()
+    st.acks = True; st.bw = bw; st.full_bytes = full_bytes
+    st.rtts.extend([rtt] * 5); st.rtt = rtt
+    return st
+
+
+def test_on_ack_measures_upload_speed_from_ack_spacing():
+    st = screen._StreamState()
+    for t in (0.0, 0.0, 0.0): st.on_sent(t, 40_000)      # three frames queued back to back
+    st.on_ack(0.30); st.on_ack(0.50); st.on_ack(0.70)    # the link needed 0.2 s per 40 kB frame
+    assert st.inflight == 0 and st.inflight_bytes == 0
+    assert 150_000 < st.bw < 250_000
+
+
+def test_link_allows_first_frame_and_unknown_speed():
+    st = screen._StreamState(); st.acks = True
+    assert st.link_allows(10 ** 9)                       # speed unknown: only the frame-count window applies
+    st.bw = 100_000; st.on_sent(0.0, 50_000)
+    assert st.inflight == 1
+    st2 = screen._StreamState(); st2.bw = 100_000
+    assert st2.link_allows(10 ** 9)                      # nothing in flight: the next frame always goes out
+
+
+def test_link_blocks_a_frame_that_would_queue_behind_old_ones():
+    st = _link_state(bw=100_000, full_bytes=40_000)      # 100 kB/s
+    st.on_sent(0.0, 40_000)
+    assert not st.link_allows(40_000)                    # 80 kB on the wire > bw * (rtt + budget) = 13 kB
+    st.on_ack(0.4)
+    assert st.link_allows(40_000)                        # the wire is empty again
+
+
+def test_fast_link_keeps_several_frames_in_flight():
+    st = _link_state(bw=5_000_000, full_bytes=40_000, rtt=0.15)
+    st.on_sent(0.0, 40_000); st.on_sent(0.03, 40_000)
+    assert st.link_allows(40_000)                        # 5 MB/s * 0.23 s = 1.15 MB of room
+
+
+def test_shape_keeps_config_on_a_fast_link_and_before_measuring():
+    cfg = StreamConfig(1280, 30, 65)
+    assert _link_state(5_000_000, 40_000).shape(cfg, 1920) == (65, 1280)
+    assert screen._StreamState().shape(cfg, 1920) == (65, 1280)       # no acks yet
+
+
+def test_shape_lowers_quality_first_then_width():
+    cfg = StreamConfig(1280, 30, 65)
+    q, w = _link_state(bw=25_000, full_bytes=50_000).shape(cfg, 1920)  # 2 kB budget per frame = ~4% of a full frame
+    assert q == round(65 * 0.55) and w < 1280 and w >= screen.WIDTH_MIN
+    assert w % screen.WIDTH_STEP == 0
+    q2, w2 = _link_state(bw=450_000, full_bytes=50_000).shape(cfg, 1920)   # ~72% of a full frame fits
+    assert w2 == 1280 and screen.QUALITY_MIN <= q2 < 65                    # only the quality drops
+
+
+def test_shape_never_goes_below_the_floors():
+    cfg = StreamConfig(1280, 30, 65)
+    q, w = _link_state(bw=1, full_bytes=10 ** 7).shape(cfg, 1920)
+    assert q >= screen.QUALITY_MIN and w >= max(screen.WIDTH_MIN, round(1280 * screen.MIN_WIDTH_FACTOR) - screen.WIDTH_STEP)
+
+
+def test_shape_uses_native_width_when_unscaled():
+    cfg = StreamConfig(0, 20, 70)
+    _, w = _link_state(bw=1_000, full_bytes=100_000).shape(cfg, 1920)
+    assert screen.WIDTH_MIN <= w < 1920
+
+
+def test_note_encoded_predicts_the_full_size_from_a_shrunk_frame():
+    cfg = StreamConfig(1280, 30, 65)
+    st = screen._StreamState()
+    st.note_encoded(10_000, 36, 640, cfg, 1920)          # half width, lower quality -> a full frame is much bigger
+    assert st.full_bytes > 40_000
+    st.note_encoded(50_000, 65, 1280, cfg, 1920)         # already at the configured values
+    assert st.full_bytes == pytest.approx(50_000)
+
+
+def test_ack_timeout_resets_bytes_in_flight():
+    st = screen._StreamState(); st.on_sent(0.0, 1234); st.reset_flight()
+    assert (st.inflight, st.inflight_bytes, len(st.sent_at)) == (0, 0, 0)

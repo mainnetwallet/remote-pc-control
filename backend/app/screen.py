@@ -10,8 +10,9 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
           clamped, unusable ones ignored. Applied live; the server answers with a fresh
           {"type":"screen",...} (carrying the values now in effect) followed by a new frame.
               {"type":"ack"}   send one after each frame you have shown. Once the server has seen an ack it
-          keeps a small number of frames in flight (the newest screen always wins) and lowers JPEG quality when the
-          link is congested, so the picture and the pointer never lag behind. Clients that never ack get the
+          keeps a small number of frames in flight (the newest screen always wins), measures the link's upload speed from
+          the ack spacing, never lets a new frame queue behind more than ~80 ms of older ones, and shrinks the JPEG quality
+          and then the width until a frame uploads in about 0.1 s, so a click's result shows up at once on a slow link. Clients that never ack get the
           old fixed-rate stream. The in-flight window grows with the measured link round-trip time (up to
           MAX_WINDOW frames) so a high-latency link such as a tunnel can still reach the configured fps.
           Optional "cursor":true in a config message: the client draws the pointer itself (see watch_cursor below),
@@ -45,6 +46,13 @@ from . import security
 
 MAX_IN_FLIGHT = 2         # minimum number of frames sent but not yet acknowledged (only once the client sends acks)
 MAX_WINDOW = 6            # the window grows up to this many frames on high-latency links (see flight_window)
+QUEUE_BUDGET = 0.10       # seconds of queueing (beyond the link's own latency) we accept before shrinking the stream
+MIN_WIDTH_FACTOR = 0.4    # congestion never scales the picture below this fraction of the configured width
+THROUGHPUT_SAMPLES = 30   # recent per-frame drain-rate samples used to estimate the link's upload speed
+LATENCY_BUDGET = 0.08     # seconds a new frame may wait behind earlier ones on the wire (on top of the link's own latency)
+FRAME_TIME_MIN, FRAME_TIME_MAX = 0.08, 0.12   # on a slow link a frame is shrunk until it needs about this long to upload
+BYTES_PER_QUALITY_POW = 1.3   # JPEG size grows roughly with quality^1.3 and with width^2 (used to predict a smaller frame's size)
+WIDTH_STEP = 80           # congestion-scaled widths are rounded to this, so the picture size does not jitter
 RTT_SAMPLES = 120         # ack round-trip samples kept to estimate the link's base latency
 MIN_RTT_SAMPLES = 4       # need this many samples before the base latency is trusted
 CURSOR_INTERVAL = 1 / 60  # how often the pointer position is sampled for watch_cursor clients
@@ -252,9 +260,69 @@ class _StreamState:
         self.acks = False                 # the client sends acks, so flow control and quality adaptation are on
         self.overlay = False              # the client draws the pointer itself: leave it out of the frames
         self.inflight = 0                 # frames sent and not yet acknowledged
-        self.sent_at: collections.deque = collections.deque()
+        self.sent_at: collections.deque = collections.deque()   # (send time, frame bytes) of unacknowledged frames
+        self.last_ack = 0.0               # when the previous ack arrived
+        self.inflight_bytes = 0           # bytes of the frames in flight
+        self.bw = 0.0                     # measured upload speed in bytes/s (0 = not measured yet)
+        self.full_bytes = 0.0             # estimated size of a frame at the configured quality and width
         self.rtt = 0.0                    # smoothed seconds between sending a frame and its ack
         self.rtts: collections.deque = collections.deque(maxlen=RTT_SAMPLES)
+
+    def on_sent(self, now: float, nbytes: int) -> None:
+        self.inflight += 1; self.inflight_bytes += nbytes
+        self.sent_at.append((now, nbytes))
+
+    def reset_flight(self) -> None:
+        self.inflight = 0; self.inflight_bytes = 0; self.sent_at.clear()
+
+    def on_ack(self, now: float) -> None:
+        """An ack arrived: update the round trip, the measured upload speed and what is still in flight."""
+        self.acks = True
+        self.inflight = max(0, self.inflight - 1)
+        if self.sent_at:
+            sent, nbytes = self.sent_at.popleft()
+            self.inflight_bytes = max(0, self.inflight_bytes - nbytes)
+            rtt = now - sent
+            self.rtts.append(rtt)
+            self.rtt = rtt if self.rtt == 0.0 else self.rtt * 0.7 + rtt * 0.3
+            if self.last_ack and sent <= self.last_ack and now > self.last_ack:
+                # The frame was already queued when the previous one finished: the gap between the two acks is
+                # how long the link (and the phone) needed for this frame alone, i.e. the real upload speed.
+                rate = nbytes / (now - self.last_ack)
+                self.bw = rate if self.bw == 0.0 else self.bw * 0.5 + rate * 0.5
+            elif self.bw and self.queue_delay() < 0.03:
+                self.bw = min(self.bw * 1.05, 1e9)   # the link kept up with room to spare: probe for more speed
+        self.last_ack = now
+
+    def link_allows(self, next_bytes: int) -> bool:
+        """May another frame go out now? Only if what is on the wire plus this frame fits into the link's
+        bandwidth-delay product plus LATENCY_BUDGET, i.e. the new picture would not queue behind old ones.
+        The first frame of a burst is always allowed; the speed is unknown until two frames were measured."""
+        if self.inflight == 0 or self.bw <= 0.0: return True
+        return self.inflight_bytes + next_bytes <= self.bw * (self.base_rtt + LATENCY_BUDGET)
+
+    def shape(self, cfg: "StreamConfig", native_width: int) -> tuple[int, int]:
+        """(JPEG quality, max_width) for the next frame: the configured values while the link keeps up, smaller
+        when one frame would need longer than FRAME_TIME to upload. Quality drops first (down to about half),
+        then the picture is scaled down, so a click's result appears at once instead of after a queue of big frames."""
+        width = min(cfg.max_width, native_width) if cfg.max_width else native_width
+        if not self.acks or self.bw <= 0.0 or self.full_bytes <= 0: return cfg.quality, cfg.max_width
+        target = self.bw * min(FRAME_TIME_MAX, max(FRAME_TIME_MIN, 1 / cfg.fps))
+        r = target / self.full_bytes   # fraction of a full-quality frame the link can carry in that time
+        if r >= 1: return cfg.quality, cfg.max_width
+        floor_q = max(QUALITY_MIN, round(cfg.quality * 0.55))
+        q_ratio = (floor_q / cfg.quality) ** BYTES_PER_QUALITY_POW
+        if r >= q_ratio:
+            return max(QUALITY_MIN, round(cfg.quality * r ** (1 / BYTES_PER_QUALITY_POW))), cfg.max_width
+        factor = max(MIN_WIDTH_FACTOR, math.sqrt(r / q_ratio))
+        scaled = max(WIDTH_MIN, round(width * factor / WIDTH_STEP) * WIDTH_STEP)
+        return floor_q, min(width, scaled)
+
+    def note_encoded(self, nbytes: int, quality: int, out_width: int, cfg: "StreamConfig", native_width: int) -> None:
+        """Remember how big a frame at the configured quality and width would be, from the frame just encoded."""
+        full_w = min(cfg.max_width, native_width) if cfg.max_width else native_width
+        if quality <= 0 or out_width <= 0: return
+        self.full_bytes = nbytes * (cfg.quality / quality) ** BYTES_PER_QUALITY_POW * (full_w / out_width) ** 2
 
     @property
     def base_rtt(self) -> float:
@@ -288,12 +356,7 @@ async def _read_client(ws: WebSocket, state: _StreamState) -> None:
             try: d = json.loads(text)
             except (ValueError, RecursionError): continue
             if isinstance(d, dict) and d.get("type") == "ack":
-                state.acks = True
-                state.inflight = max(0, state.inflight - 1)
-                if state.sent_at:
-                    rtt = asyncio.get_running_loop().time() - state.sent_at.popleft()
-                    state.rtts.append(rtt)
-                    state.rtt = rtt if state.rtt == 0.0 else state.rtt * 0.7 + rtt * 0.3
+                state.on_ack(asyncio.get_running_loop().time())
                 state.ack_wake.set()
             elif isinstance(d, dict) and d.get("type") == "config":
                 state.config = state.config.updated(d)
@@ -326,11 +389,12 @@ async def stream_frames(ws: WebSocket, grab) -> None:
                 state.dirty = False; last_digest = None; size_sent = None
             cfg = state.config
             interval = 1 / cfg.fps
-            if state.acks and state.inflight >= state.window(cfg.fps):
+            if state.acks and (state.inflight >= state.window(cfg.fps)
+                               or not state.link_allows(int(state.full_bytes * 0.6))):
                 # The client has not shown the previous frames yet: wait instead of queueing more (newest screen wins).
                 state.ack_wake.clear()
                 try: await asyncio.wait_for(state.ack_wake.wait(), ACK_TIMEOUT)
-                except asyncio.TimeoutError: state.inflight = 0; state.sent_at.clear()
+                except asyncio.TimeoutError: state.reset_flight()
                 continue
             grabbed = None
             if prefetch is not None:
@@ -349,20 +413,22 @@ async def stream_frames(ws: WebSocket, grab) -> None:
                     prefetch_done[0] = None
                     prefetch = loop.run_in_executor(cap_pool, grab)
                     prefetch.add_done_callback(lambda _f, d=prefetch_done: d.__setitem__(0, loop.time()))
-                quality = adaptive_quality(cfg.quality, state.queue_delay()) if state.acks else cfg.quality
+                quality, width = state.shape(cfg, size[0]) if state.acks else (cfg.quality, cfg.max_width)
+                if state.acks: quality = min(quality, adaptive_quality(cfg.quality, state.queue_delay()))
                 last_jpeg, out = await loop.run_in_executor(
-                    enc_pool, functools.partial(encode_frame, raw, size, cur, cfg.max_width, quality))
+                    enc_pool, functools.partial(encode_frame, raw, size, cur, width, quality))
+                state.note_encoded(len(last_jpeg), quality, out[0], cfg, size[0])
                 last_digest = digest
                 if out != size_sent:
                     await ws.send_json({"type": "screen", "width": out[0], "height": out[1],
                                         "max_width": cfg.max_width, "fps": cfg.fps, "quality": cfg.quality})
                     size_sent = out
                 await ws.send_bytes(last_jpeg); last_sent = loop.time()
-                state.inflight += 1; state.sent_at.append(last_sent)
+                state.on_sent(last_sent, len(last_jpeg))
                 cycle = last_sent - started
             elif last_jpeg is not None and loop.time() - last_sent >= KEEPALIVE_SECONDS:
                 await ws.send_bytes(last_jpeg); last_sent = loop.time()
-                state.inflight += 1; state.sent_at.append(last_sent)
+                state.on_sent(last_sent, len(last_jpeg))
             if state.dirty or state.closed: continue
             state.wake.clear()
             try: await asyncio.wait_for(state.wake.wait(), max(0.0, interval - (loop.time() - started)))
