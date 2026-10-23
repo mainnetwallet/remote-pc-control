@@ -120,7 +120,8 @@ REMOTE_PC_TURN_PASS=
 }
 # Optional: lets the Android app find the tunnel link by itself. Needs a GitHub *classic* token with ONLY the "gist" scope.
 $envText = Get-Content ".env" -Raw
-if ($envText -notmatch '(?m)^\s*GIST_TOKEN\s*=') {
+# A commented-out '#GIST_TOKEN=' line (from .env.example) counts as "already decided", so the question is asked only once.
+if ($envText -notmatch '(?m)^\s*#?\s*GIST_TOKEN\s*=' -or $GistToken) {
   if (-not $GistToken -and [Environment]::UserInteractive) {
     Write-Host ""
     Write-Host "Optional: GIST_TOKEN lets the Android app find the tunnel link by itself." -ForegroundColor Cyan
