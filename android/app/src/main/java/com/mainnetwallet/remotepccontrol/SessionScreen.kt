@@ -124,7 +124,7 @@ fun PadButtons(
 fun SpeedRow(sensitivity: Float, onSensitivity: (Float) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text("Speed", style = MaterialTheme.typography.bodySmall)
-        Slider(value = sensitivity, onValueChange = onSensitivity, valueRange = 0.5f..3f, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
+        Slider(value = sensitivity, onValueChange = onSensitivity, valueRange = 0.5f..4f, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
         Text(String.format(java.util.Locale.US, "%.1fx", sensitivity), style = MaterialTheme.typography.bodySmall)
     }
 }
@@ -147,6 +147,9 @@ fun KeysPanel(send: (JSONObject) -> Unit, typeText: String, onTypeText: (String)
  * size the frame is scaled to. The box is sized to the frame's aspect ratio (no letterbox),
  * so a touch maps 1:1 onto the picture.
  */
+/** Click mode: how far the pointer moves per finger movement (1x was the old speed; now 2x, one step faster). */
+private const val CLICK_DRAG_GAIN = 2f
+
 @Composable
 fun ScreenView(
     aspect: Float, mode: TouchMode, send: (JSONObject) -> Unit, onPosition: (Double, Double) -> Unit, modifier: Modifier = Modifier,
@@ -201,7 +204,7 @@ fun ScreenView(
                                 if (steps != 0) { send(JSONObject().put("type", "scroll").put("dy", steps)); scrollAcc -= steps * stepPx }
                             } else if (mode == TouchMode.CLICK) {
                                 // Trackpad style: the pointer keeps its place and moves by how far the finger moves, wherever the finger is.
-                                accX += amount.x; accY += amount.y
+                                accX += amount.x * CLICK_DRAG_GAIN; accY += amount.y * CLICK_DRAG_GAIN
                                 val now = System.nanoTime()
                                 if (size.width > 0 && size.height > 0 && now - lastSentNs >= 16_000_000L) {
                                     lastSentNs = now
@@ -298,13 +301,13 @@ private fun RotateIcon(color: Color, modifier: Modifier = Modifier) {
 
 /** Toggles the phone between portrait and landscape, even when auto-rotate is off in Android. */
 @Composable
-private fun RotateButton(onClick: () -> Unit, tonal: Boolean, small: Boolean = false) {
+private fun RotateButton(onClick: () -> Unit, tonal: Boolean, small: Boolean = false, modifier: Modifier = Modifier) {
     val content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         RotateIcon(LocalContentColor.current, Modifier.semantics { contentDescription = "Rotate screen" })
         Spacer(Modifier.width(4.dp))
         Text("Rotate", style = if (small) MaterialTheme.typography.labelSmall else LocalTextStyle.current)
     }
-    val size = if (small) Modifier.height(32.dp) else Modifier
+    val size = if (small) modifier.height(32.dp) else modifier
     val pad = if (small) menuPadding else compactPadding
     if (tonal) FilledTonalButton(onClick = onClick, modifier = size, contentPadding = pad, content = content)
     else OutlinedButton(onClick = onClick, modifier = size, contentPadding = pad, content = content)
@@ -352,9 +355,9 @@ private fun SideButton(text: String, selected: Boolean, onClick: () -> Unit) {
 
 /** Small tonal button (32 dp high) used inside the landscape Controls menu. */
 @Composable
-private fun MenuButton(text: String, onClick: () -> Unit) {
-    FilledTonalButton(onClick = onClick, modifier = Modifier.height(32.dp), contentPadding = menuPadding) {
-        Text(text, style = MaterialTheme.typography.labelSmall)
+private fun MenuButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    FilledTonalButton(onClick = onClick, modifier = modifier.height(32.dp), contentPadding = menuPadding) {
+        Text(text, style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }
 
@@ -433,11 +436,10 @@ private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier,
  * Portrait: PC screen on top (exact aspect ratio), trackpad below.
  * Landscape: PC screen on the left, trackpad panel on the right (hideable; the screen then fills the window).
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SessionScreen(c: RemoteController) {
     var touchMode by remember { mutableStateOf(TouchMode.OFF) }
-    var sensitivity by rememberSaveable { mutableStateOf(1.5f) }
+    var sensitivity by rememberSaveable { mutableStateOf(2.5f) }
     var showPad by rememberSaveable { mutableStateOf(true) }
     var showKeys by rememberSaveable { mutableStateOf(false) }
     var showControls by rememberSaveable { mutableStateOf(false) }   // landscape: Touch/Keys/Fullscreen/Rotate shown in the panel under the Controls button (hidden until tapped)
@@ -491,17 +493,17 @@ fun SessionScreen(c: RemoteController) {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         // Controls button top-right of the panel; its buttons wrap inside the panel width, never over the PC picture.
-                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            MenuButton(if (showControls) "Controls \u25B4" else "Controls \u25BE", { showControls = !showControls })
-                            if (showControls) androidx.compose.foundation.layout.FlowRow(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() })
-                                MenuButton("Keys", { showKeys = !showKeys })
-                                MenuButton("Fullscreen", { showPad = false })
-                                RotateButton(rotate, tonal = true, small = true)
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            MenuButton(if (showControls) "Controls \u25B4" else "Controls \u25BE", { showControls = !showControls }, Modifier.fillMaxWidth())
+                            if (showControls) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() }, Modifier.weight(1f))
+                                    MenuButton("Keys", { showKeys = !showKeys }, Modifier.weight(1f))
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    MenuButton("Fullscreen", { showPad = false }, Modifier.weight(1f))
+                                    RotateButton(rotate, tonal = true, small = true, modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                         Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())

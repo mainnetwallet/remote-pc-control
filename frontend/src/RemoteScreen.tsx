@@ -15,7 +15,7 @@ const QUICK:{label:string;msg:object}[]=[
  {label:'Ctrl+C',msg:{type:'hotkey',keys:['CTRL','C']}},{label:'Ctrl+V',msg:{type:'hotkey',keys:['CTRL','V']}},
  {label:'Ctrl+A',msg:{type:'hotkey',keys:['CTRL','A']}},{label:'Ctrl+Z',msg:{type:'hotkey',keys:['CTRL','Z']}},
 ];
-const LONG_PRESS_MS=500,TAP_SLOP=10,MOVE_INTERVAL_MS=16,SCROLL_STEP_PX=24;
+const CLICK_GAIN=2,LONG_PRESS_MS=500,TAP_SLOP=10,MOVE_INTERVAL_MS=16,SCROLL_STEP_PX=24;
 const clamp01=(v:number)=>Math.min(1,Math.max(0,v));
 
 export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
@@ -68,7 +68,7 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   if(!st.moved&&Math.hypot(e.clientX-st.start.x,e.clientY-st.start.y)>TAP_SLOP){st.moved=true;window.clearTimeout(st.timer)}
   if(mode==='scroll'){st.scrollAcc+=dy;scrollBy(st);return}
   if(mode==='click'){ // trackpad style: the pointer keeps its place and moves by how far the finger moves, wherever the finger is
-   st.accX+=e.clientX-prev.x;st.accY+=dy;
+   st.accX+=(e.clientX-prev.x)*CLICK_GAIN;st.accY+=dy*CLICK_GAIN;
    const now=performance.now();if(now-st.lastMove<MOVE_INTERVAL_MS)return;st.lastMove=now;
    const el=img.current;if(!el)return;
    const r=el.getBoundingClientRect(),nw=el.naturalWidth||r.width,nh=el.naturalHeight||r.height,k=Math.min(r.width/nw,r.height/nh);
