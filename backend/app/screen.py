@@ -17,13 +17,6 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
           MAX_WINDOW frames) so a high-latency link such as a tunnel can still reach the configured fps.
           Optional "cursor":true in a config message: the client draws the pointer itself (see watch_cursor below),
           so frames are sent without the baked-in pointer and a pointer-only move no longer re-encodes the screen.
-          Optional "tiles":true (only together with "cursor":true): changed-region updates. When the server accepts it,
-          every {"type":"screen",...} message carries "tiles":true and EVERY binary message after it starts with a
-          9-byte header  >BHHHH  = kind (0 full frame, 1 region), x, y, w, h  followed by the JPEG. A full frame
-          replaces the picture (x=y=0, w,h = size announced in the screen message). A region is drawn over the previous
-          picture at x,y in the same (possibly downscaled) coordinates. After a click or a typed letter only the small
-          changed rectangle is encoded and sent, so the result arrives in a fraction of the time of a full frame.
-          Clients that do not send "tiles" get plain JPEG frames exactly as before.
   /ws/input   server -> client after {"type":"watch_cursor","on":true}: {"type":"cursor","nx":0..1,"ny":0..1,"w":px,"h":px}
           up to 60 times a second while the pointer moves, plus a heartbeat every 0.25 s (w/h = the PC's native
           size). It travels on this small socket so it never waits behind a screen frame.
@@ -43,11 +36,11 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
 Normalized coordinates make the mapping independent of the (possibly downscaled)
 frame the phone is showing, and of Windows display scaling.
 """
-import asyncio, collections, contextlib, functools, hmac, io, json, math, platform, struct, zlib
+import asyncio, collections, contextlib, functools, hmac, io, json, math, platform, zlib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from fastapi import WebSocket, WebSocketDisconnect
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageDraw
 from .config import settings
 from . import security
 
@@ -66,10 +59,6 @@ CURSOR_INTERVAL = 1 / 60  # how often the pointer position is sampled for watch_
 CURSOR_HEARTBEAT = 0.25   # resend the unchanged position this often so a client can correct itself
 ACK_TIMEOUT = 1.0         # no ack for this long: assume the frames were lost and carry on
 KEEPALIVE_SECONDS = 3.0   # resend the last frame so idle screens don't hit client read timeouts
-TILE_HEADER = struct.Struct(">BHHHH")   # kind, x, y, w, h: prefix of every binary message in "tiles" mode
-KIND_FULL, KIND_REGION = 0, 1
-REGION_PAD = 4            # pixels added around the changed area (the resize filter reaches a little beyond it)
-REGION_MAX_FRACTION = 0.5 # a changed area larger than this share of the screen is sent as a full frame instead
 MAX_SCROLL = 20
 MAX_REL = 500   # max pixels a single "rel" message may move the pointer on each axis
 BUTTONS = ("left", "right", "middle")
@@ -201,58 +190,6 @@ def encode_frame(raw: bytes, size: tuple[int, int], cursor: tuple[float, float] 
     return buf.getvalue(), img.size
 
 
-def _out_size(size: tuple[int, int], max_width: int) -> tuple[int, int]:
-    """Size of the picture that is sent for a screen of `size` (same rule as encode_frame)."""
-    if max_width and size[0] > max_width:
-        return max_width, max(1, round(size[1] * max_width / size[0]))
-    return size
-
-
-def changed_region(box: tuple[int, int, int, int], size: tuple[int, int], out: tuple[int, int]) -> tuple[int, int, int, int] | None:
-    """Rectangle (x0, y0, x1, y1) in the SENT picture's pixels that covers the changed box (given in screen pixels),
-    or None when it is so large that a full frame is the better choice."""
-    w, h = size; ow, oh = out
-    x0, y0 = max(0, box[0] - REGION_PAD), max(0, box[1] - REGION_PAD)
-    x1, y1 = min(w, box[2] + REGION_PAD), min(h, box[3] + REGION_PAD)
-    if (x1 - x0) * (y1 - y0) > REGION_MAX_FRACTION * w * h: return None
-    sx, sy = ow / w, oh / h
-    rx0, ry0 = max(0, math.floor(x0 * sx)), max(0, math.floor(y0 * sy))
-    rx1, ry1 = min(ow, math.ceil(x1 * sx)), min(oh, math.ceil(y1 * sy))
-    if rx1 <= rx0 or ry1 <= ry0: return None
-    return rx0, ry0, rx1, ry1
-
-
-def encode_update(raw: bytes, size: tuple[int, int], prev: "Image.Image | None", base_out: tuple[int, int] | None,
-                  max_width: int | None = None, quality: int | None = None):
-    """Changed-region encoder for "tiles" clients.
-
-    Returns (message, (out_w, out_h), screen image, kind). `message` is TILE_HEADER + JPEG, or None when nothing
-    differs from `prev`. `prev` is the screen image of the previous update (None forces a full frame), `base_out` the
-    size of the last full frame the client got: a region is only sent when the picture size has not changed since.
-    The returned image must be passed back as `prev` for the next call."""
-    max_width = settings.max_width if max_width is None else max_width
-    quality = settings.jpeg_quality if quality is None else quality
-    img = Image.frombytes("RGB", size, raw, "raw", "BGRX")
-    out = _out_size(size, max_width)
-    if prev is not None and prev.size == img.size and out == base_out:
-        box = ImageChops.difference(prev, img).getbbox()
-        if box is None: return None, out, img, KIND_REGION
-        region = changed_region(box, size, out)
-        if region is not None:
-            rx0, ry0, rx1, ry1 = region
-            if out == size:
-                piece = img.crop(region)
-            else:   # the same pixel mapping the full-frame resize uses, so region and frame match without seams
-                sx, sy = out[0] / size[0], out[1] / size[1]
-                src = (rx0 / sx, ry0 / sy, min(size[0], rx1 / sx), min(size[1], ry1 / sy))
-                piece = img.resize((rx1 - rx0, ry1 - ry0), Image.BILINEAR, box=src)
-            buf = io.BytesIO(); piece.save(buf, "JPEG", quality=quality)
-            return TILE_HEADER.pack(KIND_REGION, rx0, ry0, rx1 - rx0, ry1 - ry0) + buf.getvalue(), out, img, KIND_REGION
-    full = img if out == size else img.resize(out, Image.BILINEAR)
-    buf = io.BytesIO(); full.save(buf, "JPEG", quality=quality)
-    return TILE_HEADER.pack(KIND_FULL, 0, 0, out[0], out[1]) + buf.getvalue(), out, img, KIND_FULL
-
-
 async def _authenticate(ws: WebSocket) -> bool:
     key = security.client_key(ws.headers, ws.client)
     if security.is_blocked(key):
@@ -322,7 +259,6 @@ class _StreamState:
         self.ack_wake = asyncio.Event()   # an ack arrived (or config change / disconnect): re-check the in-flight window
         self.acks = False                 # the client sends acks, so flow control and quality adaptation are on
         self.overlay = False              # the client draws the pointer itself: leave it out of the frames
-        self.tiles = False                # the client understands changed-region updates (needs overlay too)
         self.inflight = 0                 # frames sent and not yet acknowledged
         self.sent_at: collections.deque = collections.deque()   # (send time, frame bytes) of unacknowledged frames
         self.last_ack = 0.0               # when the previous ack arrived
@@ -425,7 +361,6 @@ async def _read_client(ws: WebSocket, state: _StreamState) -> None:
             elif isinstance(d, dict) and d.get("type") == "config":
                 state.config = state.config.updated(d)
                 if "cursor" in d: state.overlay = d["cursor"] is True
-                if "tiles" in d: state.tiles = d["tiles"] is True
                 state.dirty = True; state.wake.set(); state.ack_wake.set()
     except Exception:
         pass
@@ -447,15 +382,11 @@ async def stream_frames(ws: WebSocket, grab) -> None:
     prefetch = None; prefetch_done = [None]   # the capture started during the last encode, and when it finished
     try:
         last_digest, last_jpeg, last_sent, size_sent = None, None, 0.0, None
-        prev_img = None   # tiles mode: the screen image the client currently shows, to find what changed
         cycle = 0.0   # seconds the last capture+encode took
         while not state.closed:
             started = loop.time()
             if state.dirty:   # config changed: re-encode even an unchanged screen and re-announce the size
-                state.dirty = False; last_digest = None; size_sent = None; prev_img = None
-            # Read together with the dirty flag and without an await in between: a mode change always comes with
-            # dirty, so the screen message that announces a new mode is sent before the first frame in that mode.
-            use_tiles = state.tiles and state.overlay
+                state.dirty = False; last_digest = None; size_sent = None
             cfg = state.config
             interval = 1 / cfg.fps
             if state.acks and (state.inflight >= state.window(cfg.fps)
@@ -484,27 +415,17 @@ async def stream_frames(ws: WebSocket, grab) -> None:
                     prefetch.add_done_callback(lambda _f, d=prefetch_done: d.__setitem__(0, loop.time()))
                 quality, width = state.shape(cfg, size[0]) if state.acks else (cfg.quality, cfg.max_width)
                 if state.acks: quality = min(quality, adaptive_quality(cfg.quality, state.queue_delay()))
-                if use_tiles:
-                    msg, out, prev_img, kind = await loop.run_in_executor(
-                        enc_pool, functools.partial(encode_update, raw, size, prev_img, size_sent, width, quality))
-                else:
-                    prev_img = None; kind = KIND_FULL
-                    msg, out = await loop.run_in_executor(
-                        enc_pool, functools.partial(encode_frame, raw, size, cur, width, quality))
+                last_jpeg, out = await loop.run_in_executor(
+                    enc_pool, functools.partial(encode_frame, raw, size, cur, width, quality))
+                state.note_encoded(len(last_jpeg), quality, out[0], cfg, size[0])
                 last_digest = digest
-                if msg is not None:
-                    last_jpeg = msg
-                    # Only a full frame says how big a full frame is; a small region would make the link look much faster.
-                    if kind == KIND_FULL: state.note_encoded(len(msg), quality, out[0], cfg, size[0])
-                    if out != size_sent:
-                        info = {"type": "screen", "width": out[0], "height": out[1],
-                                "max_width": cfg.max_width, "fps": cfg.fps, "quality": cfg.quality}
-                        if use_tiles: info["tiles"] = True
-                        await ws.send_json(info)
-                        size_sent = out
-                    await ws.send_bytes(msg); last_sent = loop.time()
-                    state.on_sent(last_sent, len(msg))
-                    cycle = last_sent - started
+                if out != size_sent:
+                    await ws.send_json({"type": "screen", "width": out[0], "height": out[1],
+                                        "max_width": cfg.max_width, "fps": cfg.fps, "quality": cfg.quality})
+                    size_sent = out
+                await ws.send_bytes(last_jpeg); last_sent = loop.time()
+                state.on_sent(last_sent, len(last_jpeg))
+                cycle = last_sent - started
             elif last_jpeg is not None and loop.time() - last_sent >= KEEPALIVE_SECONDS:
                 await ws.send_bytes(last_jpeg); last_sent = loop.time()
                 state.on_sent(last_sent, len(last_jpeg))

@@ -3,8 +3,6 @@ package com.mainnetwallet.remotepccontrol
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Rect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -21,7 +19,6 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
-import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -40,7 +37,6 @@ private const val DEFAULT_URL = "gist:b1b39edd1c382e1a39a3156293d3eba1"
 private const val PREF_TOKEN = "pc_token_enc"   // password, encrypted with an Android Keystore key (see SecureStore)
 private const val PREF_URL = "pc_url"        // the token is never stored, only the address
 private const val PREF_QUALITY = "quality"
-private const val TILE_HEADER = 9   // changed-region stream: kind(1) x(2) y(2) w(2) h(2), big endian, then the JPEG
 private const val LOCAL_CURSOR_NS = 250_000_000L   // after the finger moved the pointer, trust our own prediction this long
 
 /** Live-screen quality presets. Each one is sent to the PC as {"type":"config","max_width","fps","quality"}. */
@@ -53,7 +49,6 @@ enum class Quality(val label: String, val maxWidth: Int, val fps: Int, val jpeg:
     fun configMessage(): String = JSONObject()
         .put("type", "config").put("max_width", maxWidth).put("fps", fps).put("quality", jpeg)
         .put("cursor", true)   // the app draws the pointer itself: frames come without it (older PCs ignore this)
-        .put("tiles", true)    // after a click only the changed rectangle is sent: far fewer bytes, the result shows up sooner
         .toString()
 }
 
@@ -129,10 +124,6 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
 
     /** Counts received frames; the session overlay turns it into frames per second. */
     val frameCounter = AtomicInteger()
-
-    // Changed-region stream: the PC says so in its "screen" message ("tiles":true); then every frame has a 9-byte header.
-    @Volatile private var tilesActive = false
-    @Volatile private var canvasBmp: Bitmap? = null   // the picture the regions are drawn onto
 
     private var screenSocket: WebSocket? = null
     private var inputSocket: WebSocket? = null
@@ -259,7 +250,6 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
         val gen = ++sessionGen
         val wsBase = normalizedBase().replaceFirst("https://", "wss://").replaceFirst("http://", "ws://")
         frameCounter.set(0); frame = null; streamInfo = null
-        tilesActive = false; canvasBmp = null
         cursorX = -1f; cursorY = -1f; cursorFromServer = false; localCursorUntilNs = 0L
         screenOpen = true
         screenSocket = wsClient.newWebSocket(Request.Builder().url("$wsBase/ws/screen").build(), object : WebSocketListener() {
@@ -269,11 +259,8 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
             override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
                 if (gen != sessionGen) return
                 val data = bytes.toByteArray()
-                if (tilesActive) applyTile(data)
-                else {
-                    val decoded = BitmapFactory.decodeByteArray(data, 0, data.size)
-                    if (decoded != null) { frame = decoded; frameCounter.incrementAndGet() }
-                }
+                val decoded = BitmapFactory.decodeByteArray(data, 0, data.size)
+                if (decoded != null) { frame = decoded; frameCounter.incrementAndGet() }
                 webSocket.send("{\"type\":\"ack\"}")   // frame shown: the PC may send the next one (keeps the stream lag-free)
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -282,10 +269,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
                     val o = JSONObject(text)
                     when (o.optString("type")) {
                         "ready" -> webSocket.send(quality.configMessage())
-                        "screen" -> {
-                            tilesActive = o.optBoolean("tiles", false)   // older PCs never say it: plain JPEG frames
-                            streamInfo = StreamInfo(o.optInt("width"), o.optInt("height"), o.optInt("fps", 0))
-                        }
+                        "screen" -> streamInfo = StreamInfo(o.optInt("width"), o.optInt("height"), o.optInt("fps", 0))
                         "error" -> notice = Notice("Screen stream error: ${o.optString("message")}", true)
                     }
                 } catch (_: Exception) { }
@@ -329,31 +313,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
         inputSocket?.close(1000, "User closed screen")
         screenSocket = null; inputSocket = null
         screenOpen = false; frame = null; streamInfo = null
-        tilesActive = false; canvasBmp = null
         cursorX = -1f; cursorY = -1f; cursorFromServer = false
-    }
-
-    /**
-     * One message of the changed-region stream: a full frame replaces the picture, a region is drawn over it.
-     * The picture shown is always a fresh copy, so Compose sees a new bitmap and redraws.
-     */
-    private fun applyTile(data: ByteArray) {
-        if (data.size <= TILE_HEADER) return
-        val head = ByteBuffer.wrap(data)   // big endian, like the PC's struct ">BHHHH"
-        val kind = head.get(0).toInt() and 0xFF
-        val x = head.getShort(1).toInt() and 0xFFFF
-        val y = head.getShort(3).toInt() and 0xFFFF
-        val opts = BitmapFactory.Options().apply { inMutable = true; inScaled = false }
-        val piece = BitmapFactory.decodeByteArray(data, TILE_HEADER, data.size - TILE_HEADER, opts) ?: return
-        if (kind == 0) {
-            canvasBmp = piece
-        } else {
-            val base = canvasBmp ?: return   // a region before any full frame cannot be placed: wait for the next full frame
-            Canvas(base).drawBitmap(piece, Rect(0, 0, piece.width, piece.height), Rect(x, y, x + piece.width, y + piece.height), null)
-            piece.recycle()
-        }
-        val shown = canvasBmp?.copy(Bitmap.Config.ARGB_8888, false) ?: return
-        frame = shown; frameCounter.incrementAndGet()
     }
 
     fun sendInput(o: JSONObject) {
