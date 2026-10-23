@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -249,7 +250,7 @@ private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier,
 /**
  * Full-window session UI.
  * Portrait: PC screen on top (exact aspect ratio), trackpad below.
- * Landscape: PC screen fills the window; the trackpad (and keys) are hideable panels on top of it.
+ * Landscape: PC screen on the left, trackpad panel on the right (hideable; the screen then fills the window).
  */
 @Composable
 fun SessionScreen(c: RemoteController) {
@@ -265,30 +266,42 @@ fun SessionScreen(c: RemoteController) {
     val doubleClick: () -> Unit = { send(JSONObject().put("type", "click").put("count", 2)) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
+        val windowWidth = maxWidth
         val windowHeight = maxHeight   // read here: BoxWithConstraints' scope is not reachable from inside Column
         if (maxWidth > maxHeight) {
-            Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
-                ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize())
-                Row(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilledTonalButton(onClick = { showPad = !showPad }, contentPadding = compactPadding) { Text(if (showPad) "Hide pad" else "Trackpad") }
-                    FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
-                    FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
-                    QualityMenuButton(c.quality) { c.setQuality(it) }
-                    StopButton { c.stopScreen() }
-                }
-                if (showKeys) Surface(
-                    Modifier.align(Alignment.BottomStart).fillMaxWidth(if (showPad) 0.66f else 1f).padding(8.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
-                ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
-                if (showPad) Surface(
-                    Modifier.align(Alignment.BottomEnd).fillMaxHeight(0.62f).fillMaxWidth(0.3f).padding(8.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
-                        PadButtons(send)
-                        SpeedRow(sensitivity) { sensitivity = it }
+            // Landscape: PC screen on the left, a separate control panel on the right (nothing is drawn over the picture).
+            val panelWidth = (windowWidth * 0.28f).coerceIn(230.dp, 340.dp)
+            Row(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize())
+                    if (showKeys) Surface(
+                        Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
+                    ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
+                    if (!showPad) Row(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilledTonalButton(onClick = { showPad = true }, contentPadding = compactPadding) { Text("Trackpad") }
+                        FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
+                        FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
+                        QualityMenuButton(c.quality) { c.setQuality(it) }
+                        StopButton { c.stopScreen() }
                     }
+                }
+                if (showPad) Column(
+                    Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
+                        FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
+                        FilledTonalButton(onClick = { showPad = false }, contentPadding = compactPadding) { Text("Hide") }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        QualityMenuButton(c.quality) { c.setQuality(it) }
+                        StopButton { c.stopScreen() }
+                    }
+                    Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
+                    PadButtons(send)
+                    SpeedRow(sensitivity) { sensitivity = it }
                 }
             }
         } else {
