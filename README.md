@@ -96,17 +96,6 @@ Start-ScheduledTask -TaskName RemotePCControl
 
 The agent then has full admin rights, so use a strong password. The UAC secure desktop still cannot be controlled.
 
-**Stop the PC locking itself, so remote control never hits the lock screen**
-
-Windows isolates the lock screen (and the UAC secure desktop) from every process, even admin ones, specifically so no remote tool can type a password into it. There is no software fix for that - the only reliable option is to stop the PC from locking on its own:
-
-```powershell
-cd $HOME\remote-pc-control
-.\scripts\disable-lock.ps1
-```
-
-Turns off screen timeout, sleep, and the screensaver while the PC is plugged in. Undo with `.\scripts\disable-lock.ps1 -Restore`. The PC can still be locked manually (`Win+L`) or by a Windows Update/policy - that still needs an unlock at the PC itself.
-
 **Run backend tests**
 
 ```powershell
