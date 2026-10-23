@@ -440,6 +440,7 @@ fun SessionScreen(c: RemoteController) {
     var sensitivity by rememberSaveable { mutableStateOf(2.5f) }
     var showPad by rememberSaveable { mutableStateOf(true) }
     var showKeys by rememberSaveable { mutableStateOf(false) }
+    var showKeyboard by rememberSaveable { mutableStateOf(false) }   // landscape: PC-style on-screen keyboard (button under R-click)
     var showControls by rememberSaveable { mutableStateOf(false) }   // landscape: Touch/Keys/Fullscreen/Rotate shown in the panel under the Controls button (hidden until tapped)
     var typeText by rememberSaveable { mutableStateOf("") }
     val send: (JSONObject) -> Unit = { c.sendInput(it) }
@@ -471,6 +472,10 @@ fun SessionScreen(c: RemoteController) {
                             Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp),
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
                         ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
+                        if (showKeyboard) Surface(
+                            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(6.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f), shape = RoundedCornerShape(12.dp)
+                        ) { PcKeyboard(send, { showKeyboard = false }, Modifier.padding(6.dp)) }
                     }
                     // Panel hidden: a slim column in the free space to the right of the PC picture (nothing is drawn over the screen).
                     // Exit (brings the panel back as it was) on top, then touch modes and left/right click; the active mode is highlighted.
@@ -484,6 +489,7 @@ fun SessionScreen(c: RemoteController) {
                         }
                         SideButton("L-click", false, { send(JSONObject().put("type", "click").put("button", "left")) })
                         SideButton("R-click", false, { send(JSONObject().put("type", "click").put("button", "right")) })
+                        SideButton("Keyboard", showKeyboard, { showKeyboard = !showKeyboard })
                     }
                     if (showPad) Column(
                         Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(8.dp),
