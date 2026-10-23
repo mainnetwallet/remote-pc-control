@@ -441,7 +441,7 @@ fun SessionScreen(c: RemoteController) {
     var showPad by rememberSaveable { mutableStateOf(true) }
     var showKeys by rememberSaveable { mutableStateOf(false) }
     var showKeyboard by rememberSaveable { mutableStateOf(false) }   // landscape: PC-style on-screen keyboard (button under R-click)
-    var showControls by rememberSaveable { mutableStateOf(false) }   // landscape: Touch/Keys/Fullscreen/Rotate shown in the panel under the Controls button (hidden until tapped)
+    var showControls by rememberSaveable { mutableStateOf(false) }   // landscape: Touch/Speed/Fullscreen/Rotate shown in the panel under the Controls button (hidden until tapped)
     var typeText by rememberSaveable { mutableStateOf("") }
     val send: (JSONObject) -> Unit = { c.sendInput(it) }
     val onSendText: () -> Unit = {
@@ -461,17 +461,13 @@ fun SessionScreen(c: RemoteController) {
         }
         if (maxWidth > maxHeight) {
             // Landscape: PC screen on the left, a separate trackpad panel on the right.
-            // The Controls button sits at the top-right of the panel; tapping it shows Touch, Keys, Fullscreen and Rotate inside the panel (never over the PC picture).
+            // The Controls button sits at the top-right of the panel; tapping it shows Touch, Speed, Fullscreen and Rotate inside the panel (never over the PC picture).
             // Quality and Stop are only in the portrait toolbar.
             val panelWidth = (windowWidth * 0.28f).coerceIn(230.dp, 340.dp)
             Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         ScreenArea(c, touchMode, Modifier.fillMaxSize(), Modifier.fillMaxSize(), Modifier.fillMaxSize(), showStats = false)
-                        if (showKeys) Surface(
-                            Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
-                        ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
                         if (showKeyboard) Surface(
                             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(6.dp),
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f), shape = RoundedCornerShape(12.dp)
@@ -499,10 +495,8 @@ fun SessionScreen(c: RemoteController) {
                         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             MenuButton(if (showControls) "Controls \u25B4" else "Controls \u25BE", { showControls = !showControls }, Modifier.fillMaxWidth())
                             if (showControls) {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() }, Modifier.weight(1f))
-                                    MenuButton("Keys", { showKeys = !showKeys }, Modifier.weight(1f))
-                                }
+                                MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() }, Modifier.fillMaxWidth())
+                                SpeedRow(sensitivity) { sensitivity = it }   // moved here from the bottom of the panel
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     MenuButton("Fullscreen", { showPad = false }, Modifier.weight(1f))
                                     RotateButton(rotate, tonal = true, small = true, modifier = Modifier.weight(1f))
@@ -514,7 +508,6 @@ fun SessionScreen(c: RemoteController) {
                         // PC-style keyboard under Left/Right click (same keyboard as the Keyboard button in Fullscreen).
                         (if (showKeyboard) Button(onClick = { showKeyboard = false }, modifier = Modifier.fillMaxWidth().height(40.dp)) { Text("Keyboard") }
                         else FilledTonalButton(onClick = { showKeyboard = true }, modifier = Modifier.fillMaxWidth().height(40.dp)) { Text("Keyboard") })
-                        SpeedRow(sensitivity) { sensitivity = it }
                     }
                 }
             }
