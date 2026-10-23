@@ -209,6 +209,7 @@ Full WebRTC, stream-quality, TURN and protocol reference: **[docs/WEBRTC.md](doc
 | Tunnel shows 502 / bad gateway | `start.ps1` is not running; start it in its own window |
 | New tunnel link not reachable yet | Wait 1-2 minutes and retry |
 | Black screen / stream error | PC is locked or a UAC prompt is open; unlock the desktop |
+| Clicks/keys do nothing in Task Manager, Registry Editor or an admin terminal | Windows blocks input from a normal process into elevated windows. From an Administrator PowerShell run `.\scripts\install-autostart.ps1 -Admin` (or start `start.ps1` as administrator) |
 | `python` or `npm` not found | Install Python 3.12 and Node.js 22, then open a new PowerShell |
 | "Too many failed attempts" | Wait 5 minutes and use the correct token |
 | App always shows "WebSocket" | No direct UDP path; use Tailscale or the same Wi-Fi, or set up TURN. Check `REMOTE_PC_WEBRTC=1` |

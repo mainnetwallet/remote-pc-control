@@ -64,5 +64,6 @@ The log is written to `autostart.log`. To remove the task, use the final command
 - Setup attempts to add a firewall rule restricted to Tailscale addresses. Verify the rule if setup warns; do not replace it with a public inbound rule.
 - Wake-on-LAN is **not configured** in the API. The PC cannot wake itself; mobile-data wake requires a separately authenticated, always-on LAN relay.
 - The agent does not need administrator privileges for normal operation. Use Administrator PowerShell only for firewall changes when necessary.
+- To control elevated windows (Task Manager, Registry Editor, admin terminals), run the agent as administrator: `.\scripts\install-autostart.ps1 -Admin` from an Administrator PowerShell. Use a strong password, because the agent then has full admin rights.
 
 For the full setup flow and troubleshooting, see [docs/QUICKSTART_WINDOWS.md](docs/QUICKSTART_WINDOWS.md). For the repository structure, endpoints, tests and transports, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
