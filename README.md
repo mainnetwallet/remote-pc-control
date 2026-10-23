@@ -10,7 +10,7 @@
 ![android](https://img.shields.io/badge/app-Android-3DDC84?logo=android&logoColor=white)
 ![transport](https://img.shields.io/badge/transport-WebRTC%20%7C%20WebSocket-6366f1)
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Connect](#-connect-your-phone) • [Android App](#-android-app) • [Configuration](#-configuration) • [Commands](#-command-reference) • [Troubleshooting](#-troubleshooting) • [Security](#-security)
+[Features](#-features) • [Quick Start](#-quick-start) • [Commands](#-command-reference) • [Connect](#-connect-your-phone) • [Android App](#-android-app) • [Configuration](#-configuration) • [Troubleshooting](#-troubleshooting) • [Security](#-security)
 
 </div>
 
@@ -61,6 +61,53 @@ cd $HOME\remote-pc-control
 ```
 
 Step-by-step guides: [Windows quick start](docs/QUICKSTART_WINDOWS.md) · [Install and autostart](INSTALL_WINDOWS.md)
+
+## 🧰 Command reference
+
+**Update the project**
+
+```powershell
+cd $HOME\remote-pc-control
+git checkout main
+git pull
+.\scripts\setup.ps1
+```
+
+**Update and restart the scheduled-task installation** (`RemotePCControl`)
+
+```powershell
+cd $HOME\remote-pc-control
+Stop-ScheduledTask -TaskName RemotePCControl
+git pull
+.\scripts\setup.ps1
+Start-ScheduledTask -TaskName RemotePCControl
+```
+
+**Run backend tests**
+
+```powershell
+cd $HOME\remote-pc-control
+.\.venv\Scripts\python.exe -m pytest backend/tests tests -q
+```
+
+**Build the dashboard**
+
+```powershell
+cd $HOME\remote-pc-control\frontend
+npm install
+npm run build
+```
+
+**Reset `.env` to the latest template** (⚠ overwrites password, Gist and TURN settings; run only when needed)
+
+```powershell
+cd $HOME\remote-pc-control
+Copy-Item .env .env.backup
+Copy-Item .env.example .env -Force
+.\scripts\set-password.ps1 YourNewPassword
+```
+
+`setup.ps1` only *adds* new settings to an existing `.env`. After a reset, restore values you still need from the backup and securely delete it.
 
 ## 🌐 Connect your phone
 
@@ -153,53 +200,6 @@ Settings live in `.env` (restart `start.ps1` after editing). Full template: [`.e
 **Which network gives low latency?** Same Wi-Fi and Tailscale give direct UDP (about 50 ms or less). A free Cloudflare quick tunnel only carries TCP, so WebRTC usually falls back to the WebSocket stream; use Tailscale, the same LAN or a TURN relay for the best result.
 
 Full WebRTC, stream-quality, TURN and protocol reference: **[docs/WEBRTC.md](docs/WEBRTC.md)**.
-
-## 🧰 Command reference
-
-**Update the project**
-
-```powershell
-cd $HOME\remote-pc-control
-git checkout main
-git pull
-.\scripts\setup.ps1
-```
-
-**Update and restart the scheduled-task installation** (`RemotePCControl`)
-
-```powershell
-cd $HOME\remote-pc-control
-Stop-ScheduledTask -TaskName RemotePCControl
-git pull
-.\scripts\setup.ps1
-Start-ScheduledTask -TaskName RemotePCControl
-```
-
-**Run backend tests**
-
-```powershell
-cd $HOME\remote-pc-control
-.\.venv\Scripts\python.exe -m pytest backend/tests tests -q
-```
-
-**Build the dashboard**
-
-```powershell
-cd $HOME\remote-pc-control\frontend
-npm install
-npm run build
-```
-
-**Reset `.env` to the latest template** (⚠ overwrites password, Gist and TURN settings; run only when needed)
-
-```powershell
-cd $HOME\remote-pc-control
-Copy-Item .env .env.backup
-Copy-Item .env.example .env -Force
-.\scripts\set-password.ps1 YourNewPassword
-```
-
-`setup.ps1` only *adds* new settings to an existing `.env`. After a reset, restore values you still need from the backup and securely delete it.
 
 ## 🩺 Troubleshooting
 
