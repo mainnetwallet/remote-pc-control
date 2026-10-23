@@ -13,6 +13,72 @@ New here? Follow the step-by-step **[Windows quick start](docs/QUICKSTART_WINDOW
 - [Android app and APK build](android/README.md)
 - [Repository architecture and API reference](docs/ARCHITECTURE.md)
 
+
+## Command guides — quick reference
+
+Use these commands in **PowerShell** on the Windows PC. The full explanations and connection choices remain in the guides below.
+
+### 1. Install / first-time setup
+```powershell
+cd $HOME
+git clone https://github.com/mainnetwallet/remote-pc-control.git
+cd remote-pc-control
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\setup.ps1
+```
+
+### 2. Show your access token
+```powershell
+cd $HOME\remote-pc-control
+Get-Content .env | Select-String REMOTE_PC_TOKEN
+```
+Copy only the value after `REMOTE_PC_TOKEN=`. Keep it private.
+
+### 3. Start the PC server
+```powershell
+cd $HOME\remote-pc-control
+.\scripts\start.ps1
+```
+Keep this PowerShell window open. The server listens on port `8888`.
+
+### 4. Start a Cloudflare quick tunnel
+Open a **second** PowerShell window:
+```powershell
+cd $HOME\remote-pc-control
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\start-tunnel.ps1
+```
+Open the printed `https://....trycloudflare.com` address on your phone. The address changes when the tunnel restarts. For a permanent tunnel, see [Cloudflare Tunnel and Access](docs/CLOUDFLARE.md).
+
+### 5. Update the code
+```powershell
+cd $HOME\remote-pc-control
+git checkout main
+git pull
+.\scripts\setup.ps1
+```
+Then start the server with `.\scripts\start.ps1`. If it is running as a scheduled task, follow [Quick update and restart](#quick-update-and-restart-scheduled-task) instead.
+
+### 6. Run tests / build the dashboard
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests tests -q
+cd frontend
+npm install
+npm run build
+```
+
+### 7. Reset `.env` only if needed
+This replaces your current settings and credentials, so back up first:
+```powershell
+Copy-Item .env .env.backup
+Copy-Item .env.example .env -Force
+.\scripts\set-password.ps1 YourNewPassword
+```
+Restore the settings you still need, restart the server, then securely delete the backup. See [Reset `.env` to the latest template](#reset-env-to-the-latest-template) for the full instructions.
+
+**Step-by-step guides:** [Windows quick start](docs/QUICKSTART_WINDOWS.md) · [Windows installation and autostart](INSTALL_WINDOWS.md) · [Cloudflare Tunnel and Access](docs/CLOUDFLARE.md) · [Android app and APK build](android/README.md).
+
+
 ## Features
 - **Live screen, low latency**: WebRTC (H.264 video over UDP, input over data channels) first, with the original JPEG-over-WebSocket stream as automatic fallback. See *WebRTC mode*.
 - **Live screen (fallback)** streamed to the phone (JPEG over WebSocket, downscaled, idle-frame skipping, on-screen pointer). Resolution, frame rate and JPEG quality can be changed live from the client (see *Stream quality*).
