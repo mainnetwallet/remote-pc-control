@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -286,14 +283,14 @@ private fun RotateIcon(color: Color, modifier: Modifier = Modifier) {
 
 /** Toggles the phone between portrait and landscape, even when auto-rotate is off in Android. */
 @Composable
-private fun RotateButton(onClick: () -> Unit, tonal: Boolean, modifier: Modifier = Modifier, contentPadding: PaddingValues = compactPadding, small: Boolean = false) {
+private fun RotateButton(onClick: () -> Unit, tonal: Boolean) {
     val content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         RotateIcon(LocalContentColor.current, Modifier.semantics { contentDescription = "Rotate screen" })
         Spacer(Modifier.width(4.dp))
-        Text("Rotate", style = if (small) MaterialTheme.typography.labelSmall else LocalTextStyle.current)
+        Text("Rotate")
     }
-    if (tonal) FilledTonalButton(onClick = onClick, modifier = modifier, contentPadding = contentPadding, content = content)
-    else OutlinedButton(onClick = onClick, modifier = modifier, contentPadding = contentPadding, content = content)
+    if (tonal) FilledTonalButton(onClick = onClick, contentPadding = compactPadding, content = content)
+    else OutlinedButton(onClick = onClick, contentPadding = compactPadding, content = content)
 }
 
 private fun Context.findActivity(): Activity? {
@@ -320,11 +317,11 @@ private fun SessionToolbar(
 }
 
 @Composable
-private fun StopButton(onStop: () -> Unit, modifier: Modifier = Modifier, contentPadding: PaddingValues = compactPadding, small: Boolean = false) {
+private fun StopButton(onStop: () -> Unit) {
     Button(
-        onClick = onStop, modifier = modifier, contentPadding = contentPadding,
+        onClick = onStop, contentPadding = compactPadding,
         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)
-    ) { Text("Stop", style = if (small) MaterialTheme.typography.labelSmall else LocalTextStyle.current) }
+    ) { Text("Stop") }
 }
 
 @Composable
@@ -446,44 +443,29 @@ fun SessionScreen(c: RemoteController) {
                         StopButton({ c.stopScreen() })
                     }
                 }
-                if (showPad) Box(Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface)) {
-                    // Trackpad keeps its full size; the Controls button/menu float on top of it.
-                    Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
-                        PadButtons(send)
-                        SpeedRow(sensitivity) { sensitivity = it }
+                if (showPad) Column(
+                    Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // One tap shows the control rows, another tap hides them again.
+                    FilledTonalButton(onClick = { showControls = !showControls }, contentPadding = compactPadding) {
+                        Text(if (showControls) "Controls ▴" else "Controls ▾")
                     }
-                    Column(
-                        Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 12.dp),
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        FilledTonalButton(
-                            onClick = { showControls = !showControls },
-                            modifier = Modifier.height(32.dp), contentPadding = menuPadding
-                        ) { Text(if (showControls) "Controls ▴" else "Controls ▾", style = MaterialTheme.typography.labelSmall) }
-                        if (showControls) Surface(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                            shape = RoundedCornerShape(12.dp), tonalElevation = 6.dp, shadowElevation = 6.dp
-                        ) {
-                            Column(
-                                Modifier.padding(6.dp).widthIn(max = panelWidth - 24.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                val h = Modifier.height(32.dp)
-                                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    FilledTonalButton(onClick = { touchMode = touchMode.next() }, modifier = h, contentPadding = menuPadding) { Text("Touch: ${touchMode.label}", style = MaterialTheme.typography.labelSmall) }
-                                    FilledTonalButton(onClick = { showKeys = !showKeys }, modifier = h, contentPadding = menuPadding) { Text("Keys", style = MaterialTheme.typography.labelSmall) }
-                                    FilledTonalButton(onClick = { showControls = false; showPad = false }, modifier = h, contentPadding = menuPadding) { Text("Hide", style = MaterialTheme.typography.labelSmall) }
-                                }
-                                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    QualityMenuButton(c.quality, { c.setQuality(it) }, h, menuPadding, small = true)
-                                    RotateButton(rotate, tonal = true, modifier = h, contentPadding = menuPadding, small = true)
-                                    StopButton({ c.stopScreen() }, h, menuPadding, small = true)
-                                }
-                            }
+                    if (showControls) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
+                            FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
+                            FilledTonalButton(onClick = { showPad = false }, contentPadding = compactPadding) { Text("Hide") }
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            QualityMenuButton(c.quality) { c.setQuality(it) }
+                            RotateButton(rotate, tonal = true)
+                            StopButton { c.stopScreen() }
                         }
                     }
+                    Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
+                    PadButtons(send)
+                    SpeedRow(sensitivity) { sensitivity = it }
                 }
             }
         } else {
