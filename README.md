@@ -96,7 +96,7 @@ Also: **Double-click** button, **Fullscreen**, **Keys** (quick keys) and a text 
 Open **GitHub > Actions > Android APK** (it runs on every push to `main`, or use *Run workflow*) and download the APK from the run's artifact or from **Releases**. Install it (allow "install unknown apps" if asked). In the app enter the *PC URL* (`https://...trycloudflare.com`, `http://100.x.x.x:8888` or your LAN address) and the token. This is a debug build for personal use, not a Play Store release. Build instructions: [android/README.md](android/README.md).
 
 The app has three screens:
-- **Connect**: PC URL and token. Only the URL is remembered; the token stays in memory.
+- **Connect**: PC URL and token. The URL and the password (encrypted with the Android Keystore) are remembered after the first login, so the login screen only appears once; Log out forgets them.
 - **Dashboard**: CPU, memory and disk gauges, network speed (refreshed every 5 s), and power buttons. Sleep, Restart and Shutdown ask for confirmation; Lock does not. It also holds the **Quality** setting and the *Start screen session* button.
 - **Session**: live screen, touch modes, trackpad, keys. A small overlay in the corner of the picture shows the received resolution and the measured/maximum frames per second (for example `1280×720 · 14/15 fps`). **Quality** in the toolbar changes the stream while it is running, and the choice is remembered.
 

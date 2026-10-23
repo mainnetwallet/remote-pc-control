@@ -33,6 +33,7 @@ private val wsClient = http.newBuilder()
     .build()
 
 private const val DEFAULT_URL = "gist:b1b39edd1c382e1a39a3156293d3eba1"
+private const val PREF_TOKEN = "pc_token_enc"   // password, encrypted with an Android Keystore key (see SecureStore)
 private const val PREF_URL = "pc_url"        // the token is never stored, only the address
 private const val PREF_QUALITY = "quality"
 
@@ -81,7 +82,10 @@ class StreamInfo(val width: Int, val height: Int, val targetFps: Int)
  */
 class RemoteController(private val scope: CoroutineScope, private val prefs: SharedPreferences) {
     var baseUrl by mutableStateOf(prefs.getString(PREF_URL, DEFAULT_URL) ?: DEFAULT_URL)
-    var token by mutableStateOf("")
+    var token by mutableStateOf(prefs.getString(PREF_TOKEN, null)?.let { SecureStore.decrypt(it) } ?: "")
+    /** True while the app signs in by itself with the saved password right after start. */
+    var restoring by mutableStateOf(false)
+        private set
     var connected by mutableStateOf(false)
         private set
     var busy by mutableStateOf(false)
@@ -161,20 +165,36 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
 
     fun connect() {
         if (busy) return
-        if (baseUrl.isBlank() || token.isBlank()) { notice = Notice("PC URL and API token are required.", true); return }
+        if (baseUrl.isBlank() || token.isBlank()) { restoring = false; notice = Notice("PC URL and password are required.", true); return }
         busy = true
         resolveGist { gistError ->
-            if (gistError != null) { busy = false; connected = false; reachable = false; notice = Notice(gistError, true); return@resolveGist }
+            if (gistError != null) { busy = false; restoring = false; connected = false; reachable = false; notice = Notice(gistError, true); return@resolveGist }
             call("/api/v1/status") { ok, text ->
-                busy = false
+                busy = false; restoring = false
                 connected = ok; reachable = ok
                 if (ok) {
                     status = PcStatus.parse(text)
-                    prefs.edit().putString(PREF_URL, baseUrl.trim()).apply()
+                    // Remember the login: the next start signs in by itself until the user taps Log out.
+                    prefs.edit().putString(PREF_URL, baseUrl.trim()).putString(PREF_TOKEN, SecureStore.encrypt(token.trim())).apply()
                     notice = Notice("", false)
+                } else if (text.contains("Invalid token")) {
+                    forgetLogin()
+                    notice = Notice("Wrong password. Please log in again.", true)
                 } else notice = Notice("Connection failed: $text", true)
             }
         }
+    }
+
+    /** Signs in by itself with the saved password (called once at app start). */
+    fun autoConnect() {
+        if (connected || busy || token.isBlank() || baseUrl.isBlank()) return
+        restoring = true
+        connect()
+    }
+
+    private fun forgetLogin() {
+        prefs.edit().remove(PREF_TOKEN).apply()
+        token = ""
     }
 
     /** Quietly reloads the metrics; used by the dashboard's timer. */
@@ -183,13 +203,15 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
         call("/api/v1/status") { ok, text ->
             reachable = ok
             if (ok) PcStatus.parse(text)?.let { status = it }
+            else if (text.contains("Invalid token")) disconnect()   // the password was changed on the PC
         }
     }
 
     fun disconnect() {
         stopScreen()
         connected = false; status = null; reachable = true
-        notice = Notice("Disconnected.", false)
+        forgetLogin()
+        notice = Notice("Logged out.", false)
     }
 
     fun power(action: PowerAction) {

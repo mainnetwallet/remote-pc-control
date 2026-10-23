@@ -75,7 +75,7 @@ fun ConnectScreen(c: RemoteController) {
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = c.token, onValueChange = { c.token = it },
-                    label = { Text("API token") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
                     visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = { TextButton(onClick = { showToken = !showToken }) { Text(if (showToken) "Hide" else "Show") } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
@@ -101,7 +101,7 @@ fun ConnectScreen(c: RemoteController) {
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                "Never port-forward the PC agent. The token stays in app memory only; just the address is remembered. " +
+                "After the first login the password is kept encrypted on this phone and the app signs in by itself until you tap Log out. " +
                     "Screen and input control work in the logged-in desktop session.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
             )

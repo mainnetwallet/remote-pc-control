@@ -72,7 +72,7 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                OutlinedButton(onClick = { c.disconnect() }, contentPadding = compactPadding) { Text("Disconnect") }
+                OutlinedButton(onClick = { c.disconnect() }, contentPadding = compactPadding) { Text("Log out") }
             }
 
             // CPU / RAM / disk

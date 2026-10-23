@@ -8,7 +8,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,7 +45,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Page { CONNECT, DASHBOARD, SESSION }
+private enum class Page { LOADING, CONNECT, DASHBOARD, SESSION }
 
 private const val STATUS_REFRESH_MS = 5_000L
 
@@ -59,6 +65,8 @@ private fun RemotePcApp() {
         if (c.connected && !c.screenOpen) while (true) { delay(STATUS_REFRESH_MS); c.refreshStatus() }
     }
     BackHandler(enabled = c.screenOpen) { c.stopScreen() }
+    // Sign in by itself with the saved password, so the login screen only shows the first time.
+    LaunchedEffect(Unit) { c.autoConnect() }
 
     confirm?.let { action ->
         AlertDialog(
@@ -74,10 +82,17 @@ private fun RemotePcApp() {
         val page = when {
             c.screenOpen -> Page.SESSION
             c.connected -> Page.DASHBOARD
+            c.restoring -> Page.LOADING
             else -> Page.CONNECT
         }
         Crossfade(targetState = page, label = "page") { p ->
             when (p) {
+                Page.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Text("Connecting…", Modifier.padding(top = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 Page.CONNECT -> ConnectScreen(c)
                 Page.DASHBOARD -> DashboardScreen(c) { action -> if (action.needsConfirm) { confirm = action } else { c.power(action) } }
                 Page.SESSION -> SessionScreen(c)
