@@ -116,6 +116,8 @@ The server's `.env` values below are only the *starting* values of every `/ws/sc
 ```
 All fields are optional. `max_width` is `0` (native) or 320-3840, `fps` is 1-30, `quality` is JPEG 25-90; out-of-range numbers are clamped and unusable values are ignored. Settings are per connection. The server answers with a fresh `{"type":"screen","width":W,"height":H,"max_width":..,"fps":..,"quality":..}` (the values now in effect) followed by a new frame. Frames are never upscaled, so `max_width` above the PC's resolution just sends native size. Clients that never send `config` get exactly the `.env` behaviour.
 
+**Changed-region updates (`tiles`).** Add `"cursor":true,"tiles":true` to the `config` message (the Android app does). The server then answers with `"tiles":true` in its `screen` message, and from that message on every binary frame starts with a 9-byte header (`>BHHHH` = kind, x, y, w, h) followed by the JPEG. Kind `0` is a full frame, kind `1` is a rectangle to draw over the previous picture at `x,y`. After a click or a typed letter only the small rectangle that changed is encoded and sent, so on a slow link such as a Cloudflare tunnel the result appears much sooner than with a full frame. Big changes (scrolling, video, a new window covering more than half the screen) are still sent as full frames, and every `config` message refreshes the whole picture. Clients that do not send `tiles` get plain JPEG frames exactly as before.
+
 ## Updating
 ```powershell
 cd $HOME\remote-pc-control
