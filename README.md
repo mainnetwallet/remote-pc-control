@@ -60,11 +60,7 @@ The first run installs `cloudflared`; if it asks, close the window, open a new o
 
 Install Tailscale on the PC and phone and sign in to the **same account** on both, with the VPN switched on on the phone. Get the PC's address with `tailscale ip -4`, then open `http://<that-ip>:8888`. The firewall rule created by `setup.ps1` only accepts connections from Tailscale addresses (`100.64.0.0/10`). Run `setup.ps1` from an administrator PowerShell if the rule could not be created.
 
-**C. ngrok (free permanent `https` link, no domain needed)**
-
-ngrok gives a free account one static domain that never changes. Limited free bandwidth (about 1 GB/month), so use it mainly when you are away from home. Step-by-step: **[docs/NGROK.md](docs/NGROK.md)**.
-
-**D. Same Wi-Fi only**
+**C. Same Wi-Fi only**
 
 From an administrator PowerShell:
 ```powershell
