@@ -433,6 +433,7 @@ private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier,
  * Portrait: PC screen on top (exact aspect ratio), trackpad below.
  * Landscape: PC screen on the left, trackpad panel on the right (hideable; the screen then fills the window).
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SessionScreen(c: RemoteController) {
     var touchMode by remember { mutableStateOf(TouchMode.OFF) }
@@ -460,7 +461,7 @@ fun SessionScreen(c: RemoteController) {
         }
         if (maxWidth > maxHeight) {
             // Landscape: PC screen on the left, a separate trackpad panel on the right.
-            // The Controls button sits at the top-right; tapping it lines up Touch, Keys, Hide and Rotate to its left.
+            // The Controls button sits at the top-right of the panel; tapping it shows Touch, Keys, Hide and Rotate inside the panel (never over the PC picture).
             // Quality and Stop are only in the portrait toolbar.
             val panelWidth = (windowWidth * 0.28f).coerceIn(230.dp, 340.dp)
             Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
@@ -473,7 +474,7 @@ fun SessionScreen(c: RemoteController) {
                         ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
                     }
                     // Panel hidden: a slim column in the free space to the right of the PC picture (nothing is drawn over the screen).
-                    // Touch modes, left/right click and Hide; the active mode is highlighted, Hide brings the panel back as it was.
+                    // Hide on top, then touch modes and left/right click; the active mode is highlighted, Hide brings the panel back as it was.
                     if (!showPad) Column(
                         Modifier.width(68.dp).fillMaxHeight().padding(horizontal = 4.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)
@@ -489,23 +490,24 @@ fun SessionScreen(c: RemoteController) {
                         Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(8.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Spacer(Modifier.height(32.dp))   // room for the Controls row drawn on top
+                        // Controls button top-right of the panel; its buttons wrap inside the panel width, never over the PC picture.
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            MenuButton(if (showControls) "Controls \u25B4" else "Controls \u25BE", { showControls = !showControls })
+                            if (showControls) androidx.compose.foundation.layout.FlowRow(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() })
+                                MenuButton("Keys", { showKeys = !showKeys })
+                                MenuButton("Hide", { showPad = false })
+                                RotateButton(rotate, tonal = true, small = true)
+                            }
+                        }
                         Trackpad(sensitivity, send, Modifier.weight(1f).fillMaxWidth())
                         PadButtons(send)
                         SpeedRow(sensitivity) { sensitivity = it }
                     }
-                }
-                if (showPad) Row(
-                    Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (showControls) {
-                        MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() })
-                        MenuButton("Keys", { showKeys = !showKeys })
-                        MenuButton("Hide", { showPad = false })
-                        RotateButton(rotate, tonal = true, small = true)
-                    }
-                    MenuButton(if (showControls) "Controls \u25B4" else "Controls \u25BE", { showControls = !showControls })
                 }
             }
         } else {
