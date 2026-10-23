@@ -36,18 +36,27 @@ Works from anywhere through a private **Tailscale** network or a **Cloudflare** 
 
 Run in **PowerShell on the Windows PC**. Prerequisites: **Python 3.12 (x64)**, **Node.js 22**, **Git**.
 
+**1. First-time setup** (installs dependencies, builds dashboard, creates `.env`)
+
 ```powershell
-# 1. First-time setup (installs dependencies, builds dashboard, creates .env)
 cd $HOME
 git clone https://github.com/mainnetwallet/remote-pc-control.git
 cd remote-pc-control
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\setup.ps1
+```
 
-# 2. Show the access token (copy only the value after REMOTE_PC_TOKEN=)
+**2. Show the access token** (copy only the value after `REMOTE_PC_TOKEN=`)
+
+```powershell
+cd $HOME\remote-pc-control
 Get-Content .env | Select-String REMOTE_PC_TOKEN
+```
 
-# 3. Start the server (keep this window open, port 8888)
+**3. Start the server** (keep this window open, port 8888)
+
+```powershell
+cd $HOME\remote-pc-control
 .\scripts\start.ps1
 ```
 
@@ -60,6 +69,13 @@ Step-by-step guides: [Windows quick start](docs/QUICKSTART_WINDOWS.md) · [Insta
 | **Cloudflare quick tunnel** | Anywhere, no account | `.\scripts\start-tunnel.ps1` in a second window, open the printed `https://….trycloudflare.com` link |
 | **Tailscale** | Private, stable, lowest latency | Same account on PC and phone, then open `http://<tailscale ip -4>:8888` |
 | **Same Wi-Fi** | Home use | Allow port 8888 on the LAN, open `http://<PC-IPv4>:8888` |
+
+**Start the Cloudflare tunnel** (second PowerShell window)
+
+```powershell
+cd $HOME\remote-pc-control
+.\scripts\start-tunnel.ps1
+```
 
 <details>
 <summary><b>Cloudflare quick tunnel details</b></summary>
@@ -140,26 +156,44 @@ Full WebRTC, stream-quality, TURN and protocol reference: **[docs/WEBRTC.md](doc
 
 ## 🧰 Command reference
 
+**Update the project**
+
 ```powershell
-# Update the project
 cd $HOME\remote-pc-control
 git checkout main
 git pull
 .\scripts\setup.ps1
+```
 
-# Update and restart the scheduled-task installation (RemotePCControl)
+**Update and restart the scheduled-task installation** (`RemotePCControl`)
+
+```powershell
+cd $HOME\remote-pc-control
 Stop-ScheduledTask -TaskName RemotePCControl
 git pull
 .\scripts\setup.ps1
 Start-ScheduledTask -TaskName RemotePCControl
+```
 
-# Run backend tests and build the dashboard
+**Run backend tests**
+
+```powershell
+cd $HOME\remote-pc-control
 .\.venv\Scripts\python.exe -m pytest backend/tests tests -q
-cd frontend
+```
+
+**Build the dashboard**
+
+```powershell
+cd $HOME\remote-pc-control\frontend
 npm install
 npm run build
+```
 
-# Reset .env to the latest template (overwrites password, Gist and TURN settings; back up first)
+**Reset `.env` to the latest template** (⚠ overwrites password, Gist and TURN settings; run only when needed)
+
+```powershell
+cd $HOME\remote-pc-control
 Copy-Item .env .env.backup
 Copy-Item .env.example .env -Force
 .\scripts\set-password.ps1 YourNewPassword
