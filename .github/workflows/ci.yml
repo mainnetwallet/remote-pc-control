@@ -12,7 +12,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[test]"
-      - run: python -m pytest backend/tests tests -q
+      - run: python -m pytest backend/tests tests -q -rf --tb=short 2>&1 | Tee-Object pytest.log
+      - if: failure()
+        run: |
+          $t = (Get-Content pytest.log -Tail 45) -join "%0A"
+          Write-Host "::error title=pytest failures::$t"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
