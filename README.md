@@ -193,6 +193,8 @@ Start-ScheduledTask -TaskName RemotePCControl
 ```
 Note: `Get-Process python | Stop-Process -Force` stops *every* Python process on the PC, not only this server.
 
+`start.ps1` itself also stops an older copy of the server that still holds port 8888 (and its leftover tunnel), so a plain `git pull` followed by `.\scripts\start.ps1` is enough. The *address already in use / only one usage of each socket address* error no longer happens.
+
 ### Reset `.env` to the latest template
 `setup.ps1` only *adds* new settings. To start over with the tidy, current `.env.example`, back up first (the copy overwrites `.env`, including your password, Gist and TURN values):
 ```powershell

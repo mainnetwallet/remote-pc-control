@@ -4,6 +4,28 @@ Set-Location $Root
 if (-not (Test-Path ".venv\Scripts\python.exe")) { throw "Run .\scripts\setup.ps1 first." }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# An older copy of the server may still be running and hold port 8888 (then uvicorn fails with "only one usage of each
+# socket address"). Stop whatever listens on the port, plus a leftover tunnel to it, and wait until the port is free.
+function Stop-OldServer {
+  $owners = @(Get-NetTCPConnection -LocalPort 8888 -State Listen -ErrorAction SilentlyContinue |
+    Select-Object -ExpandProperty OwningProcess -Unique | Where-Object { $_ -and $_ -ne $PID })
+  foreach ($procId in $owners) {
+    $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
+    if ($p) {
+      Write-Host "Stopping the old server ($($p.ProcessName), PID $procId) that uses port 8888..." -ForegroundColor Yellow
+      Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+    }
+  }
+  Get-CimInstance Win32_Process -Filter "Name='cloudflared.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -match 'localhost:8888' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  for ($i = 0; $i -lt 20 -and (Get-NetTCPConnection -LocalPort 8888 -State Listen -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }
+  if (Get-NetTCPConnection -LocalPort 8888 -State Listen -ErrorAction SilentlyContinue) {
+    Write-Warning "Port 8888 is still in use. Close the program that uses it, or run PowerShell as Administrator and try again."
+  }
+}
+Stop-OldServer
+
 # Optional settings in .env:
 #   QUICK_TUNNEL=1       start a free Cloudflare quick tunnel together with the server
 #   GIST_TOKEN=...       GitHub token (scope: gist only). The new tunnel link is written to a secret Gist
