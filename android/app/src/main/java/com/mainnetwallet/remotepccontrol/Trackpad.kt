@@ -4,6 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -13,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -35,6 +43,7 @@ private const val PAD_PC_PX_PER_DP = 2f          // PC pixels per dp of finger t
  * Laptop-style trackpad (plain black surface, no picture of the PC).
  *  one finger slide = relative move, tap = left click, second tap soon after = double click,
  *  tap then slide = drag (left button held), two-finger tap = right click, two-finger slide = scroll.
+ *  Right strip (after a divider line): one-finger slide up/down = scroll.
  * Taps are sent as plain clicks at the current pointer; two quick taps become a double click on the PC.
  */
 @Composable
@@ -42,8 +51,9 @@ fun Trackpad(sensitivity: Float, send: (JSONObject) -> Unit, modifier: Modifier 
     val sendNow by rememberUpdatedState(send)
     val speedNow by rememberUpdatedState(sensitivity)
     val shape = RoundedCornerShape(14.dp)
+    Row(modifier.clip(shape).background(Color(0xFF06080C), shape).border(1.dp, Palette.Outline, shape)) {
     Box(
-        modifier.background(Color(0xFF06080C), shape).border(1.dp, Palette.Outline, shape)
+        Modifier.weight(1f).fillMaxHeight()
             .pointerInput(Unit) {
                 var lastTapUpMs = 0L   // survives between gestures (needed for double tap / tap-then-slide)
                 val slop = viewConfiguration.touchSlop
@@ -147,6 +157,45 @@ fun Trackpad(sensitivity: Float, send: (JSONObject) -> Unit, modifier: Modifier 
         contentAlignment = Alignment.Center
     ) {
         Text("Trackpad", color = Color(0xFF55607A), style = MaterialTheme.typography.bodySmall)
+    }
+    // Divider line between the pad and the scroll strip.
+    Box(Modifier.width(1.dp).fillMaxHeight().background(Palette.Outline))
+    ScrollStrip(send = send, modifier = Modifier.width(SCROLL_STRIP_WIDTH).fillMaxHeight())
+    }
+}
+
+private val SCROLL_STRIP_WIDTH = 56.dp
+private const val STRIP_STEP_DP = 10f   // one wheel notch per this much finger travel on the strip
+
+/** Right-hand strip of the trackpad: drag one finger up/down to scroll the PC page. */
+@Composable
+private fun ScrollStrip(send: (JSONObject) -> Unit, modifier: Modifier = Modifier) {
+    val sendNow by rememberUpdatedState(send)
+    Column(
+        modifier.pointerInput(Unit) {
+            val stepPx = STRIP_STEP_DP.dp.toPx()
+            var acc = 0f
+            detectVerticalDragGestures(
+                onDragStart = { acc = 0f },
+                onDragEnd = { acc = 0f },
+                onDragCancel = { acc = 0f }
+            ) { change, dragAmount ->
+                change.consume()
+                // Content follows the finger: finger down -> wheel up (dy > 0), same as the two-finger scroll.
+                acc += dragAmount
+                val steps = (acc / stepPx).toInt()
+                if (steps != 0) {
+                    acc -= steps * stepPx
+                    sendNow(JSONObject().put("type", "scroll").put("dx", 0).put("dy", steps))
+                }
+            }
+        }.padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text("▲", color = Color(0xFF55607A), style = MaterialTheme.typography.bodySmall)
+        Text("Scroll", color = Color(0xFF55607A), style = MaterialTheme.typography.labelSmall)
+        Text("▼", color = Color(0xFF55607A), style = MaterialTheme.typography.bodySmall)
     }
 }
 
