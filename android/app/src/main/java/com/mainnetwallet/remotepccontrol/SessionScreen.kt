@@ -441,9 +441,9 @@ fun SessionScreen(c: RemoteController) {
                         FilledTonalButton(onClick = { showPad = true }, contentPadding = compactPadding) { Text("Trackpad") }
                         FilledTonalButton(onClick = { showKeys = !showKeys }, contentPadding = compactPadding) { Text("Keys") }
                         FilledTonalButton(onClick = { touchMode = touchMode.next() }, contentPadding = compactPadding) { Text("Touch: ${touchMode.label}") }
-                        QualityMenuButton(c.quality, { c.setQuality(it) })
+                        QualityMenuButton(c.quality) { c.setQuality(it) }
                         RotateButton(rotate, tonal = true)
-                        StopButton({ c.stopScreen() })
+                        StopButton { c.stopScreen() }
                     }
                 }
                 if (showPad) Box(Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface)) {
