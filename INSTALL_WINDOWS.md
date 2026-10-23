@@ -1,17 +1,39 @@
-# Windows 11 Pro setup
+# Windows installation
 
-1. Install Python 3.12 x64, Node.js 22 and Tailscale on PC and Android.
-2. Sign in to the same tailnet on both devices.
-3. Clone this repository and open PowerShell in its folder.
-4. Run `Set-ExecutionPolicy -Scope Process Bypass`, then `scripts/setup.ps1`.
-5. Store the generated token privately; never commit `.env`.
-6. Run `scripts/start.ps1` in the logged-in desktop session.
-7. On the phone, connect to Tailscale and open `http://<PC-Tailscale-IP>:8888`.
-8. Do not port-forward TCP 8888. Test screen and input locally first.
+Two ways to install. Both run the agent in your signed-in desktop session.
 
-The agent cannot capture/control Windows secure desktop, UAC prompts or the sign-in screen. Use Windows Remote Desktop or a reviewed remote-access client to log in; this project does not bypass authentication.
+## Option A: Installer
 
-Wake-on-LAN requires firmware/NIC support. Mobile-data wake needs an authenticated always-on LAN relay; the API currently reports WOL as unconfigured.
+1. Download `RemotePCControl-Setup.exe` from the **Windows installer** workflow artifacts (GitHub **Actions** tab).
+2. Run it. It installs per user, without administrator rights, and creates Start menu and desktop shortcuts.
+3. Let the final step run `configure-installed.ps1`. It creates `.env` in the install folder and prints your access token once. Save it privately.
+4. Start **Remote PC Control** from the shortcut.
+5. Allow TCP port 8888 only from Tailscale (`100.64.0.0/10`) or your local network.
 
-## Cloudflare tunnel (no Tailscale)
-See [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md) for the quick tunnel (`scripts/start-tunnel.ps1`) and the permanent-link setup with your own domain, plus Cloudflare Access.
+## Option B: From source
+
+1. Install Python 3.11 or newer (x64), Node.js 22 and Git.
+2. Clone the repository and open PowerShell in its folder.
+3. Run:
+   ```powershell
+   Set-ExecutionPolicy -Scope Process Bypass
+   .\scripts\setup.ps1
+   .\scripts\start.ps1
+   ```
+4. Save the generated token privately. Never commit `.env`.
+
+See the [README](README.md#quick-start) for details and [docs/QUICKSTART_WINDOWS.md](docs/QUICKSTART_WINDOWS.md) for a step-by-step guide.
+
+## Connect from the phone
+
+Choose one:
+
+- **Tailscale:** sign in to the same account on both devices and open `http://<PC-Tailscale-IP>:8888`.
+- **Cloudflare tunnel:** see [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md) for the quick tunnel and for a permanent link on your own domain.
+
+Do not port-forward TCP 8888. Test screen and input on the local network first.
+
+## Limitations
+
+- The agent cannot capture or control the Windows secure desktop, UAC prompts or the sign-in screen. Use Windows Remote Desktop or a reviewed remote-access client to sign in; this project does not bypass authentication.
+- Wake-on-LAN requires firmware and NIC support. Waking over mobile data needs an authenticated, always-on LAN relay; the API currently reports Wake-on-LAN as not configured.
