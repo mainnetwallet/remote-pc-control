@@ -72,6 +72,9 @@ REMOTE_PC_FPS=20
 REMOTE_PC_JPEG_QUALITY=55
 REMOTE_PC_MAX_WIDTH=1280
 REMOTE_PC_SHOW_CURSOR=1
+REMOTE_PC_MOTION_QUALITY=70
+REMOTE_PC_MOTION_WIDTH=80
+REMOTE_PC_CAPTURE=auto
 "@ | Set-Content -Encoding ascii ".env"
   Write-Host "Save this access token securely: $token" -ForegroundColor Yellow
 }
