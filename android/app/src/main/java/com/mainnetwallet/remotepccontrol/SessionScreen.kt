@@ -141,15 +141,15 @@ fun KeysPanel(send: (JSONObject) -> Unit, typeText: String, onTypeText: (String)
 }
 
 
+/** Click mode: how far the pointer moves per finger movement (1x was the old speed; now 2x, one step faster). */
+private const val CLICK_DRAG_GAIN = 2f
+
 /**
  * Shows the PC frame and turns touches into mouse input.
  * Coordinates are sent normalized (0..1 of the visible picture), so they stay correct whatever
  * size the frame is scaled to. The box is sized to the frame's aspect ratio (no letterbox),
  * so a touch maps 1:1 onto the picture.
  */
-/** Click mode: how far the pointer moves per finger movement (1x was the old speed; now 2x, one step faster). */
-private const val CLICK_DRAG_GAIN = 2f
-
 @Composable
 fun ScreenView(
     aspect: Float, mode: TouchMode, send: (JSONObject) -> Unit, onPosition: (Double, Double) -> Unit, modifier: Modifier = Modifier,
