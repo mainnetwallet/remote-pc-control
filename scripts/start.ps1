@@ -77,7 +77,7 @@ if ($envVars["QUICK_TUNNEL"] -eq "1") {
 }
 
 try {
-  & ".\.venv\Scripts\python.exe" -m uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8888
+  & ".\.venv\Scripts\python.exe" -m uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8888 --ws-per-message-deflate false
 } finally {
   if ($tunnel -and -not $tunnel.HasExited) { Stop-Process -Id $tunnel.Id -Force -ErrorAction SilentlyContinue }
 }

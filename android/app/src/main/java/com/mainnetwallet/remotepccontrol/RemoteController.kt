@@ -243,6 +243,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
                 val data = bytes.toByteArray()
                 val decoded = BitmapFactory.decodeByteArray(data, 0, data.size)
                 if (decoded != null) { frame = decoded; frameCounter.incrementAndGet() }
+                webSocket.send("{\"type\":\"ack\"}")   // frame shown: the PC may send the next one (keeps the stream lag-free)
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
                 if (gen != sessionGen) return

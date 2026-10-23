@@ -159,3 +159,84 @@ def test_stream_ends_when_client_disconnects():
     sent = asyncio.run(run())
     screens = [m for m in sent if isinstance(m, dict)]
     assert [m["fps"] for m in screens] == [10, 2]
+
+
+# ---- latency: flow control, adaptive quality, input coalescing ---------------
+
+class _FakeWS:
+    def __init__(self): self.inbox = asyncio.Queue(); self.sent = []
+    async def receive(self): return await self.inbox.get()
+    async def send_json(self, d): self.sent.append(d)
+    async def send_bytes(self, b): self.sent.append(b)
+    def say(self, text): self.inbox.put_nowait({"type": "websocket.receive", "text": text})
+
+
+def _changing_grab():
+    n = [0]
+    def grab():
+        n[0] += 1
+        return RAW, (W, H), None, n[0]     # a new digest every time: the screen always changed
+    return grab
+
+
+def _frames(ws): return [m for m in ws.sent if isinstance(m, bytes)]
+
+
+def test_without_acks_the_stream_keeps_its_fixed_rate(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 30)
+    async def run():
+        ws = _FakeWS()
+        task = asyncio.create_task(screen.stream_frames(ws, _changing_grab()))
+        await asyncio.sleep(0.5)
+        ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(task, 3)
+        return len(_frames(ws))
+    assert asyncio.run(run()) > screen.MAX_IN_FLIGHT + 2      # old clients are not throttled
+
+
+def test_with_acks_at_most_two_frames_are_in_flight(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 30)
+    async def run():
+        ws = _FakeWS()
+        task = asyncio.create_task(screen.stream_frames(ws, _changing_grab()))
+        ws.say('{"type":"ack"}')                               # the client speaks ack: flow control is on
+        await asyncio.sleep(0.5)
+        waiting = len(_frames(ws))
+        ws.say('{"type":"ack"}'); await asyncio.sleep(0.3)     # one frame shown: exactly one more is sent
+        after = len(_frames(ws))
+        ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(task, 3)
+        return waiting, after
+    waiting, after = asyncio.run(run())
+    assert waiting == screen.MAX_IN_FLIGHT and after == waiting + 1
+
+
+def test_stream_resumes_if_the_client_stops_acking(monkeypatch):
+    monkeypatch.setattr(settings, "fps", 30)
+    monkeypatch.setattr(screen, "ACK_TIMEOUT", 0.2)
+    async def run():
+        ws = _FakeWS()
+        task = asyncio.create_task(screen.stream_frames(ws, _changing_grab()))
+        ws.say('{"type":"ack"}')
+        await asyncio.sleep(0.8)                               # no more acks: must not stall forever
+        ws.inbox.put_nowait({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(task, 3)
+        return len(_frames(ws))
+    assert asyncio.run(run()) > screen.MAX_IN_FLIGHT
+
+
+@pytest.mark.parametrize("rtt, expected", [(0.0, 65), (0.1, 65), (0.25, 53), (0.5, 40), (2.0, 40)])
+def test_quality_drops_when_frames_arrive_slowly(rtt, expected):
+    assert screen.adaptive_quality(65, rtt) == expected
+    assert screen.adaptive_quality(30, 5.0) == screen.QUALITY_MIN
+
+
+def test_coalesce_merges_pointer_moves_but_keeps_clicks_in_order():
+    msgs = [{"type": "rel", "dx": 3, "dy": 1}, {"type": "rel", "dx": 4, "dy": -2},
+            {"type": "click", "button": "left"},
+            {"type": "rel", "dx": 1, "dy": 1}, {"type": "move", "nx": 0.1, "ny": 0.1}, {"type": "move", "nx": 0.5, "ny": 0.5},
+            {"type": "scroll", "dy": 2}]
+    out = screen.coalesce_input(msgs)
+    assert out == [{"type": "rel", "dx": 7, "dy": -1}, {"type": "click", "button": "left"},
+                   {"type": "rel", "dx": 1, "dy": 1}, {"type": "move", "nx": 0.5, "ny": 0.5}, {"type": "scroll", "dy": 2}]
+    assert msgs[0] == {"type": "rel", "dx": 3, "dy": 1}        # input list is left untouched

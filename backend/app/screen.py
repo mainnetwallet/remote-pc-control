@@ -9,6 +9,10 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
           max_width 0 (native) or 320..3840, fps 1..30, quality 25..90; out-of-range values are
           clamped, unusable ones ignored. Applied live; the server answers with a fresh
           {"type":"screen",...} (carrying the values now in effect) followed by a new frame.
+              {"type":"ack"}   send one after each frame you have shown. Once the server has seen an ack it
+          keeps at most 2 frames in flight (the newest screen always wins) and lowers JPEG quality when the
+          link is slow, so the picture and the pointer never lag behind. Clients that never ack get the
+          old fixed-rate stream.
   /ws/input   client -> server:
       {"type":"move",   "nx":0..1, "ny":0..1}                    cursor to a normalized position
       {"type":"rel",    "dx":int, "dy":int}                       move the pointer by pixel deltas from where it is
@@ -25,13 +29,15 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
 Normalized coordinates make the mapping independent of the (possibly downscaled)
 frame the phone is showing, and of Windows display scaling.
 """
-import asyncio, contextlib, hmac, io, json, math, platform, zlib
+import asyncio, collections, contextlib, hmac, io, json, math, platform, zlib
 from dataclasses import dataclass
 from fastapi import WebSocket, WebSocketDisconnect
 from PIL import Image, ImageDraw
 from .config import settings
 from . import security
 
+MAX_IN_FLIGHT = 2         # frames sent but not yet acknowledged (only once the client sends acks)
+ACK_TIMEOUT = 1.0         # no ack for this long: assume the frames were lost and carry on
 KEEPALIVE_SECONDS = 3.0   # resend the last frame so idle screens don't hit client read timeouts
 MAX_SCROLL = 20
 MAX_REL = 500   # max pixels a single "rel" message may move the pointer on each axis
@@ -192,6 +198,17 @@ class _StreamState:
         self.dirty = False                # a config message arrived: send a fresh screen message + frame
         self.closed = False               # the client went away
         self.wake = asyncio.Event()       # cuts the frame-interval sleep short
+        self.acks = False                 # the client sends acks, so flow control and quality adaptation are on
+        self.inflight = 0                 # frames sent and not yet acknowledged
+        self.sent_at: collections.deque = collections.deque()
+        self.rtt = 0.0                    # smoothed seconds between sending a frame and its ack
+
+
+def adaptive_quality(quality: int, rtt: float) -> int:
+    """Lower the JPEG quality when frames take long to arrive, so the stream catches up instead of lagging."""
+    if rtt > 0.35: return max(QUALITY_MIN, quality - 25)
+    if rtt > 0.20: return max(QUALITY_MIN, quality - 12)
+    return quality
 
 
 async def _read_client(ws: WebSocket, state: _StreamState) -> None:
@@ -204,7 +221,14 @@ async def _read_client(ws: WebSocket, state: _StreamState) -> None:
             if text is None: continue
             try: d = json.loads(text)
             except (ValueError, RecursionError): continue
-            if isinstance(d, dict) and d.get("type") == "config":
+            if isinstance(d, dict) and d.get("type") == "ack":
+                state.acks = True
+                state.inflight = max(0, state.inflight - 1)
+                if state.sent_at:
+                    rtt = asyncio.get_running_loop().time() - state.sent_at.popleft()
+                    state.rtt = rtt if state.rtt == 0.0 else state.rtt * 0.7 + rtt * 0.3
+                state.wake.set()
+            elif isinstance(d, dict) and d.get("type") == "config":
                 state.config = state.config.updated(d)
                 state.dirty = True; state.wake.set()
     except Exception:
@@ -225,17 +249,26 @@ async def stream_frames(ws: WebSocket, grab) -> None:
             if state.dirty:   # config changed: re-encode even an unchanged screen and re-announce the size
                 state.dirty = False; last_digest = None; size_sent = None
             cfg = state.config
+            if state.acks and state.inflight >= MAX_IN_FLIGHT:
+                # The client has not shown the previous frames yet: wait instead of queueing more (newest screen wins).
+                state.wake.clear()
+                try: await asyncio.wait_for(state.wake.wait(), ACK_TIMEOUT)
+                except asyncio.TimeoutError: state.inflight = 0; state.sent_at.clear()
+                continue
             raw, size, cur, digest = await asyncio.to_thread(grab)
             if digest != last_digest:
-                last_jpeg, out = await asyncio.to_thread(encode_frame, raw, size, cur, cfg.max_width, cfg.quality)
+                quality = adaptive_quality(cfg.quality, state.rtt) if state.acks else cfg.quality
+                last_jpeg, out = await asyncio.to_thread(encode_frame, raw, size, cur, cfg.max_width, quality)
                 last_digest = digest
                 if out != size_sent:
                     await ws.send_json({"type": "screen", "width": out[0], "height": out[1],
                                         "max_width": cfg.max_width, "fps": cfg.fps, "quality": cfg.quality})
                     size_sent = out
                 await ws.send_bytes(last_jpeg); last_sent = loop.time()
+                state.inflight += 1; state.sent_at.append(last_sent)
             elif last_jpeg is not None and loop.time() - last_sent >= KEEPALIVE_SECONDS:
                 await ws.send_bytes(last_jpeg); last_sent = loop.time()
+                state.inflight += 1; state.sent_at.append(last_sent)
             if state.dirty or state.closed: continue
             state.wake.clear()
             try: await asyncio.wait_for(state.wake.wait(), max(0.0, 1 / cfg.fps - (loop.time() - started)))
@@ -304,9 +337,28 @@ def handle_input(d: dict, mon: dict, mouse_ctl, kb_ctl, mouse_mod, keys: dict) -
     elif kind == "type": kb_ctl.type(str(d.get("text", ""))[:500])
 
 
+def coalesce_input(messages: list[dict]) -> list[dict]:
+    """Merge a backlog of pointer moves so a slow moment never turns into a delayed, rubber-band pointer.
+
+    Consecutive "rel" messages are summed; consecutive absolute "move" messages keep only the last one.
+    Everything else (clicks, keys, scroll...) keeps its order and is never dropped."""
+    out: list[dict] = []
+    for d in messages:
+        kind = d.get("type")
+        if out and kind == "rel" and out[-1].get("type") == "rel":
+            prev = out[-1]
+            prev["dx"] = (_number(prev.get("dx")) or 0) + (_number(d.get("dx")) or 0)
+            prev["dy"] = (_number(prev.get("dy")) or 0) + (_number(d.get("dy")) or 0)
+        elif out and kind == "move" and out[-1].get("type") == "move":
+            out[-1] = d
+        else:
+            out.append(dict(d) if kind == "rel" else d)
+    return out
+
+
 async def input_socket(ws: WebSocket):
     await ws.accept()
-    held = False
+    pump_task = None
     try:
         if not await _authenticate(ws): return
         enable_dpi_awareness()
@@ -315,22 +367,38 @@ async def input_socket(ws: WebSocket):
         keys = key_map(keyboard)
         mon = await asyncio.to_thread(primary_monitor)
         await ws.send_json({"type": "ready"})
+
+        # A separate reader keeps receiving while input is applied, so messages are batched (and pointer moves merged)
+        # instead of piling up in a queue when the PC or the link is briefly slow.
+        inbox: collections.deque = collections.deque()
+        wake = asyncio.Event()
+        gone: list[BaseException] = []
+
+        async def pump():
+            try:
+                while True:
+                    inbox.append(await ws.receive_text()); wake.set()
+            except Exception as exc:
+                gone.append(exc)
+            finally:
+                wake.set()
+
+        pump_task = asyncio.create_task(pump())
         while True:
-            try: d = json.loads(await ws.receive_text())
-            except json.JSONDecodeError: continue
-            if not isinstance(d, dict): continue
-            if d.get("type") == "down": held = True
-            elif d.get("type") == "up": held = False
-            try: handle_input(d, mon, m, k, mouse, keys)
-            except Exception: pass   # a bad message must not kill the whole session
+            await wake.wait(); wake.clear()
+            batch = []
+            while inbox:
+                try: d = json.loads(inbox.popleft())
+                except (json.JSONDecodeError, RecursionError): continue
+                if isinstance(d, dict): batch.append(d)
+            for d in coalesce_input(batch):
+                try: handle_input(d, mon, m, k, mouse, keys)
+                except Exception: pass   # a bad message must not kill the whole session
+            if gone and not inbox: raise gone[0]
     except WebSocketDisconnect: return
     except asyncio.TimeoutError: await ws.close(code=4401, reason="Authentication timeout")
     except Exception:
         try: await ws.close(code=1008, reason="Invalid input")
         except Exception: pass
     finally:
-        if held:  # never leave a mouse button stuck down if the phone disconnects mid-drag
-            try:
-                from pynput import mouse as _mouse
-                _mouse.Controller().release(_mouse.Button.left)
-            except Exception: pass
+        if pump_task: pump_task.cancel()
