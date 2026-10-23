@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -327,6 +328,15 @@ private fun StopButton(onStop: () -> Unit) {
     ) { Text("Stop") }
 }
 
+/** Full-width 32 dp button for the slim column beside the PC picture; the active touch mode is highlighted. */
+@Composable
+private fun SideButton(text: String, selected: Boolean, onClick: () -> Unit) {
+    val m = Modifier.fillMaxWidth().height(32.dp)
+    val pad = PaddingValues(horizontal = 2.dp, vertical = 0.dp)
+    if (selected) Button(onClick = onClick, modifier = m, contentPadding = pad) { Text(text, style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+    else FilledTonalButton(onClick = onClick, modifier = m, contentPadding = pad) { Text(text, style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+}
+
 /** Small tonal button (32 dp high) used inside the landscape Controls menu. */
 @Composable
 private fun MenuButton(text: String, onClick: () -> Unit) {
@@ -448,15 +458,19 @@ fun SessionScreen(c: RemoteController) {
                             Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp),
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
                         ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
-                        if (!showPad) Row(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // Panel hidden: the touch modes in one row (Off, Click, Move, Scroll, Drag) plus Hide.
-                            // The active mode is highlighted; Hide brings the panel back exactly as it was.
-                            listOf(TouchMode.OFF, TouchMode.CLICK, TouchMode.MOVE, TouchMode.SCROLL, TouchMode.DRAG).forEach { m ->
-                                if (m == touchMode) Button(onClick = { touchMode = m }, contentPadding = compactPadding) { Text(m.label) }
-                                else FilledTonalButton(onClick = { touchMode = m }, contentPadding = compactPadding) { Text(m.label) }
-                            }
-                            FilledTonalButton(onClick = { showPad = true }, contentPadding = compactPadding) { Text("Hide") }
+                    }
+                    // Panel hidden: a slim column in the free space to the right of the PC picture (nothing is drawn over the screen).
+                    // Touch modes, left/right click and Hide; the active mode is highlighted, Hide brings the panel back as it was.
+                    if (!showPad) Column(
+                        Modifier.width(68.dp).fillMaxHeight().padding(horizontal = 4.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)
+                    ) {
+                        listOf(TouchMode.OFF, TouchMode.CLICK, TouchMode.MOVE, TouchMode.SCROLL, TouchMode.DRAG).forEach { m ->
+                            SideButton(m.label, m == touchMode, { touchMode = m })
                         }
+                        SideButton("L-click", false, { send(JSONObject().put("type", "click").put("button", "left")) })
+                        SideButton("R-click", false, { send(JSONObject().put("type", "click").put("button", "right")) })
+                        SideButton("Hide", false, { showPad = true })
                     }
                     if (showPad) Column(
                         Modifier.width(panelWidth).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(8.dp),
