@@ -30,8 +30,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
@@ -329,28 +327,6 @@ private fun StopButton(onStop: () -> Unit) {
     ) { Text("Stop") }
 }
 
-/** "Touch: Click" button that opens a list of every touch mode; tapping one selects it (no cycling on each tap). */
-@Composable
-private fun TouchModeMenuButton(mode: TouchMode, onSelect: (TouchMode) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        FilledTonalButton(onClick = { expanded = true }, contentPadding = compactPadding) { Text("Touch: ${mode.label}") }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            TouchMode.values().forEach { m ->
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(if (m == mode) "${m.label}  \u2713" else m.label, style = MaterialTheme.typography.titleSmall)
-                            Text(m.hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    },
-                    onClick = { expanded = false; onSelect(m) }
-                )
-            }
-        }
-    }
-}
-
 /** Small tonal button (32 dp high) used inside the landscape Controls menu. */
 @Composable
 private fun MenuButton(text: String, onClick: () -> Unit) {
@@ -473,8 +449,12 @@ fun SessionScreen(c: RemoteController) {
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f), shape = RoundedCornerShape(16.dp)
                         ) { Box(Modifier.padding(8.dp)) { KeysPanel(send, typeText, { typeText = it }, onSendText) } }
                         if (!showPad) Row(Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // Panel hidden: only Touch (opens a list of all modes) and Hide stay; Hide brings the panel back exactly as it was.
-                            TouchModeMenuButton(touchMode, { touchMode = it })
+                            // Panel hidden: the touch modes in one row (Off, Click, Move, Scroll, Drag) plus Hide.
+                            // The active mode is highlighted; Hide brings the panel back exactly as it was.
+                            listOf(TouchMode.OFF, TouchMode.CLICK, TouchMode.MOVE, TouchMode.SCROLL, TouchMode.DRAG).forEach { m ->
+                                if (m == touchMode) Button(onClick = { touchMode = m }, contentPadding = compactPadding) { Text(m.label) }
+                                else FilledTonalButton(onClick = { touchMode = m }, contentPadding = compactPadding) { Text(m.label) }
+                            }
                             FilledTonalButton(onClick = { showPad = true }, contentPadding = compactPadding) { Text("Hide") }
                         }
                     }
