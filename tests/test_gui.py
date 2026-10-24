@@ -172,3 +172,17 @@ def test_packaged_window_selftest_flag(window, tmp_path):
     r = subprocess.run([sys.executable, str(root / "run_agent.py"), "--gui-selftest", str(out)], cwd=tmp_path, timeout=60,
                        env={**__import__("os").environ, "PYTHONPATH": str(root / "backend")})
     assert r.returncode == 0 and out.read_text().startswith("ok tk=")
+
+
+def test_clear_logs_button_calls_the_api_and_reloads(window, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    calls = []
+    class Logs(FakeClient):
+        def call(self, path, method="GET", body=None, timeout=60):
+            if path.endswith("/clear"): calls.append((method, path)); return {"ok": True}
+            return super().call(path, method, body, timeout)
+    app = gui.App(window, Logs())
+    _settle(window, 0.6)
+    app.log_sel.set("lock"); app.clear_log(); _settle(window, 0.6)
+    assert calls == [("POST", "/logs/lock/clear")]
+    assert "cleared" in app.status.cget("text").lower()
