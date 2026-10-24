@@ -207,8 +207,12 @@ async def _authenticate(ws: WebSocket) -> bool:
     key = security.client_key(ws.headers, ws.client)
     if security.is_blocked(key):
         await ws.close(code=4429, reason="Too many failed attempts"); return False
-    auth = json.loads(await asyncio.wait_for(ws.receive_text(), timeout=8))
-    if not security.token_ok(str(auth.get("token", ""))):
+    try:
+        auth = json.loads(await asyncio.wait_for(ws.receive_text(), timeout=8))
+        token = str(auth.get("token", "")) if isinstance(auth, dict) else ""
+    except (asyncio.TimeoutError, ValueError, KeyError):   # silent, garbled or non-text first message counts as a failed login
+        security.record_fail(key); await ws.close(code=4401); return False
+    if not security.token_ok(token):
         security.record_fail(key); await ws.close(code=4401); return False
     security.record_success(key)
     return True

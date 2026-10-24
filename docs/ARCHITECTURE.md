@@ -154,6 +154,7 @@ More detail is in the header of `backend/app/webrtc.py`.
 - `backend/app/security.py` compares tokens in constant time.
 - A client is locked out after **8** failed attempts within **5 minutes**. A global guard also blocks all authentication after **40** failed attempts within **10 minutes**, even if requests rotate client IPs. Behind a Cloudflare tunnel the client is identified by the `CF-Connecting-IP` header.
 - Setup generates a long random token. The application accepts a minimum of 4 characters for compatibility, but a unique token of at least 12 characters is strongly recommended.
+- **Repeated-failure limiter** (`security.py`, applied by the HTTP middleware in `main.py`): per client + method + path, 10 failed (4xx) answers within 60 s block that request with `429` and `Retry-After`; 60 failed requests of any path within 60 s block the whole client for the rest of the minute. `429` and `5xx` answers are not counted, a successful answer clears the route's counter, and the tables are size-bounded (5000 entries). WebSockets use the wrong-token lockout instead; a silent, non-JSON or non-object first message counts as a failed login.
 - `.env` is ignored by Git. Never commit it or share the token or tunnel URL.
 - Never port-forward TCP 8888 directly to the public internet. Prefer Tailscale or private Wi-Fi, or Cloudflare Access for a named hostname.
 - Android encrypts the saved token using an Android Keystore key. **Log out** clears the saved token.
@@ -227,6 +228,7 @@ npm run build
 | Test file | Covers |
 |---|---|
 | `backend/tests/test_api.py` | Authentication, lockout and API behaviour |
+| `backend/tests/test_rate_limit.py` | Repeated-failure limiter: per route, per client, expiry, bounds, WebSocket login |
 | `backend/tests/test_pinlock.py` | PIN-lock state and its lock/unlock behaviour |
 | `backend/tests/test_lock_overlay.py` | Overlay logic and Tk event handling (Linux/Xvfb and Windows CI) |
 | `backend/tests/test_screen_config.py` | Screen configuration and frame flow control |

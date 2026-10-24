@@ -1,4 +1,4 @@
-import hmac, time, threading
+import hmac, math, time, threading
 from collections import defaultdict, deque
 from fastapi import Header, HTTPException, Request
 from .config import settings
@@ -16,6 +16,18 @@ _lock = threading.Lock()
 GLOBAL_MAX_FAILS = 40
 GLOBAL_WINDOW_SECONDS = 600
 _global_fails: deque = deque()
+
+
+# Repeated-failure limiter (any request, with or without a token): the same request failing again and again from one
+# client is answered with 429 + Retry-After until the window passes. Covers missing/garbled Authorization headers,
+# wrong paths, rejected bodies and scanners, none of which the wrong-token lockout above counts.
+ROUTE_MAX_FAILS = 10          # same client + method + path failing this often within ROUTE_WINDOW_SECONDS ...
+ROUTE_WINDOW_SECONDS = 60     # ... is refused for the rest of the window
+CLIENT_MAX_FAILS = 60         # any failed requests from one client (e.g. a scanner trying random paths) ...
+CLIENT_WINDOW_SECONDS = 60    # ... within this window block that client for the rest of it
+MAX_TRACKED = 5000            # memory bound: expired entries are dropped when the tables grow past this
+_route_fails: dict[tuple, deque] = {}
+_client_fails: dict[str, deque] = {}
 
 
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
@@ -53,7 +65,45 @@ def record_success(key: str) -> None:
 
 
 def reset_all() -> None:
-    with _lock: _fails.clear(); _global_fails.clear()
+    with _lock: _fails.clear(); _global_fails.clear(); _route_fails.clear(); _client_fails.clear()
+
+
+def _trim(dq: deque, now: float, window: float) -> None:
+    while dq and now - dq[0] > window: dq.popleft()
+
+
+def _prune(now: float) -> None:
+    for table, window in ((_route_fails, ROUTE_WINDOW_SECONDS), (_client_fails, CLIENT_WINDOW_SECONDS)):
+        if len(table) <= MAX_TRACKED: continue
+        for k in [k for k, dq in table.items() if not dq or now - dq[-1] > window]: table.pop(k, None)
+        if len(table) > MAX_TRACKED:   # still full of fresh entries (a flood): forget the oldest half
+            for k in sorted(table, key=lambda k: table[k][-1] if table[k] else 0)[:len(table) // 2]: table.pop(k, None)
+
+
+def request_blocked(key: str, method: str, path: str) -> int:
+    """Seconds to wait before this client may repeat this request, or 0 when it is allowed."""
+    now = time.monotonic(); wait = 0.0
+    with _lock:
+        route = _route_fails.get((key, method, path))
+        if route is not None:
+            _trim(route, now, ROUTE_WINDOW_SECONDS)
+            if len(route) >= ROUTE_MAX_FAILS: wait = max(wait, ROUTE_WINDOW_SECONDS - (now - route[0]))
+        client = _client_fails.get(key)
+        if client is not None:
+            _trim(client, now, CLIENT_WINDOW_SECONDS)
+            if len(client) >= CLIENT_MAX_FAILS: wait = max(wait, CLIENT_WINDOW_SECONDS - (now - client[0]))
+    return max(1, math.ceil(wait)) if wait > 0 else 0
+
+
+def record_request_result(key: str, method: str, path: str, status: int) -> None:
+    """Call after every HTTP response. 4xx answers count as failures (429 and 5xx do not); a success clears that route."""
+    now = time.monotonic(); route_key = (key, method, path)
+    with _lock:
+        if status < 400: _route_fails.pop(route_key, None); return
+        if status == 429 or status >= 500: return
+        _route_fails.setdefault(route_key, deque()).append(now)
+        _client_fails.setdefault(key, deque()).append(now)
+        _prune(now)
 
 
 def token_ok(candidate: str) -> bool:

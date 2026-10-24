@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .config import validate_settings
-from .security import require_auth
+from .security import require_auth, client_key, request_blocked, record_request_result
 from . import monitor, control, pinlock, panel, tailnet
 from .screen import screen_socket, input_socket
 import threading
@@ -23,6 +23,15 @@ async def lifespan(app):
     await rtc_shutdown()   # close WebRTC sessions: tracks, capture handles, peer connections
 app=FastAPI(title="Remote PC Control",docs_url=None,redoc_url=None,lifespan=lifespan)
 app.include_router(panel.router)
+@app.middleware("http")
+async def repeated_failure_limit(request,call_next):
+    """The same request failing again and again from one client gets 429 (see security.py); WebSockets use their own lockout."""
+    key=client_key(request.headers,request.client); path=request.url.path
+    wait=request_blocked(key,request.method,path)
+    if wait: return JSONResponse({"detail":"Too many failed requests; try again later"},status_code=429,headers={"Retry-After":str(wait)})
+    response=await call_next(request)
+    record_request_result(key,request.method,path,response.status_code)
+    return response
 @app.exception_handler(pinlock.StateFileError)
 def _lock_state_error(request,exc): return JSONResponse({"detail":"Lock state file is unreadable or unwritable; see lock_overlay.log"},status_code=503)
 class PowerRequest(BaseModel): confirm: bool=False

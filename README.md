@@ -413,7 +413,8 @@ Automated tests (`backend/tests/test_lock_overlay.py`) cover the overlay logic, 
 | Tunnel shows 502 / new link not reachable yet | `start.ps1` is not running; for a new quick-tunnel link wait 1-2 minutes |
 | Black screen / stream error | The PC is locked or a UAC prompt is open; unlock the desktop |
 | Clicks or keys do nothing in Task Manager, Registry Editor or an admin terminal | Windows blocks input into elevated windows. Run `.\scripts\install-autostart.ps1 -Admin` from an Administrator PowerShell |
-| "Too many failed attempts" | One client is locked out for 5 minutes after 8 wrong tokens; a global guard blocks all logins for 10 minutes after 40 wrong tokens from anyone. Wait, then use the correct token |
+| "Too many failed attempts" / HTTP 429 | One client is locked out for 5 minutes after 8 wrong tokens; a global guard blocks all logins for 10 minutes after 40 wrong tokens from anyone. Wait, then use the correct token |
+| HTTP 429 "Too many failed requests" | The same request failed 10 times in a minute from your address (or 60 failed requests of any kind). Fix the cause (token, URL), then wait for the `Retry-After` seconds shown in the response |
 | App always shows "WebSocket" | No direct UDP path; use Tailscale or the same Wi-Fi, or set up TURN. Check `REMOTE_PC_WEBRTC=1` |
 | `aiortc is not installed` | `.\scripts\setup.ps1 -Force`, then restart `start.ps1` |
 | Lock button does nothing visible | A PIN is set but the lock screen is not installed or running: `.\scripts\install-lock-overlay.ps1`, or set `REMOTE_PC_LOCK_BUTTON=windows` |
@@ -421,6 +422,7 @@ Automated tests (`backend/tests/test_lock_overlay.py`) cover the overlay logic, 
 ## 🔒 Security
 
 - Anyone with the token and a reachable URL can control the PC. Keep both private, and revoke any token or password you ever pasted into a chat or an issue.
+- **Rate limits (built in):** 8 wrong tokens in 5 minutes lock a client out for the rest of the window; 40 wrong tokens from anyone block all logins for 10 minutes. On top of that, the *same request failing again and again* (wrong or missing token, wrong path, rejected body) is answered with HTTP 429 and a `Retry-After` header after 10 failures per minute from one address, and a client with 60 failed requests of any kind per minute (a scanner) waits out the minute. A garbled or silent WebSocket login counts as a failed login. A successful request clears the counter for that route.
 - Prefer Tailscale or Cloudflare Access over a bare public link. Never expose port 8888 directly.
 - The agent runs in the logged-in desktop session. It cannot capture or control the Windows sign-in screen or UAC prompts and does not bypass Windows authentication.
 - `GIST_TOKEN` must be a GitHub *classic* token with **only the `gist` scope**. Never reuse a repository token.
