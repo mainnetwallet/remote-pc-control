@@ -12,12 +12,14 @@ This guide describes the current source tree, runtime paths, APIs, security boun
 │   ├── security.py          Bearer-token auth and failed-login lockout
 │   ├── monitor.py           CPU, memory, disk, network and uptime
 │   ├── control.py           Lock, sleep, restart and shutdown
+│   ├── pinlock.py           Persistent PIN-lock state (lock_state.json)
 │   ├── screen.py            Capture, JPEG stream, pointer and input
 │   ├── webrtc.py            WebRTC signaling, video track and data channels
 │   └── webrtc_encoder.py    Low-latency H.264 encoder selection
 ├── backend/tests/           API, screen, input, streaming and WebRTC tests
 ├── frontend/                React + TypeScript + Vite web dashboard
 ├── android/                 Kotlin + Jetpack Compose Android client
+├── lock_overlay.py          Full-screen PIN lock shown on the PC when locked
 ├── scripts/                 Windows setup, startup, tunnel and autostart
 ├── installer/               Inno Setup installer definition
 ├── tools/wol_sender.py      Standalone Wake-on-LAN magic-packet utility
@@ -53,6 +55,10 @@ All endpoints except the health check require a bearer token.
 | POST | `/api/v1/control/shutdown` | Shutdown; requires `{"confirm":true}` |
 | GET | `/api/v1/wol/status` | Reports Wake-on-LAN as unconfigured |
 | POST | `/api/v1/wol/wake` | Returns HTTP 501 until an authenticated LAN relay is configured |
+| GET | `/api/v1/lock/status` | `{"locked": bool, "pin_set": bool}` |
+| POST | `/api/v1/lock/pin` | Set/change the PC-side unlock PIN; body `{"pin":"1234"}` |
+| POST | `/api/v1/lock/lock` | Engage the persistent PIN lock (requires a PIN already set) |
+| POST | `/api/v1/lock/unlock` | Release the PIN lock (token already authenticates the app) |
 
 The dashboard is served from `backend/app/static/` after the frontend is built.
 

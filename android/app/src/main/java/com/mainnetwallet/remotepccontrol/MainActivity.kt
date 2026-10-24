@@ -62,7 +62,7 @@ private fun RemotePcApp() {
     DisposableEffect(Unit) { onDispose { c.shutdown() } }
     // Keep the dashboard numbers fresh while it is on screen.
     LaunchedEffect(c.connected, c.screenOpen) {
-        if (c.connected && !c.screenOpen) while (true) { delay(STATUS_REFRESH_MS); c.refreshStatus() }
+        if (c.connected && !c.screenOpen) while (true) { delay(STATUS_REFRESH_MS); c.refreshStatus(); c.refreshLockState() }
     }
     BackHandler(enabled = c.screenOpen) { c.stopScreen() }
     // Sign in by itself with the saved password, so the login screen only shows the first time.

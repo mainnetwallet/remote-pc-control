@@ -16,14 +16,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -112,6 +118,9 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
                 }
             }
 
+            // PIN lock
+            LockCard(c)
+
             // Live screen
             AppCard(Modifier.fillMaxWidth()) {
                 Text("Live screen", style = MaterialTheme.typography.titleMedium)
@@ -138,6 +147,86 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+/**
+ * Locks or unlocks the PC's always-on PIN screen (separate from the Windows "Lock" button above:
+ * this one stays locked permanently -- through sleep, restart and shutdown -- until unlocked here
+ * or with the PIN at the PC itself).
+ */
+@Composable
+private fun LockCard(c: RemoteController) {
+    var showPinDialog by remember { mutableStateOf(false) }
+    val state = c.lockState
+
+    AppCard(Modifier.fillMaxWidth()) {
+        Text("PIN lock", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            when {
+                state == null -> "Loading…"
+                state.locked -> "Locked. Stays locked through sleep, restart and shutdown."
+                state.pinSet -> "Unlocked. Won't lock again until you lock it here."
+                else -> "Set a PIN first to turn this on."
+            },
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (state?.locked == true) {
+                Button(
+                    onClick = { c.unlockPc() }, modifier = Modifier.weight(1f).height(48.dp)
+                ) { Text("Unlock") }
+            } else {
+                FilledTonalButton(
+                    onClick = { c.lockPc() }, modifier = Modifier.weight(1f).height(48.dp),
+                    enabled = state?.pinSet == true
+                ) { Text("Lock now") }
+            }
+            OutlinedButton(onClick = { showPinDialog = true }, modifier = Modifier.weight(1f).height(48.dp)) {
+                Text(if (state?.pinSet == true) "Change PIN" else "Set PIN")
+            }
+        }
+    }
+
+    if (showPinDialog) SetPinDialog(onDismiss = { showPinDialog = false }, onSave = { pin, onResult -> c.setLockPin(pin, onResult) })
+}
+
+@Composable
+private fun SetPinDialog(onDismiss: () -> Unit, onSave: (String, (Boolean, String) -> Unit) -> Unit) {
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    val valid = pin.length in 4..12 && pin.all { it.isDigit() }
+
+    AlertDialog(
+        onDismissRequest = { if (!saving) onDismiss() },
+        title = { Text("Set unlock PIN") },
+        text = {
+            Column {
+                Text(
+                    "4-12 digits. Used to unlock at the PC itself.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = pin, onValueChange = { if (it.length <= 12) { pin = it.filter(Char::isDigit); error = "" } },
+                    label = { Text("PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = valid && !saving,
+                onClick = {
+                    saving = true
+                    onSave(pin) { ok, message -> saving = false; if (ok) onDismiss() else error = message }
+                }
+            ) { Text(if (saving) "Saving…" else "Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") } }
+    )
 }
 
 private fun gb(bytes: Long): String = String.format(Locale.US, "%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))

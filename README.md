@@ -229,13 +229,42 @@ Full WebRTC, stream-quality, TURN and protocol reference: **[docs/WEBRTC.md](doc
 | `aiortc is not installed` | Run `.\scripts\setup.ps1 -Force`, then restart `start.ps1` |
 | `git clone` says folder exists | `cd $HOME\remote-pc-control`, then `git pull` |
 
+## 🔐 PIN lock
+
+A separate, persistent lock screen for the PC itself -- not the agent's `/api/v1/control/lock`
+(that's Windows' own Win+L lock, which comes undone the moment someone signs back in).
+
+- **Set a PIN** from the Android app (PIN lock card → Set PIN) or on the PC: `.\scripts\set-pin.ps1`
+- **Lock** from the app any time (PIN lock card → Lock now). Once locked it stays locked --
+  through sleep, restart and shutdown -- until someone unlocks it.
+- **Unlock** either from the app (your access token already proves who you are, so no PIN needed
+  there) or at the PC itself by entering the PIN on the full-screen lock prompt.
+- Unlocking never times out or re-locks itself; it only locks again when you lock it from the app.
+- The lock state lives in `lock_state.json` (git-ignored) and is read directly by the lock
+  screen process, so it works even if the main server (`start.ps1`) isn't running.
+
+**Enable the lock screen at sign-in** (one-time, in PowerShell on the PC):
+
+```powershell
+cd $HOME\remote-pc-control
+.\scripts\set-pin.ps1
+.\scripts\install-lock-overlay.ps1
+```
+
+Honesty about its limits: this is an app-level window, not the Windows sign-in screen. It blocks
+Win, Alt+Tab, Alt+Esc and Ctrl+Esc while showing, but **Ctrl+Alt+Delete cannot be intercepted by
+any ordinary application** -- Windows routes it straight to the secure desktop by design -- so
+someone who presses it can still reach Windows' own switch-user/sign-out menu, same as on any
+Windows PC. Treat it as a privacy screen for casual access, not a substitute for your Windows
+account password.
+
 ## 🔒 Security
 
 - Anyone with the token and a reachable URL can control the PC. Keep both private and revoke any credential pasted into chats or tickets.
 - Prefer Tailscale or Cloudflare Access ([docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)) over a bare public link. Never expose port 8888 directly.
 - The agent runs in the logged-in desktop session. It cannot capture or control the Windows sign-in screen or UAC prompts and does not bypass Windows authentication.
 - Wake-on-LAN over mobile data needs a separately authenticated always-on LAN relay (reported as not configured).
-- Never commit `.env`.
+- Never commit `.env` or `lock_state.json` (both are git-ignored already).
 
 ## 🛠 Development
 

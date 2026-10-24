@@ -86,6 +86,16 @@ class PcStatus(
     }
 }
 
+/** What the PC reports from /api/v1/lock/status: whether the PIN lock screen is currently showing, and whether a PIN has been set at all. */
+class LockState(val locked: Boolean, val pinSet: Boolean) {
+    companion object {
+        fun parse(text: String): LockState? = try {
+            val m = JSONObject(text)
+            LockState(m.optBoolean("locked", false), m.optBoolean("pin_set", false))
+        } catch (_: Exception) { null }
+    }
+}
+
 /** Size of the frames being received and the frame-rate cap the PC applies (0 = unknown, older PC agent). */
 class StreamInfo(val width: Int, val height: Int, val targetFps: Int)
 
@@ -115,6 +125,9 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     var notice by mutableStateOf(Notice("Enter your PC address and API token.", false))
         private set
     var status by mutableStateOf<PcStatus?>(null)
+        private set
+    /** The PC-side PIN lock: whether it's currently showing, and whether a PIN exists at all. Null until first fetched. */
+    var lockState by mutableStateOf<LockState?>(null)
         private set
     var screenOpen by mutableStateOf(false)
         private set
@@ -226,6 +239,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
                 connected = ok; reachable = ok
                 if (ok) {
                     status = PcStatus.parse(text)
+                    refreshLockState()
                     // Remember the login: the next start signs in by itself until the user taps Log out.
                     prefs.edit().putString(PREF_URL, baseUrl.trim()).putString(PREF_TOKEN, SecureStore.encrypt(token.trim())).apply()
                     notice = Notice("", false)
@@ -269,6 +283,37 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     fun power(action: PowerAction) {
         call("/api/v1/control/${action.path}", "POST", action.body) { ok, text ->
             notice = if (ok) Notice("${action.label} request sent.", false) else Notice("${action.label} failed: $text", true)
+        }
+    }
+
+    /** Quietly reloads whether the PC-side PIN lock is on; used by the dashboard's timer. */
+    fun refreshLockState() {
+        if (!connected) return
+        call("/api/v1/lock/status") { ok, text -> if (ok) LockState.parse(text)?.let { lockState = it } }
+    }
+
+    /** Locks the PC now (shows the PIN screen there). Requires a PIN to already be set. */
+    fun lockPc() {
+        call("/api/v1/lock/lock", "POST") { ok, text ->
+            notice = if (ok) Notice("PC locked.", false) else Notice("Lock failed: $text", true)
+            refreshLockState()
+        }
+    }
+
+    /** Unlocks the PC remotely -- no PIN needed, the app's own access token already proved who you are. */
+    fun unlockPc() {
+        call("/api/v1/lock/unlock", "POST") { ok, text ->
+            notice = if (ok) Notice("PC unlocked.", false) else Notice("Unlock failed: $text", true)
+            refreshLockState()
+        }
+    }
+
+    /** Sets or changes the 4-12 digit PIN used to unlock at the physical PC. */
+    fun setLockPin(pin: String, onResult: (Boolean, String) -> Unit) {
+        val body = JSONObject().put("pin", pin).toString()
+        call("/api/v1/lock/pin", "POST", body) { ok, text ->
+            onResult(ok, if (ok) "PIN saved." else "Could not save PIN: $text")
+            refreshLockState()
         }
     }
 
