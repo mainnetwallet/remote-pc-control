@@ -35,7 +35,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material.Divider
+import androidx.compose.material3.Divider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -176,9 +176,9 @@ fun PulsingStatusDot(
         modifier
             .size(size)
             .graphicsLayer {
-                this.alpha = alpha
-                this.scaleX = scale
-                this.scaleY = scale
+                alpha = alpha
+                scaleX = scale
+                scaleY = scale
             }
             .background(color, CircleShape)
     )
@@ -290,8 +290,7 @@ fun QualityPicker(
                         selected = isSelected,
                         role = Role.RadioButton,
                         onClick = { onSelect(q) }
-                    )
-                    
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -392,10 +391,10 @@ fun RingGauge(
     val trackColor = MaterialTheme.colorScheme.outlineVariant
     val targetFraction = (percent ?: 0).coerceIn(0, 100) / 100f
 
-    val fraction by animateFloatAsState<Float>(
+    val fraction by animateFloatAsState(
         targetValue = targetFraction,
         label = "gauge",
-        animationSpec = if (animate) spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else null
+        animationSpec = if (animate) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else null
     )
 
     Box(
