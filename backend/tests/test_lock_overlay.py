@@ -10,8 +10,8 @@ hook, SetForegroundWindow, the named mutex) is NOT executed on Linux; its pure p
 (should_block_key) is tested and the Win32 calls are covered by docs/WINDOWS_LOCK_TESTING.md,
 which must be run by a person on a real Windows 11 PC.
 """
+import gc
 import json
-import multiprocessing
 import os
 import subprocess
 import sys
@@ -87,20 +87,16 @@ def test_failed_attempts_do_not_log_pin(caplog):
     assert json.loads(pinlock.STATE_PATH.read_text())["pin_hash"] not in text
 
 
-def _writer(path, n):
-    pinlock.STATE_PATH = Path(path)
-    for _ in range(n):
-        pinlock.lock(); pinlock.unlock()
-
-
 def test_concurrent_processes_never_corrupt_state(tmp_path):
     pinlock.set_pin("1234")
-    ps = [multiprocessing.Process(target=_writer, args=(str(pinlock.STATE_PATH), 25)) for _ in range(3)]
-    [p.start() for p in ps]
+    code = ("import sys; sys.path.insert(0, r'%s'); from app import pinlock; from pathlib import Path;"
+            "pinlock.STATE_PATH = Path(r'%s')\n"
+            "for _ in range(25):\n    pinlock.lock(); pinlock.unlock()") % (ROOT / "backend", pinlock.STATE_PATH)
+    ps = [subprocess.Popen([sys.executable, "-c", code], stderr=subprocess.PIPE, text=True) for _ in range(3)]
     for _ in range(100):                      # reader hammers the file meanwhile
         pinlock.status()
-    [p.join(30) for p in ps]
-    assert all(p.exitcode == 0 for p in ps)
+    errs = [p.communicate(timeout=60)[1] for p in ps]
+    assert all(p.returncode == 0 for p in ps), errs
     assert pinlock.status()["pin_set"] is True
 
 
@@ -153,11 +149,21 @@ def tkroot():
     except tk.TclError as e:
         pytest.skip(f"no display available: {e}")
     root.withdraw()
+    root._test_screens = []
     yield root
+    # Deterministic teardown ON THE MAIN THREAD. A leftover Tk object that is garbage-collected
+    # later by some other test's thread aborts the whole pytest process with
+    # "Tcl_AsyncDelete: async handler deleted by the wrong thread" (seen on the Windows CI run).
+    for screen in root._test_screens:
+        screen.close()
+    root._test_screens.clear()
     try:
         root.destroy()
     except tk.TclError:
         pass
+    del root
+    for _ in range(3):
+        gc.collect()
 
 
 class FakeHook:
@@ -174,7 +180,9 @@ def pump(root, ms=250):
 
 
 def make(root, **kw):
-    return lock_overlay.LockScreen(root, hook=FakeHook(), poll_ms=50, **kw)
+    screen = lock_overlay.LockScreen(root, hook=FakeHook(), poll_ms=50, **kw)
+    root._test_screens.append(screen)
+    return screen
 
 
 def type_keys(screen, *keysyms):

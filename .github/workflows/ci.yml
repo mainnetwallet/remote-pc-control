@@ -15,7 +15,10 @@ jobs:
       - run: python -m pytest backend/tests tests -q -rf --tb=short 2>&1 | Tee-Object pytest.log
       - if: failure()
         run: |
-          $t = (Get-Content pytest.log -Tail 45) -join "%0A"
+          $log = Get-Content pytest.log
+          $key = ($log | Select-String -Pattern 'Fatal Python error|fatal exception|Tcl_Async|FAILED|^E  ' | Select-Object -First 15 | ForEach-Object { $_.Line }) -join "%0A"
+          Write-Host "::error title=pytest key lines::$key"
+          $t = ($log | Select-Object -Last 45) -join "%0A"
           Write-Host "::error title=pytest failures::$t"
       # Windows-only check of the Scheduled Task installer: run it twice, expect exactly one task.
       # continue-on-error: needs permission to register tasks on the runner; informational.

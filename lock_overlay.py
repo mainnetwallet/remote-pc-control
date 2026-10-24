@@ -316,6 +316,7 @@ class LockScreen:
         self._last_focus_grab = 0.0
         self._focus_job = None
         self._last_state_error = None
+        self._poll_job = None
         self._poll()
 
     # -- state polling --
@@ -329,7 +330,29 @@ class LockScreen:
                 self._last_state_error = str(e)
         except Exception:
             log.exception("poll failed")
-        self.root.after(self.poll_ms, self._poll)
+        try:
+            self._poll_job = self.root.after(self.poll_ms, self._poll)
+        except self.tk.TclError:        # root already destroyed
+            self._poll_job = None
+
+    def close(self):
+        """Stop polling, close the window and drop every Tk reference. Breaks the reference
+        cycles so Tk objects are freed on the creating thread (a Tk object garbage-collected on
+        another thread aborts Python with 'Tcl_AsyncDelete: async handler deleted by the wrong
+        thread')."""
+        if self._poll_job is not None:
+            try:
+                self.root.after_cancel(self._poll_job)
+            except self.tk.TclError:
+                pass
+            self._poll_job = None
+        try:
+            self._hide()
+        except self.tk.TclError:
+            pass
+        self.hook.stop()
+        self.win = self.entry = self.button = None
+        self.entry_var = self.msg_var = None
 
     def apply_state(self, locked: bool):
         if locked and self.win is None:
