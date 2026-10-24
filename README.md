@@ -164,12 +164,12 @@ Settings live in `.env` in the project folder. Restart `start.ps1` after editing
 | `REMOTE_PC_TOKEN` | generated | Access password. **Required.** Minimum 4 characters, 12+ strongly recommended |
 | `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `127.0.0.1` in code, `0.0.0.0` / `8888` in `.env.example` | Listen address. Used by the packaged `RemotePCControl.exe` only (see note below) |
 | `REMOTE_PC_WEBRTC` | `1` | WebRTC on or off (the WebSocket stream is the fallback) |
-| `REMOTE_PC_RTC_FPS` | `30` | WebRTC max frames per second (1-30) |
+| `REMOTE_PC_RTC_FPS` | `auto` | WebRTC max frames per second: `auto` = your monitor's refresh rate, up to 60, or a number 1-60 |
 | `REMOTE_PC_RTC_BITRATE` | `4000` | Starting WebRTC bitrate limit in kbit/s (300-30000). The app's quality preset replaces it for its session (up to 30000) |
 | `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, `nvenc`, `qsv`, `amf` or `x264` |
 | `REMOTE_PC_STUN_URL` | Google STUN | STUN server(s), comma separated |
 | `REMOTE_PC_TURN_URL` / `_USER` / `_PASS` | empty | Optional TURN relay for networks without a direct path |
-| `REMOTE_PC_FPS` | `20` | Starting frame rate of the WebSocket stream (1-30) |
+| `REMOTE_PC_FPS` | `20` | Starting frame rate of the WebSocket stream (1-60, or `auto`) |
 | `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality of the WebSocket stream (25-85) |
 | `REMOTE_PC_MAX_WIDTH` | `1280` | Starting width limit of the WebSocket stream (`0` = native) |
 | `REMOTE_PC_LATENCY_FIRST` | `1` | Shrink the picture on slow links to keep delay low |
