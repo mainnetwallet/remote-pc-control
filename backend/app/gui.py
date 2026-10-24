@@ -4,7 +4,7 @@ It does everything the browser control panel does (connect the phone, password, 
 internet link, speed settings, restart/stop, logs). It talks to the local agent through the same private
 /panel/api (loopback only + access token), so it works whether the agent runs inside this program or was started
 earlier by the autostart task."""
-import json, os, queue, sys, threading, urllib.error, urllib.request
+import json, queue, sys, threading, urllib.error, urllib.request
 from pathlib import Path
 from .gui_text import TEXT
 from .paths import data_dir
@@ -189,7 +189,7 @@ class App:
         return var, cb
 
     def build(self):
-        tk, ttk = self.tk, self.ttk
+        ttk = self.ttk
         for w in self.root.winfo_children(): w.destroy()
         self.wrap = []
         head = ttk.Frame(self.root, padding=(16, 12, 16, 0)); head.pack(fill="x")
