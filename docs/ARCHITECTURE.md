@@ -19,7 +19,7 @@ This guide describes the current source tree, runtime paths, APIs, security boun
 ├── backend/tests/           API, screen, input, streaming and WebRTC tests
 ├── frontend/                React + TypeScript + Vite web dashboard
 ├── android/                 Kotlin + Jetpack Compose Android client
-├── lock_overlay.py          Full-screen PIN lock shown on the PC when locked
+├── lock_overlay.py          Full-screen PIN lock (single instance, own log, focus + hook handling)
 ├── scripts/                 Windows setup, startup, tunnel and autostart
 ├── installer/               Inno Setup installer definition
 ├── tools/wol_sender.py      Standalone Wake-on-LAN magic-packet utility

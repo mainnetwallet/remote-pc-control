@@ -17,6 +17,19 @@ jobs:
         run: |
           $t = (Get-Content pytest.log -Tail 45) -join "%0A"
           Write-Host "::error title=pytest failures::$t"
+      # Windows-only check of the Scheduled Task installer: run it twice, expect exactly one task.
+      # continue-on-error: needs permission to register tasks on the runner; informational.
+      - name: Lock overlay installer is idempotent
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $pyw = Join-Path (Split-Path (Get-Command python).Source) "pythonw.exe"
+          .\scripts\install-lock-overlay.ps1 -PythonW $pyw
+          .\scripts\install-lock-overlay.ps1 -PythonW $pyw
+          $n = @(Get-ScheduledTask | Where-Object { $_.Actions.Arguments -like "*lock_overlay.py*" }).Count
+          Write-Host "overlay tasks: $n"
+          .\scripts\install-lock-overlay.ps1 -Remove
+          if ($n -ne 1) { throw "expected 1 task, found $n" }
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

@@ -253,6 +253,11 @@ git pull
 .\scripts\install-lock-overlay.ps1
 ```
 
+The overlay writes diagnostics (never the PIN or token) to `%LOCALAPPDATA%\RemotePCControl\lock_overlay.log`.
+Only one overlay runs per Windows session, so the Scheduled Task and a manual
+`pythonw.exe lock_overlay.py` can't fight over keyboard focus; the task restarts it if it exits.
+Windows keyboard behaviour needs a human check: see [docs/WINDOWS_LOCK_TESTING.md](docs/WINDOWS_LOCK_TESTING.md).
+
 Honesty about its limits: this is an app-level window, not the Windows sign-in screen. It blocks
 Win, Alt+Tab, Alt+Esc and Ctrl+Esc while showing, but **Ctrl+Alt+Delete cannot be intercepted by
 any ordinary application** -- Windows routes it straight to the secure desktop by design -- so

@@ -17,3 +17,6 @@ cloudflared.out.log
 autostart.log
 server.out.log
 server.err.log
+lock_state.json.lock
+lock_state.json.*.tmp
+lock_overlay.log*

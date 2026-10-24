@@ -10,6 +10,8 @@ from .screen import screen_socket, input_socket
 import threading
 from .webrtc import rtc_socket, shutdown_all as rtc_shutdown, warm_up as rtc_warm_up
 app=FastAPI(title="Remote PC Control",docs_url=None,redoc_url=None)
+@app.exception_handler(pinlock.StateFileError)
+def _lock_state_error(request,exc): return JSONResponse({"detail":"Lock state file is unreadable or unwritable; see lock_overlay.log"},status_code=503)
 class PowerRequest(BaseModel): confirm: bool=False
 class PinRequest(BaseModel): pin: str
 @app.on_event("startup")
