@@ -71,6 +71,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import org.webrtc.RendererCommon
 import org.webrtc.SurfaceViewRenderer
@@ -81,7 +82,7 @@ import kotlin.math.sin
 
 enum class TouchMode(val label: String, val hint: String) {
     OFF("Off", "Screen is view-only; use the trackpad"),
-    CLICK("Click", "Drag anywhere = move the pointer from where it is · tap = click there · long-press = right click"),
+    CLICK("Click", "Drag anywhere = move the pointer from where it is · tap = click there · hold = hold left button (drag) · right click = R-click button"),
     DRAG("Drag", "Drag = hold the left button (select, move windows)"),
     SCROLL("Scroll", "Drag up/down to scroll the page")
 }
@@ -146,6 +147,9 @@ fun KeysPanel(send: (JSONObject) -> Unit, typeText: String, onTypeText: (String)
 /** Click mode: how far the pointer moves per finger movement (1x was the old speed; now 2x, one step faster). */
 private const val CLICK_DRAG_GAIN = 2f
 
+/** Click mode: a finger resting this long presses and holds the left button (it used to be a right click). */
+private const val HOLD_PRESS_MS = 400L
+
 /**
  * Shows the PC frame and turns touches into mouse input.
  * Coordinates are sent normalized (0..1 of the visible picture), so they stay correct whatever
@@ -174,11 +178,34 @@ fun ScreenView(
                 .background(Color.Black, RoundedCornerShape(6.dp))
                 .pointerInput(mode) {
                     if (mode != TouchMode.CLICK) return@pointerInput
-                    detectTapGestures(
-                        // Click where the pointer already is (no position sent): the finger only moves the pointer, it never jumps it.
-                        onTap = { send(JSONObject().put("type", "click").put("button", "left")) },
-                        onLongPress = { send(JSONObject().put("type", "click").put("button", "right")) }
-                    )
+                    // Tap = left click; finger resting HOLD_PRESS_MS = left button held (slide to drag, lift to drop), like holding a mouse button.
+                    // Right click: the R-click button. Clicks go where the pointer already is (no position sent): the finger only moves the pointer.
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val slop = viewConfiguration.touchSlop
+                        // true = lifted (tap), false = slid away (the drag handler below takes over), null = still resting: hold
+                        val outcome: Boolean? = withTimeoutOrNull(HOLD_PRESS_MS) {
+                            var r: Boolean? = null
+                            while (r == null) {
+                                val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                                r = if (c == null || !c.pressed) true else if ((c.position - down.position).getDistance() > slop) false else null
+                            }
+                            r
+                        }
+                        if (outcome == true) {
+                            send(JSONObject().put("type", "click").put("button", "left"))
+                        } else if (outcome == null) {
+                            send(JSONObject().put("type", "down").put("button", "left"))
+                            try {
+                                while (true) {
+                                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                                    if (c == null || !c.pressed) break
+                                }
+                            } finally {
+                                send(JSONObject().put("type", "up").put("button", "left"))   // also when cancelled: never leave the button held
+                            }
+                        }
+                    }
                 }
                 .pointerInput(mode) {
                     // Drag mode = a held mouse button: press exactly where the finger lands (no touch-slop delay, so small

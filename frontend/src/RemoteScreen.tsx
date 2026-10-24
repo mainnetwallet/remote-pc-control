@@ -3,7 +3,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 type Mode='click'|'drag'|'scroll';
 type Send=(o:object)=>void;
 const MODES:{id:Mode;label:string;hint:string}[]=[
- {id:'click',label:'Click',hint:'Drag anywhere = move the pointer from where it is · tap = click there · long-press = right click · two fingers = scroll'},
+ {id:'click',label:'Click',hint:'Drag anywhere = move the pointer from where it is · tap = click there · hold = hold left button (drag) · Right-click button = right click · two fingers = scroll'},
  {id:'drag',label:'Drag',hint:'Drag = hold left button (select text, move windows)'},
  {id:'scroll',label:'Scroll',hint:'Drag up/down to scroll the page'},
 ];
@@ -42,7 +42,7 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   }catch{}
  };
 
- const endDrag=(e:{clientX:number;clientY:number})=>{if(g.current.down){send({type:'up',button:'left',...norm(e.clientX,e.clientY)});g.current.down=false}};
+ const endDrag=(e:{clientX:number;clientY:number})=>{if(g.current.down){send({type:'up',button:'left',...(mode==='drag'?norm(e.clientX,e.clientY):{})});g.current.down=false}};
 
  const onDown=(e:React.PointerEvent)=>{
   e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);
@@ -55,7 +55,7 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   st.start={x:e.clientX,y:e.clientY};st.moved=false;st.long=false;st.multi=false;st.scrollAcc=0;st.accX=0;st.accY=0;
   if(mode==='drag'){send({type:'down',button:'left',...norm(e.clientX,e.clientY)});st.down=true}
   if(mode==='click'){st.timer=window.setTimeout(()=>{
-   if(!st.moved&&pointers.current.size===1){st.long=true;send({type:'click',button:'right'});navigator.vibrate?.(30)}
+   if(!st.moved&&pointers.current.size===1){st.long=true;send({type:'down',button:'left'});st.down=true;navigator.vibrate?.(30)}
   },LONG_PRESS_MS)}
  };
 
@@ -86,7 +86,7 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   const st=g.current;if(!pointers.current.has(e.pointerId))return;
   pointers.current.delete(e.pointerId);window.clearTimeout(st.timer);
   if(st.multi){if(pointers.current.size===0)st.multi=false;return}
-  if(mode==='drag'){endDrag(e);return}
+  if(mode==='drag'||st.down){endDrag(e);return}
   if(mode==='click'&&!st.moved&&!st.long&&e.type==='pointerup')send({type:'click',button:'left'});
  };
  const onCancel=(e:React.PointerEvent)=>{pointers.current.delete(e.pointerId);window.clearTimeout(g.current.timer);endDrag(e);g.current.multi=pointers.current.size>0};
@@ -97,6 +97,7 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
   <div className="modes">
    {MODES.map(m=><button key={m.id} className={mode===m.id?'':'secondary'} onClick={()=>setMode(m.id)}>{m.label}</button>)}
    <button className="secondary" onClick={()=>send({type:'click',count:2,...g.current.lastPos})}>Double-click</button>
+   <button className="secondary" onClick={()=>send({type:'click',button:'right'})}>Right-click</button>
    <button className="secondary" onClick={()=>setShowKeys(v=>!v)}>Keys</button>
    <button className="secondary" onClick={()=>void toggleFull()}>{full?'Exit fullscreen':'Fullscreen'}</button>
   </div>
