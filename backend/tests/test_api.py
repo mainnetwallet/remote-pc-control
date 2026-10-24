@@ -31,7 +31,7 @@ def test_lockout_after_repeated_wrong_tokens():
 def test_lockout_is_per_client_ip_and_success_resets():
     from app import security
     good = "Bearer " + settings.token
-    with TestClient(app) as c:
+    with TestClient(app, client=("127.0.0.1", 50000)) as c:   # the Cloudflare tunnel connects from localhost
         for _ in range(security.MAX_FAILS):
             c.get("/api/v1/status", headers={"Authorization": "Bearer bad", "CF-Connecting-IP": "1.2.3.4"})
         assert c.get("/api/v1/status", headers={"Authorization": good, "CF-Connecting-IP": "1.2.3.4"}).status_code == 429
@@ -39,6 +39,15 @@ def test_lockout_is_per_client_ip_and_success_resets():
         c.get("/api/v1/status", headers={"Authorization": "Bearer bad", "CF-Connecting-IP": "9.9.9.9"})
         assert c.get("/api/v1/status", headers={"Authorization": good, "CF-Connecting-IP": "9.9.9.9"}).status_code == 200
         assert len(security._fails.get("9.9.9.9", [])) == 0
+
+
+def test_direct_client_cannot_dodge_lockout_with_a_fake_header():
+    from app import security
+    good = "Bearer " + settings.token
+    with TestClient(app, client=("192.168.1.50", 50000)) as c:   # not the tunnel: the header must be ignored
+        for i in range(security.MAX_FAILS):
+            c.get("/api/v1/status", headers={"Authorization": "Bearer bad", "CF-Connecting-IP": f"10.0.0.{i}"})
+        assert c.get("/api/v1/status", headers={"Authorization": good, "CF-Connecting-IP": "10.9.9.9"}).status_code == 429
 
 
 def test_websocket_lockout():

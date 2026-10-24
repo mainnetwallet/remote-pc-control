@@ -18,9 +18,19 @@ GLOBAL_WINDOW_SECONDS = 600
 _global_fails: deque = deque()
 
 
+LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
 def client_key(headers, client) -> str:
-    # Behind a Cloudflare tunnel every request comes from localhost; Cloudflare puts the real client IP here.
-    return headers.get("cf-connecting-ip") or (client.host if client else "unknown")
+    # Behind a Cloudflare tunnel every request comes from localhost; Cloudflare puts the real client IP in
+    # cf-connecting-ip. That header is only believed when the connection itself is local (the tunnel): the server also
+    # listens on 0.0.0.0, and anyone who reaches it directly could otherwise invent a new "IP" for every guess and
+    # dodge the per-client lockout.
+    peer = client.host if client else "unknown"
+    if peer in LOOPBACK:
+        forwarded = (headers.get("cf-connecting-ip") or "").strip()
+        if forwarded: return forwarded[:64]
+    return peer
 
 
 def is_blocked(key: str) -> bool:
