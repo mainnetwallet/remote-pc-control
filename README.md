@@ -196,8 +196,6 @@ Needs a free Cloudflare account and a domain on Cloudflare (Active). The tunnel 
 
 **Problems:** `502` = server not running or URL is not `http://localhost:8888`; error 1033 = `Start-Service cloudflared`; stop access with `Stop-Service cloudflared`.
 
-**বাংলা:** (১) domain Cloudflare-এ **Active** করুন (২) Zero Trust > Tunnels > Create a tunnel > Windows (৩) Dashboard-এর `cloudflared.exe service install <token>` Administrator PowerShell-এ চালান (৪) Public hostname: `pc`, Type **HTTP**, URL **`localhost:8888`** (৫) ফোনে `https://pc.আপনার-domain` খুলুন।
-
 </details>
 
 ## 📱 Android app
@@ -229,6 +227,7 @@ Settings are in `.env` (template: [`.env.example`](.env.example)). Restart the s
 | `REMOTE_PC_HOST` / `_PORT` | `0.0.0.0` / `8888` | Packaged `.exe` only; `start.ps1` always uses `0.0.0.0:8888` |
 | `REMOTE_PC_WEBRTC` | `1` | WebRTC on/off (WebSocket is the fallback) |
 | `REMOTE_PC_RTC_FPS` | `auto` | WebRTC max fps (`auto` = monitor refresh, up to 120) |
+| `REMOTE_PC_RTC_STEADY` | `1` | Always send the full frame rate, even when the screen is still (`0` = only on change + 0.5 s keepalive) |
 | `REMOTE_PC_RTC_BITRATE` | `4000` | Starting WebRTC bitrate limit, kbit/s |
 | `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, `nvenc`, `qsv`, `amf` or `x264` |
 | `REMOTE_PC_STUN_URL` | Google STUN | STUN server(s), comma separated |

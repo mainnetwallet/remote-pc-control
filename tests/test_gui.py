@@ -4,11 +4,6 @@ from app import gui
 from app.gui_text import TEXT
 
 
-def test_english_and_bengali_texts_match():
-    assert set(TEXT["en"]) == set(TEXT["bn"])
-    assert set(gui.EXTRA["en"]) == set(gui.EXTRA["bn"])
-
-
 def _free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0)); return s.getsockname()[1]
@@ -97,9 +92,7 @@ def test_window_builds_and_shows_state(window, tmp_path, monkeypatch):
     assert app.v_auto.get() is True and app.v_fwlan.get() is False
     assert set(app.field_vars) == {"REMOTE_PC_RTC_FPS", "REMOTE_PC_RTC_BITRATE", "REMOTE_PC_WEBRTC"}
     assert "agent started" in app.log_text.get("1.0", "end")
-    app.toggle_lang(); _settle(window, 0.5)   # Bengali: the window is rebuilt and filled again
-    assert app.lang == "bn" and len(app.nb.tabs()) == 6 and len(app.field_vars) == 3
-    assert app.v_auto.get() is True
+    assert len(app.field_vars) == 3
 
 
 def test_window_toggle_failure_reverts_switch(window, tmp_path, monkeypatch):

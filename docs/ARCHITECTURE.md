@@ -313,7 +313,7 @@ flowchart TB
 | `tunnel.py` | Runs a Cloudflare quick tunnel (`cloudflared`). Can install it with `winget`. | `find_cloudflared`, `install`, `start`, `stop`, `status`. |
 | `firstrun.py` | Start-up helpers of the packaged exe. Do nothing when run from source. | `prepare` (data folder, `.env` with a random token, log redirect to `agent.log`), `server_state`, `classify`, `stop_old_server`, `message`. |
 | `gui.py` | Desktop window (tkinter) with six tabs: Connect, Startup, Lock, Internet, Settings, Agent. Talks to `/panel/api`. | `PanelClient`, `App`, `start_server`, `run`. |
-| `gui_text.py` | English and Bengali texts of the window. | `TEXT`. |
+| `gui_text.py` | English texts of the window. | `TEXT`. |
 | `__init__.py` | Empty package marker. | |
 
 ### Other code
@@ -608,7 +608,7 @@ Tests that need `tkinter` (app window, lock screen) are skipped when it is missi
 | `backend/tests/test_screen_input.py` | Coordinate mapping, click, drag, scroll, hotkeys, `rel` moves, socket token checks. |
 | `backend/tests/test_webrtc.py` | Signaling parsing, ICE servers, login and lockout on `/ws/rtc`, unavailable reasons, sessions, data channels, encoder fallback. |
 | `tests/test_firstrun.py` | First start of the exe, `.env` creation, server state detection. |
-| `tests/test_gui.py` | Window texts (English and Bengali match), panel client, window behaviour, server switch, self-test flag. |
+| `tests/test_gui.py` | Window texts (texts), panel client, window behaviour, server switch, self-test flag. |
 | `tests/test_wol_packet.py` | Wake-on-LAN packet format. |
 
 | Workflow | Trigger | What it does |

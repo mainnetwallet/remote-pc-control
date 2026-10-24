@@ -7,7 +7,7 @@ earlier by the autostart task."""
 import json, os, queue, subprocess, sys, threading, time, urllib.error, urllib.request
 from pathlib import Path
 from .gui_text import TEXT
-from .paths import data_dir, frozen
+from .paths import frozen
 
 TITLE = "Remote PC Control"
 
@@ -23,18 +23,7 @@ EXTRA = {
            "ts_title": "Built-in Tailscale (no Tailscale install on this PC)", "ts_help": "Lets the phone reach this PC through your Tailscale account without installing Tailscale here. The phone still needs the Tailscale app, signed in to the same account. Screen video then uses the slower WebSocket mode.",
            "ts_on": "Turn on", "ts_off": "Turn off", "ts_signin": "Open sign-in page", "ts_copy": "Copy link",
            "ts_state_off": "Off", "ts_state_starting": "Starting...", "ts_state_login": "Sign in to Tailscale once with the link below", "ts_state_running": "Connected",
-           "ts_missing": "The built-in Tailscale part is missing: install the newest setup.", "ts_addr": "Phone address"},
-    "bn": {"tab_connect": "কানেক্ট", "tab_startup": "স্টার্টআপ", "tab_lock": "লক", "tab_link": "ইন্টারনেট",
-           "tab_settings": "সেটিংস", "tab_agent": "এজেন্ট", "no_server": "এই PC র এজেন্টের সাথে যোগাযোগ হচ্ছে না। এটা কি চালু আছে?",
-           "closing_note": "এই উইন্ডো বন্ধ করলেও এজেন্ট ব্যাকগ্রাউন্ডে চালু থাকে। আবার অ্যাপ খুললে এটা দেখা যাবে।",
-           "offline": "এজেন্ট পাওয়া যাচ্ছে না", "loading": "লোড হচ্ছে...", "restarting_app": "রিস্টার্ট হচ্ছে... কয়েক সেকেন্ডে উইন্ডো আবার কানেক্ট হবে।",
-           "server_on": "সার্ভার: চালু", "server_off": "সার্ভার: বন্ধ", "server_starting": "সার্ভার: চালু হচ্ছে...", "server_stopping": "সার্ভার: বন্ধ হচ্ছে...",
-           "turn_on": "সার্ভার চালু করুন", "turn_off": "সার্ভার বন্ধ করুন", "server_off_note": "সার্ভার বন্ধ থাকলে ফোন কানেক্ট হবে না।",
-           "server_stopped": "সার্ভার বন্ধ হয়েছে।",
-           "ts_title": "অ্যাপের ভেতরের Tailscale (এই PC তে Tailscale ইনস্টল লাগবে না)", "ts_help": "এই PC তে Tailscale ইনস্টল না করেই আপনার Tailscale অ্যাকাউন্ট দিয়ে ফোন থেকে PC তে ঢোকা যায়। ফোনে Tailscale অ্যাপ লাগবে, একই অ্যাকাউন্টে সাইন-ইন করা। স্ক্রিন তখন ধীর WebSocket মোডে চলে।",
-           "ts_on": "চালু করুন", "ts_off": "বন্ধ করুন", "ts_signin": "সাইন-ইন পেজ খুলুন", "ts_copy": "লিংক কপি",
-           "ts_state_off": "বন্ধ", "ts_state_starting": "চালু হচ্ছে...", "ts_state_login": "নিচের লিংক দিয়ে একবার Tailscale এ সাইন-ইন করুন", "ts_state_running": "কানেক্টেড",
-           "ts_missing": "অ্যাপের ভেতরের Tailscale অংশ নেই: নতুন সেটআপ ইনস্টল করুন।", "ts_addr": "ফোনের ঠিকানা"},
+           "ts_missing": "The built-in Tailscale part is missing: install the newest setup.", "ts_addr": "Phone address"}
 }
 OK, BAD, MUTED = "#12805c", "#b42318", "#5d6b7e"
 
@@ -84,7 +73,6 @@ class App:
         self.stop_until = 0.0   # right after "turn off" the server may still answer once or twice: ignore that
         self.deadline = time.time() + 45 if starting else 0.0   # until then "not answering" means "starting"
         self.token_shown = False
-        self.lang = self._load_lang()
         self.q = queue.Queue(); self.pending = {}; self._job = 0
         self._tunnel_job = self._toast_job = None
         self.wrap = []
@@ -110,7 +98,7 @@ class App:
     # ---- helpers -------------------------------------------------------------------------------------------
     def _ui_font(self):
         if sys.platform != "win32": return
-        family = "Nirmala UI" if self.lang == "bn" else "Segoe UI"   # Nirmala UI has the Bengali letters
+        family = "Segoe UI"
         for n in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont"): self.tkfont.nametofont(n).configure(family=family, size=10)
         for f in ("f_title", "f_head"):
             if hasattr(self, f): getattr(self, f).configure(family=family)
@@ -122,17 +110,8 @@ class App:
                 try: self.root.iconbitmap(default=str(p)); return
                 except Exception: pass
 
-    def _lang_file(self): return data_dir() / "window_lang.txt"
-
-    def _load_lang(self):
-        try:
-            v = self._lang_file().read_text(encoding="ascii").strip()
-            if v in TEXT: return v
-        except OSError: pass
-        return "en"   # English until the user picks Bengali with the button (the choice is remembered)
-
     def t(self, key):
-        return EXTRA[self.lang].get(key) or TEXT[self.lang].get(key) or TEXT["en"].get(key) or EXTRA["en"].get(key) or key
+        return EXTRA["en"].get(key) or TEXT["en"].get(key) or key
 
     def bg(self, fn, ok=None, err=None):
         """Run fn in a worker thread so the window never freezes; ok/err run on the window thread.
@@ -211,7 +190,6 @@ class App:
         self.wrap = []
         head = ttk.Frame(self.root, padding=(16, 12, 16, 0)); head.pack(fill="x")
         ttk.Label(head, text=TITLE, font=self.f_title).pack(side="left")
-        ttk.Button(head, text="বাংলা" if self.lang == "en" else "English", command=self.toggle_lang).pack(side="right")
         self.admin_pill = ttk.Label(head); self.admin_pill.pack(side="right", padx=12)
         self.host_pill = ttk.Label(head, foreground=MUTED); self.host_pill.pack(side="right", padx=4)
 
@@ -491,16 +469,6 @@ class App:
             self._tunnel_job = self.root.after(2000, lambda: self.bg(lambda: self.client.call("/tunnel"), self.render_tunnel, lambda e: None))
 
     # ---- actions -------------------------------------------------------------------------------------------
-    def toggle_lang(self):
-        self.lang = "bn" if self.lang == "en" else "en"
-        try: self._lang_file().parent.mkdir(parents=True, exist_ok=True); self._lang_file().write_text(self.lang, encoding="ascii")
-        except OSError: pass
-        sel = self.nb.index(self.nb.select())
-        self._ui_font(); self.build(); self.nb.select(sel)
-        if self.S:
-            self.render_pills(); self.render_addrs(); self.render_fields(); self.render_lock(); self.render_tunnel(self.S.get("tunnel")); self.render_tailnet(self.S.get("tailnet"))
-        self.load_system(); self.load_log()
-
     def toggle_token(self): self.token_shown = not self.token_shown; self.render_token()
 
     def toggle(self, var, cb, call):
