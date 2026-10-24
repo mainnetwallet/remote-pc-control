@@ -38,28 +38,11 @@ Android app --HTTPS/WSS, authenticated--> FastAPI agent --local named pipe--> Cr
 
 - Windows 11 Pro, the PC's own local (non-domain) account for now - see limitations.
 - Visual Studio 2022 (Desktop C++ workload) + Windows 10/11 SDK, to build `windows/unlock-provider/`.
-  This gives you `cmake` and `signtool` - they do **not** exist in a plain PowerShell/cmd window.
 - A code-signing certificate. A self-signed test cert works for your own machine; anything you'd trust long-term
   should use a real one (or enable test-signing mode, which you should not leave on permanently).
 
 ## Install
 
-0. **If `cmake`/`signtool` aren't recognized as commands**, you're in a plain PowerShell window - they only live
-   in the Visual Studio developer shell.
-   - Install **Visual Studio 2022 Community** (free, https://visualstudio.microsoft.com/downloads/) and select the
-     **"Desktop development with C++"** workload in the installer. This pulls in CMake, MSVC, and the Windows SDK
-     (which includes `signtool.exe`) together.
-   - Then open Start -> **"x64 Native Tools Command Prompt for VS 2022"** (or "Developer PowerShell for VS 2022")
-     instead of a normal terminal - that shell has both tools on `PATH` automatically. Run every command below
-     from there.
-   - For a first local test build you can skip real code-signing and use test-signing mode instead (your own
-     dev machine only, and only temporarily):
-     ```powershell
-     # elevated Native Tools shell, then reboot
-     Bcdedit /set testsigning on
-     ```
-     Windows will then load the unsigned DLL. Skip the `signtool sign ...` step below in that case, and turn
-     test-signing back off (`Bcdedit /set testsigning off` + reboot) once you're done - don't leave it on.
 1. **Build the provider** (on the Windows PC, in an "x64 Native Tools" prompt):
    ```powershell
    cd windows\unlock-provider
