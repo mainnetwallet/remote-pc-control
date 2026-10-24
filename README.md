@@ -152,6 +152,10 @@ It is a personal-use debug build, not a Play Store release. Build details: [andr
 | Medium (default) | 1280 px | 30 | 3 Mbit/s | 65 |
 | High | 1920 px | 30 | 8 Mbit/s | 80 |
 | Native | PC resolution | 30 | 20 Mbit/s | 90 |
+| Ultra 60 | 1920 px | 60 | 12 Mbit/s | 80 |
+| Ultra 120 | 1920 px | 120 | 16 Mbit/s | 80 |
+
+The two **Ultra** presets only reach their frame rate when the PC (capture + encoder), the link and the phone all keep up; the stream never goes faster than the slowest of them. Ultra 120 is meant for 120 Hz phones and is WebRTC only (the JPEG fallback is limited to 60 fps).
 
 **Sharpest picture (closest to the PC):** choose **Native** on the same Wi-Fi or over Tailscale. Native sends the PC's full resolution at up to 30 fps; the WebSocket fallback then uses 4:4:4 colour and a Lanczos downscale (JPEG quality 85 and up), so coloured text and thin lines stay crisp. The bitrate figures are ceilings: the link's own estimate still lowers them, so a slow connection never gets more than it can carry. If you prefer exactly the chosen quality even on a slow link (at the cost of lag), add `REMOTE_PC_LATENCY_FIRST=0` to `.env`. The web dashboard has the same four presets in a **Quality** menu above the screen (default High, remembered in the browser; it uses the JPEG stream only).
 
@@ -168,7 +172,7 @@ Settings live in `.env` in the project folder. Restart `start.ps1` after editing
 | `REMOTE_PC_RTC_BITRATE` | `4000` | Starting WebRTC bitrate limit in kbit/s (300-30000). The app's quality preset replaces it for its session (up to 30000) |
 | `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, `nvenc`, `qsv`, `amf` or `x264` |
 | `REMOTE_PC_STUN_URL` | Google STUN | STUN server(s), comma separated |
-| `REMOTE_PC_TURN_URL` / `_USER` / `_PASS` | empty | Optional TURN relay for networks without a direct path |
+| `REMOTE_PC_TURN_URL` / `REMOTE_PC_TURN_USER` / `REMOTE_PC_TURN_PASS` | empty | Optional TURN relay for networks without a direct path |
 | `REMOTE_PC_FPS` | `auto` | Starting frame rate of the WebSocket stream (1-60, or `auto`) |
 | `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality of the WebSocket stream (25-85) |
 | `REMOTE_PC_MAX_WIDTH` | `1280` | Starting width limit of the WebSocket stream (`0` = native) |
@@ -185,6 +189,17 @@ Settings live in `.env` in the project folder. Restart `start.ps1` after editing
 > `scripts/start.ps1` always starts Uvicorn on `0.0.0.0:8888`, and the firewall rule, autostart runner and docs all assume port 8888. For the script-based install, `REMOTE_PC_HOST` and `REMOTE_PC_PORT` therefore have no effect; they apply to the packaged `RemotePCControl.exe`.
 
 **Which network gives low latency?** Same Wi-Fi and Tailscale give direct UDP (about 50 ms or less). A free Cloudflare quick tunnel only carries TCP, so WebRTC usually falls back to the WebSocket stream; use Tailscale, the same LAN or a TURN relay for the best result. Full WebRTC, stream-quality, TURN and protocol reference: **[docs/WEBRTC.md](docs/WEBRTC.md)**.
+
+### What frame rate can my PC do?
+
+Run this on the PC you control. It measures the monitor refresh rate, screen capture, JPEG speed and which H.264 encoders work (NVENC, Intel QSV, AMD AMF, x264), then recommends settings:
+
+```powershell
+python tools\pc_capability.py            # measure and print a report
+python tools\pc_capability.py --apply    # also write the recommended values into .env
+```
+
+`REMOTE_PC_RTC_FPS=auto` (the default) already follows your monitor's refresh rate, up to 120. Use the report if you want a fixed number instead. For fast capture install the optional extra: `pip install dxcam` (`setup.ps1` does this).
 
 ## 🧰 Command reference
 
@@ -324,7 +339,7 @@ frontend/    React web dashboard (touch UI: src/RemoteScreen.tsx)
 android/     Native Android app (Kotlin, Jetpack Compose, Material 3)
 scripts/     setup, start, tunnel, autostart, lock-screen and firewall scripts
 installer/   Windows installer definition (Inno Setup)
-tools/       Standalone Wake-on-LAN sender
+tools/       Wake-on-LAN sender and pc_capability.py (what FPS can this PC do?)
 docs/        Guides and reference
 lock_overlay.py   Full-screen PIN lock process
 ```

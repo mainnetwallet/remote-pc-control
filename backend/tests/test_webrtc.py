@@ -412,7 +412,6 @@ def test_input_and_control_messages_reach_handle_input_identically():
 def test_pointer_moves_are_coalesced_but_clicks_keep_order():
     async def go():
         s = make_session(); ch = await started(s)
-        mouse_ref = []
         for i in range(50): s.on_channel_message(ch["input"], json.dumps({"type": "rel", "dx": 2, "dy": 1}))
         s.on_channel_message(ch["control"], json.dumps({"type": "click", "button": "left"}))
         await settle(s)
@@ -551,7 +550,6 @@ def test_track_scales_to_max_width_and_follows_live_config():
 
 def test_track_stop_releases_capture_on_the_capture_thread_and_ends_the_thread():
     cap = FakeCapture()
-    before = {t.name for t in threading.enumerate()}
     async def go():
         t = webrtc._screen_track_class()(cap, webrtc.RtcConfig(0, 30, 2000))
         await t.recv(); t.stop(); await t.released()

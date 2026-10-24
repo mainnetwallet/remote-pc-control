@@ -5,7 +5,7 @@ from fastapi import FastAPI, Depends, HTTPException, WebSocket
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from .config import settings, validate_settings
+from .config import validate_settings
 from .security import require_auth
 from . import monitor, control, pinlock
 from .screen import screen_socket, input_socket

@@ -12,7 +12,6 @@ which must be run by a person on a real Windows 11 PC.
 """
 import gc
 import json
-import os
 import subprocess
 import sys
 import time

@@ -12,6 +12,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e ".[test]"
+      - run: python -m pip install ruff
+      - run: ruff check backend tools lock_overlay.py run_agent.py --select F,E9
       - run: python -m pytest backend/tests tests -q -rf --tb=short 2>&1 | Tee-Object pytest.log
       - if: failure()
         run: |

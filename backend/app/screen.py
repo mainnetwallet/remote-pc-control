@@ -36,7 +36,7 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
 Normalized coordinates make the mapping independent of the (possibly downscaled)
 frame the phone is showing, and of Windows display scaling.
 """
-import asyncio, collections, contextlib, functools, hmac, io, json, math, platform, threading, time, zlib
+import asyncio, collections, contextlib, functools, io, json, math, platform, threading, time, zlib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from fastapi import WebSocket, WebSocketDisconnect
@@ -587,7 +587,6 @@ def cursor_message(pos, mon: dict) -> dict:
 
 async def _push_cursor(ws: WebSocket, mouse_ctl, mon: dict) -> None:
     """Tell a watch_cursor client where the pointer is: on every change (at most 60/s) and as a heartbeat."""
-    loop = asyncio.get_running_loop()
     last, last_at = None, 0.0
     try:
         while True:

@@ -20,7 +20,7 @@ The server's `.env` values below are only the *starting* values of every `/ws/sc
 {"type":"config","max_width":1920,"fps":15,"quality":70}
 ```
 
-All fields are optional. `max_width` is `0` (native) or 320-3840, `fps` is 1-30, `quality` is JPEG 25-90; out-of-range numbers are clamped and unusable values are ignored. Settings are per connection. The server answers with a fresh `{"type":"screen","width":W,"height":H,"max_width":..,"fps":..,"quality":..}` (the values now in effect) followed by a new frame. Frames are never upscaled, so a `max_width` above the PC's resolution just sends native size. Clients that never send `config` get exactly the `.env` behaviour.
+All fields are optional. `max_width` is `0` (native) or 320-3840, `fps` is 1-60 on `/ws/screen`, `quality` is JPEG 25-90; out-of-range numbers are clamped and unusable values are ignored. Settings are per connection. The server answers with a fresh `{"type":"screen","width":W,"height":H,"max_width":..,"fps":..,"quality":..}` (the values now in effect) followed by a new frame. Frames are never upscaled, so a `max_width` above the PC's resolution just sends native size. Clients that never send `config` get exactly the `.env` behaviour.
 
 **Sharp mode.** From JPEG quality 85 up the server downscales with Lanczos instead of bilinear and keeps full-resolution colour (4:4:4 instead of 4:2:0), so coloured text and thin UI lines stay crisp. Frames get noticeably bigger, which the flow control absorbs on a fast link. The Native preset (quality 90, in the app and in the web dashboard) uses it; the other presets do not.
 
