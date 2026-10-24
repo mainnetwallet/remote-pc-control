@@ -1,5 +1,5 @@
 # Quick Cloudflare tunnel: gives your phone an https link that works from anywhere (no Tailscale, no port-forwarding).
-# The link changes every time this runs. For a permanent link see docs/CLOUDFLARE.md (section B).
+# The link changes every time this runs. For a permanent link see README.md (Cloudflare permanent tunnel).
 $ErrorActionPreference = "Stop"
 if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
   winget install --id Cloudflare.cloudflared -e --accept-source-agreements --accept-package-agreements

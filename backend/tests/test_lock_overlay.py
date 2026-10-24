@@ -7,7 +7,7 @@ They are skipped (not failed) when no display/Tk is available.
 What these tests are -- and are not: they exercise the overlay's logic and Tk event handling
 on whatever platform runs them (Linux/Xvfb here, Windows in CI). Win32-only code (the keyboard
 hook, SetForegroundWindow, the named mutex) is NOT executed on Linux; its pure policy
-(should_block_key) is tested and the Win32 calls are covered by docs/WINDOWS_LOCK_TESTING.md,
+(should_block_key) is tested and the Win32 calls are covered by the manual checklist in README.md (PIN lock),
 which must be run by a person on a real Windows 11 PC.
 """
 import gc
@@ -190,7 +190,7 @@ def type_keys(screen, *keysyms):
             # Tk on Windows cannot synthesise the numpad's NumLock-dependent keysyms from
             # event_generate, so call the bound handler directly. That the handlers are bound
             # to the keypad keys is asserted in test_keypad_bindings_exist; real numpad typing
-            # is covered by docs/WINDOWS_LOCK_TESTING.md (not by these tests).
+            # is covered by the manual checklist in README.md (PIN lock) (not by these tests).
             screen._on_enter() if k == "KP_Enter" else screen._on_keypad_digit(int(k[3:]))
             screen.root.update()
             continue

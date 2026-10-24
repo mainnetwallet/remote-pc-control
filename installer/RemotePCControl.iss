@@ -21,7 +21,7 @@ ArchitecturesInstallIn64BitMode=x64
 [Files]
 Source: "..\dist\RemotePCControl.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\tsbridge.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\INSTALL_WINDOWS.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\scripts\register-installed-task.ps1"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]

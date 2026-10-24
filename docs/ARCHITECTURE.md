@@ -4,13 +4,13 @@
 
 The current source tree, runtime paths, APIs, security boundaries, tests and build workflows.
 
-[← Project README](../README.md) · [Quick start](QUICKSTART_WINDOWS.md) · [WebRTC details](WEBRTC.md)
+[← Project README](../README.md)
 
 </div>
 
 ---
 
-**On this page:** [Layout](#project-layout) · [Runtime flow](#runtime-flow) · [HTTP API](#http-api) · [Transports](#live-screen-and-input-transports) · [Security](#authentication-and-security) · [PIN lock](#pin-lock-design) · [Configuration](#configuration) · [Scripts](#windows-scripts) · [Clients](#frontend-and-android-client) · [Tests and CI](#tests-and-ci) · [Limitations](#known-limitations)
+**On this page:** [Layout](#project-layout) · [Runtime flow](#runtime-flow) · [HTTP API](#http-api) · [Transports](#live-screen-and-input-transports) · [WebRTC protocol](#webrtc-and-stream-protocol) · [Security](#authentication-and-security) · [PIN lock](#pin-lock-design) · [Configuration](#configuration) · [Scripts](#windows-scripts) · [Clients](#frontend-and-android-client) · [Tests and CI](#tests-and-ci) · [Limitations](#known-limitations)
 
 ## Project layout
 
@@ -35,10 +35,10 @@ The current source tree, runtime paths, APIs, security boundaries, tests and bui
 ├── installer/               Inno Setup installer definition
 ├── tools/wol_sender.py      Standalone Wake-on-LAN magic-packet utility
 ├── tests/                   Wake-on-LAN packet tests
-├── docs/                    Setup, connection and reference guides
+├── docs/                    ARCHITECTURE.md (this file)
 ├── assets/                  README banner
 ├── .github/workflows/       CI, Android APK and Windows installer workflows
-├── INSTALL_WINDOWS.md       Install and autostart guide (also shipped by the installer)
+├── README.md                Install, run, connect, configure, troubleshoot
 ├── .env.example             Supported configuration settings
 └── pyproject.toml           Python dependencies and pytest configuration
 ```
@@ -100,7 +100,53 @@ The dashboard is served from `backend/app/static/` after the frontend is built. 
 | `/ws/screen` | JPEG frames over WebSocket | Fallback with acknowledgements, flow control, adaptive quality and resolution |
 | `/ws/input` | JSON over WebSocket | Mouse, trackpad, keyboard, text input and cursor updates |
 
-WebRTC can use NVIDIA NVENC, Intel QSV or AMD AMF hardware encoding; otherwise it falls back to libx264. The WebSocket stream remains available when WebRTC is disabled or cannot deliver video. A Cloudflare quick tunnel carries HTTP/WebSocket signaling but not direct UDP media; use LAN/Tailscale or configure TURN when needed. Protocol details: [WEBRTC.md](WEBRTC.md).
+WebRTC can use NVIDIA NVENC, Intel QSV or AMD AMF hardware encoding; otherwise it falls back to libx264. The WebSocket stream remains available when WebRTC is disabled or cannot deliver video. A Cloudflare quick tunnel carries HTTP/WebSocket signaling but not direct UDP media; use LAN/Tailscale or configure TURN when needed. Protocol details: [WebRTC and stream protocol](#webrtc-and-stream-protocol).
+
+## WebRTC and stream protocol
+
+### JPEG stream quality (`/ws/screen`)
+
+The `.env` values are only the *starting* values of every `/ws/screen` connection. A client can change them at any time while streaming:
+
+```json
+{"type":"config","max_width":1920,"fps":15,"quality":70}
+```
+
+All fields are optional. `max_width` is `0` (native) or 320-3840, `fps` is 1-60, `quality` is JPEG 25-90; out-of-range numbers are clamped and unusable values ignored. Settings are per connection. The server answers with `{"type":"screen","width":W,"height":H,"max_width":..,"fps":..,"quality":..}` (the values now in effect) followed by a new frame. Frames are never upscaled.
+
+- **Sharp mode.** From JPEG quality 85 up the server downscales with Lanczos and keeps full-resolution colour (4:4:4 instead of 4:2:0). Frames get bigger, which the flow control absorbs on a fast link. The Native preset uses it.
+- **Motion quality.** While the picture keeps changing, frames are sent at `REMOTE_PC_MOTION_QUALITY` percent of the JPEG quality and `REMOTE_PC_MOTION_WIDTH` percent of the width (both `100` = off). After about 0.2 s of rest one full-quality frame follows.
+- **Fast capture.** `setup.ps1` tries to install the optional `dxcam` package (DXGI capture, several times faster than `mss`). If it is missing or does not work, the server prints one line and keeps using `mss`; `REMOTE_PC_CAPTURE=mss` forces it.
+
+### WebRTC (low latency)
+
+The JPEG stream sends one picture per frame over a TCP WebSocket, so one slow packet delays everything behind it. WebRTC sends H.264 over UDP (old frames are dropped, not queued) and carries mouse and keyboard input on data channels.
+
+- When the user taps *Start screen*, the Android app opens `/ws/rtc` with the same token. That socket only exchanges the connection offer; video and input then travel directly between phone and PC.
+- The JPEG stream starts at the same moment, so a picture appears from the first second. Once WebRTC video is really decoded the app switches to it and closes the JPEG stream. If WebRTC has not delivered video within about 20 seconds, or the PC reports it unavailable, the app keeps the WebSocket stream and shows a notice. A network drop under 5 seconds does not end a working session.
+- The PC encodes on the GPU when it can (`nvenc`, `qsv`, `amf`), otherwise libx264 (`ultrafast`, `zerolatency`, no B-frames). A hardware encoder that does not work is skipped automatically.
+- Input uses two data channels with the same JSON messages as `/ws/input`: `input` (unordered, no retransmits) for pointer moves and `control` (reliable) for clicks, keys, scroll, hotkeys and text.
+- The live bitrate follows the receiver's estimate but never goes below the *floor*: 1 Mbit/s, or one sixth of the limit when that is higher, and never below the limit itself if that is lower.
+
+| Network | Result |
+|---|---|
+| Same Wi-Fi / LAN | Direct UDP, lowest latency (about 50 ms or less) |
+| Tailscale (phone and PC) | Direct UDP through the Tailscale addresses |
+| Internet, both sides reachable with STUN | Direct UDP after NAT punch-through |
+| Mobile data behind CGNAT / strict firewall | Needs a TURN relay, otherwise WebSocket fallback |
+| Cloudflare quick tunnel only | TCP only: signaling works, video does not; falls back to WebSocket |
+
+### Signaling protocol (for other clients)
+
+`/ws/rtc` uses the same first message as the other sockets, `{"token":"..."}`, then JSON:
+
+1. The PC sends `{"type":"ready","ice_servers":[...]}`.
+2. The client sends `{"type":"offer","sdp":"..."}` (receive-only video plus data channels `input` and `control`) and gets `{"type":"answer","sdp":"..."}`.
+3. Trickle candidates go both ways as `{"type":"candidate","candidate":{"candidate":"...","sdpMid":"0","sdpMLineIndex":0}}`.
+4. `{"type":"unavailable","reason":"..."}` means: use `/ws/screen`.
+5. Over the `control` channel `{"type":"config","max_width":1280,"fps":30,"bitrate":3000,"cursor":true}` changes the video live (bitrate in kbit/s).
+
+More detail is in the header of `backend/app/webrtc.py`.
 
 ## Authentication and security
 
@@ -122,7 +168,7 @@ The PIN lock is two independent processes sharing one file:
 | `lock_overlay.py` | Separate process that polls the file every second and shows or hides a full-screen PIN window. Works even when the server is not running, and again right after Windows boots |
 | `scripts/install-lock-overlay.ps1` | Registers the single scheduled task `RemotePCControlLock` (sign-in trigger plus a one-minute watchdog; `IgnoreNew` and a per-session mutex prevent duplicate windows) |
 
-Rules: PINs are 4-12 digits; five wrong PINs at the PC start a 60-second cool-down; an unreadable state file never counts as "unlocked"; no PIN, hash or salt is ever logged. The overlay logs to `%LOCALAPPDATA%\RemotePCControl\lock_overlay.log`. The state file path can be overridden with `REMOTE_PC_LOCK_STATE`. Manual test steps: [WINDOWS_LOCK_TESTING.md](WINDOWS_LOCK_TESTING.md).
+Rules: PINs are 4-12 digits; five wrong PINs at the PC start a 60-second cool-down; an unreadable state file never counts as "unlocked"; no PIN, hash or salt is ever logged. The overlay logs to `%LOCALAPPDATA%\RemotePCControl\lock_overlay.log`. The state file path can be overridden with `REMOTE_PC_LOCK_STATE`. The manual test checklist is in the [README](../README.md#-pin-lock).
 
 ## Configuration
 
