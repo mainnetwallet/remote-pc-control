@@ -22,6 +22,8 @@ Source: "..\scripts\register-installed-task.ps1"; DestDir: "{app}"; Flags: ignor
 [Icons]
 Name: "{group}\Remote PC Control"; Filename: "{app}\RemotePCControl.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\Remote PC Control"; Filename: "{app}\RemotePCControl.exe"; WorkingDir: "{app}"
+[InternetShortcuts]
+Name: "{group}\Remote PC Control panel"; Filename: "http://127.0.0.1:8888/panel"
 [Run]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Exe ""{app}\RemotePCControl.exe"""; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; StatusMsg: "Setting up autostart, administrator rights and firewall..."
 [UninstallRun]

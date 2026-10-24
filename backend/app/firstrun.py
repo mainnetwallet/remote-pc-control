@@ -42,19 +42,33 @@ def prepare():
         env.write_text(_ENV.format(token=_new_token), encoding="ascii")
 
 
+def _open_url(url):
+    """This program runs as administrator. A browser started from an elevated program often fails to open (it cannot
+    hand the page to the normal browser window), so on Windows the page is opened through explorer.exe, which opens it
+    as the signed-in user."""
+    import subprocess, webbrowser
+    if sys.platform == "win32":
+        try:
+            subprocess.Popen(["explorer.exe", url], creationflags=0x08000000)
+            return
+        except OSError as e:
+            print("explorer.exe could not open the page:", e)
+    try: webbrowser.open(url)
+    except Exception as e: print("Could not open the browser:", e)
+
+
 def open_panel(port, token, wait_for_server=True):
     """Open the control panel in the default browser (the token travels in the #hash: it never reaches the server)."""
     url = f"http://127.0.0.1:{int(port)}/panel#{token}"
 
     def work():
-        import time, webbrowser
+        import time
         if wait_for_server:
             for _ in range(60):
                 try:
                     socket.create_connection(("127.0.0.1", int(port)), timeout=1).close(); break
                 except OSError: time.sleep(0.5)
-        try: webbrowser.open(url)
-        except Exception as e: print("Could not open the browser:", e)
+        _open_url(url)
 
     threading.Thread(target=work, daemon=True).start()
 
