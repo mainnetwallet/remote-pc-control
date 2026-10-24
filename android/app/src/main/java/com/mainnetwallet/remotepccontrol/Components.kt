@@ -4,7 +4,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -14,11 +16,13 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +51,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -71,13 +76,11 @@ fun AppCard(
     val shapes = MaterialTheme.shapes
 
     Card(
-        modifier = modifier
-            .shadow(elevation, shape = shapes.large),
+        modifier = modifier,
         shape = shapes.large,
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
         colors = CardDefaults.cardColors(
-            containerColor = colors.surface,
-            // Subtle border for definition
-            surfaceTint = colors.surfaceContainerHigh
+            containerColor = colors.surface
         ),
         border = BorderStroke(1.dp, colors.outlineVariant)
     ) {
@@ -101,12 +104,11 @@ fun ElevatedCard(
     val shapes = MaterialTheme.shapes
 
     Card(
-        modifier = modifier
-            .shadow(4.dp, shape = shapes.large),
+        modifier = modifier,
         shape = shapes.large,
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(
-            containerColor = colors.surfaceContainer,
-            surfaceTint = colors.surfaceContainerHigh
+            containerColor = colors.surfaceContainer
         )
     ) {
         Column(
@@ -149,7 +151,6 @@ fun StatusDot(color: Color, modifier: Modifier = Modifier, size: Dp = 8.dp) {
         modifier
             .size(size)
             .background(color, CircleShape)
-            .shadow(2.dp, CircleShape)
     )
 }
 
@@ -173,7 +174,11 @@ fun PulsingStatusDot(
     Box(
         modifier
             .size(size)
-            .graphicsLayer { this.alpha = alpha; this.scaleX = scale; this.scaleY = scale }
+            .graphicsLayer {
+                this.alpha = alpha
+                this.scaleX = scale
+                this.scaleY = scale
+            }
             .background(color, CircleShape)
     )
 }
@@ -450,7 +455,7 @@ fun RateColumn(
             }
             Text(label, style = typo.labelMedium, color = colors.onSurfaceVariant)
         }
-        Spacer(Modifier.height(DesignTokens.SpaceXS))
+        androidx.compose.foundation.layout.Spacer(Modifier.height(DesignTokens.SpaceXS))
         Text(
             if (bytesPerSec == null) "–" else formatBytes(bytesPerSec) + "/s",
             style = typo.titleLarge,
@@ -516,10 +521,10 @@ fun PrimaryActionButton(
                     color = colors.onPrimary,
                     strokeWidth = 2.dp
                 )
-                Spacer(Modifier.width(DesignTokens.SpaceSM))
+                androidx.compose.foundation.layout.Spacer(Modifier.width(DesignTokens.SpaceSM))
             }
             icon?.invoke()
-            if (icon != null && !loading) Spacer(Modifier.width(DesignTokens.SpaceSM))
+            if (icon != null && !loading) androidx.compose.foundation.layout.Spacer(Modifier.width(DesignTokens.SpaceSM))
             Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
         }
     }
