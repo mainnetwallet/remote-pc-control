@@ -56,7 +56,7 @@ For a **Windows 10/11 x64** PC. Pick **one** option.
 <li><b>Best for:</b> quick and easy setup</li>
 <li><b>Update:</b> run the newer <code>Setup.exe</code></li>
 </ul>
-<a href="#option-b--windows-installer"><b>Go to Option B ↓</b></a>
+<a href="https://github.com/mainnetwallet/remote-pc-control/releases/latest/download/RemotePCControl-Setup.exe"><b>⬇ Download Setup.exe</b></a> &nbsp;·&nbsp; <a href="#option-b--windows-installer"><b>Steps ↓</b></a>
 </td>
 </tr>
 </table>
