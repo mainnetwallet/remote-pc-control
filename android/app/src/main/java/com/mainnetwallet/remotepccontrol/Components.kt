@@ -35,6 +35,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material.Divider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -290,7 +291,7 @@ fun QualityPicker(
                         role = Role.RadioButton,
                         onClick = { onSelect(q) }
                     )
-                    .animateContentSize(),
+                    
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -391,10 +392,10 @@ fun RingGauge(
     val trackColor = MaterialTheme.colorScheme.outlineVariant
     val targetFraction = (percent ?: 0).coerceIn(0, 100) / 100f
 
-    val fraction by animateFloatAsState(
+    val fraction by animateFloatAsState<Float>(
         targetValue = targetFraction,
         label = "gauge",
-        animationSpec = if (animate) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else null
+        animationSpec = if (animate) spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else null
     )
 
     Box(
