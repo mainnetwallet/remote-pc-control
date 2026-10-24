@@ -6,6 +6,8 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 DefaultDirName={autopf}\RemotePCControl
 DefaultGroupName=Remote PC Control
+DisableProgramGroupPage=yes
+SetupIconFile=..\assets\app.ico
 PrivilegesRequired=admin
 CloseApplications=force
 UninstallDisplayIcon={app}\RemotePCControl.exe
@@ -18,12 +20,15 @@ ArchitecturesInstallIn64BitMode=x64
 [Files]
 Source: "..\dist\RemotePCControl.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\INSTALL_WINDOWS.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\assets\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\scripts\register-installed-task.ps1"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
-Name: "{group}\Remote PC Control"; Filename: "{app}\RemotePCControl.exe"; WorkingDir: "{app}"
+Name: "{autoprograms}\Remote PC Control"; Filename: "{app}\RemotePCControl.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\Remote PC Control"; Filename: "{app}\RemotePCControl.exe"; WorkingDir: "{app}"
-[InternetShortcuts]
-Name: "{group}\Remote PC Control panel"; Filename: "http://127.0.0.1:8888/panel"
+[InstallDelete]
+Type: filesandordirs; Name: "{autoprograms}\Remote PC Control"
+Type: filesandordirs; Name: "{userprograms}\Remote PC Control"
+Type: files; Name: "{userdesktop}\Remote PC Control.lnk"
 [Run]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Exe ""{app}\RemotePCControl.exe"""; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; StatusMsg: "Setting up autostart, administrator rights and firewall..."
 [UninstallRun]
