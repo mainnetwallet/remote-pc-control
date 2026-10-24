@@ -1,0 +1,4 @@
+LIBRARY RemoteUnlockProvider
+EXPORTS
+    DllCanUnloadNow   PRIVATE
+    DllGetClassObject PRIVATE

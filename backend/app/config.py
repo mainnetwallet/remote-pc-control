@@ -39,6 +39,17 @@ class Settings:
     turn_user = os.getenv("REMOTE_PC_TURN_USER", "").strip()
     turn_pass = os.getenv("REMOTE_PC_TURN_PASS", "")
 
+    # --- Secure Windows unlock (disabled by default; needs the native Credential Provider, see docs/UNLOCK.md) ---
+    unlock_enabled = os.getenv("REMOTE_PC_UNLOCK", "0").strip().lower() in ("1", "true", "yes", "on")
+    # The one local Windows account this agent may unlock (e.g. "alice"). Required when unlock is enabled.
+    unlock_account = os.getenv("REMOTE_PC_UNLOCK_ACCOUNT", "").strip()
+    # 1 = the plain Windows PIN/password action is refused; only phone-biometric + credential is accepted.
+    unlock_require_biometric = os.getenv("REMOTE_PC_UNLOCK_REQUIRE_BIOMETRIC", "0").strip().lower() in ("1", "true", "yes", "on")
+    # Folder for the enrolled device public keys (never holds Windows credentials).
+    unlock_data_dir = os.getenv("REMOTE_PC_UNLOCK_DATA", "").strip()
+    # Optional stable PC identifier that challenges are bound to (default: derived from the machine GUID/hostname).
+    pc_id = os.getenv("REMOTE_PC_ID", "").strip()
+
 settings = Settings()
 MIN_TOKEN_LEN = 4   # short passwords are allowed; longer is safer (12+ recommended, setup.ps1 generates 64 chars)
 

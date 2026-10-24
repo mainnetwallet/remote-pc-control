@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "remote-pc-control"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["fastapi>=0.115,<1", "uvicorn[standard]>=0.30,<1", "psutil>=6,<8", "mss>=9,<11", "Pillow>=10,<13", "pynput>=1.7,<2", "python-dotenv>=1,<2", "aiortc>=1.9,<2", "av>=13"]
+dependencies = ["fastapi>=0.115,<1", "uvicorn[standard]>=0.30,<1", "psutil>=6,<8", "mss>=9,<11", "Pillow>=10,<13", "pynput>=1.7,<2", "python-dotenv>=1,<2", "cryptography>=42", "aiortc>=1.9,<2", "av>=13"]
 [project.optional-dependencies]
 test = ["pytest>=8,<9", "httpx>=0.27,<1"]
 fast = ["dxcam>=0.3.0; sys_platform == 'win32'"]

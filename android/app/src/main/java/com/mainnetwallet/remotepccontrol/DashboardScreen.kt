@@ -112,6 +112,9 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
                 }
             }
 
+            // Secure Windows unlock (optional; disabled on the PC until configured, see docs/UNLOCK.md)
+            UnlockCard(c)
+
             // Live screen
             AppCard(Modifier.fillMaxWidth()) {
                 Text("Live screen", style = MaterialTheme.typography.titleMedium)

@@ -53,6 +53,11 @@ All endpoints except the health check require a bearer token.
 | POST | `/api/v1/control/shutdown` | Shutdown; requires `{"confirm":true}` |
 | GET | `/api/v1/wol/status` | Reports Wake-on-LAN as unconfigured |
 | POST | `/api/v1/wol/wake` | Returns HTTP 501 until an authenticated LAN relay is configured |
+| GET | `/api/v1/unlock/status` | Whether the Windows unlock integration is installed/enabled, and which methods are usable |
+| GET/POST/DELETE | `/api/v1/unlock/devices[/{id}]` | Enroll, list, or revoke a biometric device's public key (approval itself is local-only, see `docs/UNLOCK.md`) |
+| POST | `/api/v1/unlock/challenge` | Issue a short-lived, single-use biometric unlock challenge for one enrolled device |
+| POST | `/api/v1/unlock/password` | Submit a Windows PIN/password for unlock; Windows itself verifies it |
+| POST | `/api/v1/unlock/biometric` | Submit a signed challenge plus the Windows credential for unlock |
 
 The dashboard is served from `backend/app/static/` after the frontend is built.
 
@@ -139,7 +144,9 @@ Tests cover authentication and lockout, API behavior, screen configuration and f
 ## Known limitations
 
 - Wake-on-LAN API support is unconfigured. `tools/wol_sender.py` can send a magic packet from a device already on the target LAN, but the PC agent cannot wake itself. Mobile-data wake needs a separately authenticated, always-on LAN relay.
-- The agent cannot control Windows sign-in, UAC secure desktop or other protected sessions.
+- The agent cannot control UAC secure desktop or other protected sessions. Windows sign-in (unlock only, not
+  initial logon) is supported as an optional, disabled-by-default feature - see `docs/UNLOCK.md`. It requires
+  installing a separate native Windows component that has not been built or verified against a real machine.
 - Cloudflare Access email/OTP login works in a browser; the Android app cannot complete that browser flow.
 - WebRTC requires a direct UDP path or TURN. A quick tunnel alone falls back to WebSocket/JPEG.
 - The CI Android APK is a debug build intended for personal use.

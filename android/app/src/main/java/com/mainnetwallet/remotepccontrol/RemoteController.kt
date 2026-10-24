@@ -40,6 +40,7 @@ private const val DEFAULT_URL = "http://100.82.180.82:8888"
 private const val PREF_TOKEN = "pc_token_enc"   // password, encrypted with an Android Keystore key (see SecureStore)
 private const val PREF_URL = "pc_url"        // the token is never stored, only the address
 private const val PREF_QUALITY = "quality"
+private const val PREF_DEVICE_ID = "unlock_device_id"   // this phone's own device id (not secret, just a label the PC recognizes)
 private const val LOCAL_CURSOR_NS = 250_000_000L   // after the finger moved the pointer, trust our own prediction this long
 
 /** Live-screen quality presets. Each one is sent to the PC as {"type":"config","max_width","fps","quality"}. */
@@ -480,5 +481,121 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
         wsGen++
         rtc?.close(); rtc = null
         screenSocket?.cancel(); inputSocket?.cancel()
+    }
+
+    // ---------------------------------------------------------------------------------- Secure Windows unlock
+    var unlockStatus by mutableStateOf<UnlockStatus?>(null)
+        private set
+    var unlockBusy by mutableStateOf(false)
+        private set
+    /** Set right after a successful enrollment so the UI can show the fingerprint for local approval on the PC. */
+    var pendingEnrollment by mutableStateOf<PendingEnrollment?>(null)
+        private set
+    /** This phone's own device id on the currently connected PC, remembered across restarts (not secret). */
+    var thisDeviceId by mutableStateOf(prefs.getString(PREF_DEVICE_ID, null))
+        private set
+
+    fun refreshUnlockStatus() {
+        if (!connected) return
+        call("/api/v1/unlock/status") { ok, text -> if (ok) unlockStatus = UnlockStatus.parse(text) }
+    }
+
+    /** Generates (or reuses) the device key and submits it for PC-side approval. */
+    fun enrollThisDevice(deviceName: String, onDone: (Notice) -> Unit) {
+        if (unlockBusy) return
+        unlockBusy = true
+        scope.launch {
+            val spki = try { withContext(Dispatchers.IO) { UnlockKeyStore.ensureKeyPair() } }
+            catch (e: Exception) { unlockBusy = false; onDone(Notice("Could not create the device key: ${e.message}", true)); return@launch }
+            val body = JSONObject().put("name", deviceName).put("public_key", spki).toString()
+            call("/api/v1/unlock/devices", "POST", body) { ok, text ->
+                unlockBusy = false
+                if (ok) {
+                    val o = try { JSONObject(text) } catch (_: Exception) { JSONObject() }
+                    val did = o.optString("device_id")
+                    pendingEnrollment = PendingEnrollment(did, o.optString("fingerprint"))
+                    thisDeviceId = did
+                    prefs.edit().putString(PREF_DEVICE_ID, did).apply()
+                    refreshUnlockStatus()
+                    onDone(Notice("Enrolled. Approve this device on the PC to finish.", false))
+                } else onDone(Notice("Enrollment failed: $text", true))
+            }
+        }
+    }
+
+    /** Submits the Windows PIN/password the user typed, over the authenticated API (never the input WebSocket). */
+    fun unlockWithPassword(credential: String, onResult: (UnlockOutcome) -> Unit) {
+        if (unlockBusy) { onResult(UnlockOutcome(false, "Already in progress")); return }
+        unlockBusy = true
+        val body = JSONObject().put("credential", credential).toString()
+        call("/api/v1/unlock/password", "POST", body) { ok, text ->
+            unlockBusy = false
+            onResult(unlockOutcomeFrom(ok, text))
+        }
+    }
+
+    /**
+     * Requests a fresh challenge, has the caller sign it (after a real BiometricPrompt success), then submits the
+     * signature together with the Windows credential - a fingerprint alone is never sent as proof by itself.
+     */
+    fun requestUnlockChallenge(deviceId: String, onResult: (ok: Boolean, challenge: JSONObject?, error: String?) -> Unit) {
+        val body = JSONObject().put("device_id", deviceId).toString()
+        call("/api/v1/unlock/challenge", "POST", body) { ok, text ->
+            if (ok) onResult(true, try { JSONObject(text) } catch (_: Exception) { null }, null)
+            else onResult(false, null, text)
+        }
+    }
+
+    fun unlockWithBiometric(deviceId: String, challengeId: String, signatureB64: String, credential: String, onResult: (UnlockOutcome) -> Unit) {
+        if (unlockBusy) { onResult(UnlockOutcome(false, "Already in progress")); return }
+        unlockBusy = true
+        val body = JSONObject().put("device_id", deviceId).put("challenge_id", challengeId)
+            .put("signature", signatureB64).put("credential", credential).toString()
+        call("/api/v1/unlock/biometric", "POST", body) { ok, text ->
+            unlockBusy = false
+            onResult(unlockOutcomeFrom(ok, text))
+        }
+    }
+
+    private fun unlockOutcomeFrom(ok: Boolean, text: String): UnlockOutcome {
+        if (ok) return UnlockOutcome(true, "Unlocked.")
+        val o = try { JSONObject(text).optJSONObject("detail") } catch (_: Exception) { null }
+        val result = o?.optString("result").orEmpty()
+        val message = when (result) {
+            "INVALID_CREDENTIALS" -> "Incorrect Windows PIN/password."
+            "ACCOUNT_RESTRICTED" -> "Windows refused the sign-in (locked out, expired password, or disabled account)."
+            "TIMEOUT" -> "Timed out waiting for Windows to respond."
+            "NOT_CONFIGURED" -> "Windows unlock isn't installed or enabled on the PC yet."
+            "UNSUPPORTED" -> "This PC requires biometric approval; plain PIN/password isn't accepted."
+            "NOT_LOCKED" -> "The PC isn't locked right now."
+            "BUSY" -> "Another unlock attempt is already in progress."
+            "RATE_LIMITED" -> "Too many failed attempts. Try again later."
+            "CHALLENGE_INVALID" -> "That approval expired. Try again."
+            "SIGNATURE_INVALID", "DEVICE_NOT_AUTHORIZED" -> "This device isn't approved for unlock."
+            else -> "Unlock failed: $text"
+        }
+        return UnlockOutcome(false, message)
+    }
+}
+
+class PendingEnrollment(val deviceId: String, val fingerprint: String)
+class UnlockOutcome(val success: Boolean, val message: String)
+
+class UnlockStatus(
+    val ready: Boolean, val passwordAvailable: Boolean, val biometricAvailable: Boolean,
+    val reason: String, val approvedDevices: Int
+) {
+    companion object {
+        fun parse(text: String): UnlockStatus? = try {
+            val o = JSONObject(text)
+            val methods = o.optJSONObject("methods")
+            UnlockStatus(
+                ready = o.optBoolean("integration_installed", false),
+                passwordAvailable = methods?.optBoolean("password", false) ?: false,
+                biometricAvailable = methods?.optBoolean("biometric", false) ?: false,
+                reason = o.optString("reason", ""),
+                approvedDevices = o.optInt("approved_devices", 0)
+            )
+        } catch (_: Exception) { null }
     }
 }

@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.20)
+project(RemoteUnlockProvider LANGUAGES CXX)
+if (NOT WIN32)
+  message(FATAL_ERROR "This Credential Provider only builds on Windows (MSVC + Windows SDK).")
+endif()
+add_library(RemoteUnlockProvider SHARED RemoteUnlockProvider.cpp RemoteUnlockProvider.def)
+set_target_properties(RemoteUnlockProvider PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+target_link_libraries(RemoteUnlockProvider PRIVATE Secur32 Wtsapi32 Shlwapi Ole32)
