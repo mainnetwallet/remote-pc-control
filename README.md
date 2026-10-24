@@ -82,6 +82,28 @@ cd $HOME\remote-pc-control
 
 Health check: `http://localhost:8888/api/health` returns `"ok":true`.
 
+### 🧰 Other commands
+
+Run from `$HOME\remote-pc-control`.
+
+| I want to… | Command |
+|---|---|
+| Show the token | `Select-String '^REMOTE_PC_TOKEN=' .env` |
+| Change the password | `.\scripts\set-password.ps1` (then restart the server) |
+| Autostart at sign-in | `.\scripts\install-autostart.ps1` (remove: add `-Remove`) |
+| Stop / start autostart task | `Stop-ScheduledTask -TaskName RemotePCControl` / `Start-ScheduledTask -TaskName RemotePCControl` |
+| Control Task Manager, admin terminals | Administrator PowerShell, once: `.\scripts\install-autostart.ps1 -Admin` (gives the agent admin rights; use a strong password) |
+| Set the PIN | `.\scripts\set-pin.ps1` |
+| PIN lock screen at sign-in | `.\scripts\install-lock-overlay.ps1` (remove: add `-Remove`) |
+| Quick Cloudflare tunnel | `.\scripts\start-tunnel.ps1` |
+| Remove the Tailscale firewall rule | `.\scripts\remove-firewall.ps1` (Administrator) |
+| Reinstall everything | `.\scripts\setup.ps1 -Force` |
+| What FPS can my PC do? | `python tools\pc_capability.py` (add `--apply` to save to `.env`) |
+| Run tests | `.\.venv\Scripts\python.exe -m pytest backend/tests tests -q` |
+| Build the dashboard | `cd frontend; npm install; npm run build` |
+
+Reset `.env` to the latest template (⚠ overwrites password, Gist and TURN settings): `Copy-Item .env .env.backup; Copy-Item .env.example .env -Force; .\scripts\set-password.ps1 NewPassword`
+
 ### Option B · Windows installer
 
 1. [**Download RemotePCControl-Setup.exe**](https://github.com/mainnetwallet/remote-pc-control/releases/latest/download/RemotePCControl-Setup.exe) (latest release) and run it. It installs the app, autostart (admin) and the Tailscale-only firewall rule, then starts the agent.
@@ -201,28 +223,6 @@ Settings are in `.env` (template: [`.env.example`](.env.example)). Restart the s
 | `QUICK_TUNNEL` / `GIST_TOKEN` / `GIST_ID` | empty | Quick tunnel and Gist link (`start.ps1` only) |
 
 **Latency:** Wi-Fi and Tailscale give direct UDP (~50 ms). A Cloudflare quick tunnel carries TCP only, so video falls back to the WebSocket stream. Behind CGNAT or a strict firewall you need TURN (e.g. [coturn](https://github.com/coturn/coturn) on a server with a public IP and UDP 3478); then set `REMOTE_PC_TURN_URL=turn:IP:3478`, `REMOTE_PC_TURN_USER` and `REMOTE_PC_TURN_PASS` in `.env`. Protocol details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#webrtc-and-stream-protocol).
-
-## 🧰 Other commands
-
-Run from `$HOME\remote-pc-control`.
-
-| I want to… | Command |
-|---|---|
-| Show the token | `Select-String '^REMOTE_PC_TOKEN=' .env` |
-| Change the password | `.\scripts\set-password.ps1` (then restart the server) |
-| Autostart at sign-in | `.\scripts\install-autostart.ps1` (remove: add `-Remove`) |
-| Stop / start autostart task | `Stop-ScheduledTask -TaskName RemotePCControl` / `Start-ScheduledTask -TaskName RemotePCControl` |
-| Control Task Manager, admin terminals | Administrator PowerShell, once: `.\scripts\install-autostart.ps1 -Admin` (gives the agent admin rights; use a strong password) |
-| Set the PIN | `.\scripts\set-pin.ps1` |
-| PIN lock screen at sign-in | `.\scripts\install-lock-overlay.ps1` (remove: add `-Remove`) |
-| Quick Cloudflare tunnel | `.\scripts\start-tunnel.ps1` |
-| Remove the Tailscale firewall rule | `.\scripts\remove-firewall.ps1` (Administrator) |
-| Reinstall everything | `.\scripts\setup.ps1 -Force` |
-| What FPS can my PC do? | `python tools\pc_capability.py` (add `--apply` to save to `.env`) |
-| Run tests | `.\.venv\Scripts\python.exe -m pytest backend/tests tests -q` |
-| Build the dashboard | `cd frontend; npm install; npm run build` |
-
-Reset `.env` to the latest template (⚠ overwrites password, Gist and TURN settings): `Copy-Item .env .env.backup; Copy-Item .env.example .env -Force; .\scripts\set-password.ps1 NewPassword`
 
 ## 🔐 PIN lock
 
