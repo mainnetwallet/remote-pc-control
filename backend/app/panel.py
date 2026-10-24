@@ -1,11 +1,10 @@
-"""Control panel: a local web page (http://127.0.0.1:8888/panel) to do everything the PowerShell scripts do.
+"""Control panel API: what the desktop app window uses to do everything the PowerShell scripts do (there is no web page).
 Safety: it only answers requests that come from this PC itself (never from the phone, Tailscale, LAN or a Cloudflare
 tunnel), and every API call also needs the access token."""
 import os, re, secrets, socket
 from collections import deque
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from . import envfile, monitor, pinlock, tunnel, winadmin
 from .config import settings
@@ -20,16 +19,11 @@ LOG_FILES = {"agent": "agent.log", "lock": "lock_overlay.log"}
 async def local_only(request: Request):
     peer = request.client.host if request.client else ""
     if peer not in LOOPBACK or not _HOST.match(request.headers.get("host", "")) or any(h in request.headers for h in PROXY_HEADERS):
-        raise HTTPException(403, "The control panel opens on the PC itself only: use http://127.0.0.1:8888/panel on this PC")
+        raise HTTPException(403, "The control panel works on the PC itself only: use the Remote PC Control app on this PC")
 
 
 router = APIRouter()
 api = APIRouter(prefix="/panel/api", dependencies=[Depends(local_only), Depends(require_auth)])
-PAGE = Path(__file__).resolve().parent / "panel.html"
-
-
-@router.get("/panel", dependencies=[Depends(local_only)], include_in_schema=False)
-def page(): return FileResponse(PAGE, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
 
 
 def env_path() -> Path: return data_dir() / ".env"

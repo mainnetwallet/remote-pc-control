@@ -1,4 +1,4 @@
-"""Texts of the app window (English and Bengali). The first part is shared with the browser panel (panel.html)."""
+"""Texts of the app window (English and Bengali). """
 TEXT = {
  "en": {
   "login_title": "Enter the password",

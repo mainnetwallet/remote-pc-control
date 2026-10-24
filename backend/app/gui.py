@@ -11,7 +11,7 @@ from .paths import data_dir
 
 TITLE = "Remote PC Control"
 
-# Texts that only the app window needs (the rest is shared with the browser panel).
+# Texts that only the app window needs (the rest is in gui_text.py).
 EXTRA = {
     "en": {"tab_connect": "Connect", "tab_startup": "Startup", "tab_lock": "Lock", "tab_link": "Internet",
            "tab_settings": "Settings", "tab_agent": "Agent", "no_server": "Cannot reach the agent on this PC. Is it running?",

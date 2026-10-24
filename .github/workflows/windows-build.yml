@@ -33,7 +33,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force backend/app/static | Out-Null
           Copy-Item -Recurse -Force frontend/dist/* backend/app/static/
-          pyinstaller --noconfirm --clean --onefile --noconsole --uac-admin --icon assets/app.ico --name RemotePCControl --paths backend --add-data "backend/app/static;backend/app/static" --add-data "backend/app/static;app/static" --add-data "backend/app/panel.html;backend/app" --add-data "backend/app/panel.html;app" --add-data "assets/app.ico;assets" --hidden-import tkinter --hidden-import mss --hidden-import pynput.keyboard --hidden-import pynput.mouse --collect-all aiortc --collect-all av --collect-all aioice --collect-all pylibsrtp --collect-all google_crc32c run_agent.py
+          pyinstaller --noconfirm --clean --onefile --noconsole --uac-admin --icon assets/app.ico --name RemotePCControl --paths backend --add-data "backend/app/static;backend/app/static" --add-data "backend/app/static;app/static" --add-data "assets/app.ico;assets" --hidden-import tkinter --hidden-import mss --hidden-import pynput.keyboard --hidden-import pynput.mouse --collect-all aiortc --collect-all av --collect-all aioice --collect-all pylibsrtp --collect-all google_crc32c run_agent.py
       - name: Smoke test the packaged exe
         shell: pwsh
         run: |
@@ -49,10 +49,14 @@ jobs:
           $problems = @()
           if (-not $ok) { $problems += "server did not answer on port 8888 (process exited: $($p.HasExited))" }
           else {
-            foreach ($path in "/panel", "/") {
-              try { $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8888$path" -TimeoutSec 5; Write-Host "GET $path -> $($r.StatusCode), $($r.Content.Length) bytes" }
-              catch { $problems += "GET $path failed: $($_.Exception.Message)" }
+            foreach ($path in "/", "/panel/api/state") {
+              try {
+                $h = @{}
+                if ($path -like "/panel/*") { $tok = ((Get-Content (Join-Path $env:LOCALAPPDATA "RemotePCControl\.env")) | Where-Object { $_ -like "REMOTE_PC_TOKEN=*" }) -replace "^REMOTE_PC_TOKEN=", ""; $h = @{ Authorization = "Bearer $tok" } }
+                $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8888$path" -Headers $h -TimeoutSec 5; Write-Host "GET $path -> $($r.StatusCode), $($r.Content.Length) bytes"
+              } catch { $problems += "GET $path failed: $($_.Exception.Message)" }
             }
+            try { Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8888/panel" -TimeoutSec 5 | Out-Null; $problems += "the old web page /panel still answers" } catch { Write-Host "GET /panel -> gone (expected)" }
           }
           $dir = Join-Path $env:LOCALAPPDATA "RemotePCControl"
           if (Test-Path $dir) { Get-ChildItem $dir -Filter *.log | ForEach-Object { Write-Host "=== $($_.Name)"; Get-Content $_.FullName -Tail 80 } }

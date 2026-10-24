@@ -58,11 +58,10 @@ def main():
 
 
 def show_panel(port, token, hosted=False):
-    """Show the app window (a real desktop UI). Only if it cannot be created, open the browser panel instead."""
+    """Show the app window (a real desktop UI)."""
     from app import firstrun, gui
     if gui.run(port, token, hosted=hosted): return
-    firstrun.open_panel(port, token)
-    import time; time.sleep(1.5)   # the browser thread is a daemon: give it time to start
+    firstrun.message("The Remote PC Control window could not be opened.\nThe agent keeps running in the background; the phone app still works.\nDetails are in agent.log.")
 
 
 if __name__ == "__main__":

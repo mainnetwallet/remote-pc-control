@@ -20,20 +20,22 @@ def local(**kw):
 def auth(): return {"Authorization": "Bearer " + settings.token}
 
 
-def test_page_opens_on_this_pc_only():
+def test_no_web_page_any_more():
     with local() as c:
-        r = c.get("/panel")
-        assert r.status_code == 200 and "Remote PC Control" in r.text
+        assert c.get("/panel").status_code in (404, 405)   # the control panel is the desktop app, not a website
+        assert c.get("/panel/").status_code in (404, 405)
+
+
+def test_api_opens_on_this_pc_only():
     with TestClient(app, base_url="http://127.0.0.1:8888", client=("100.64.1.2", 5)) as c:   # phone over Tailscale
-        assert c.get("/panel").status_code == 403
         assert c.get("/panel/api/state", headers=auth()).status_code == 403
 
 
 def test_blocked_through_tunnel_and_dns_rebinding():
     with local() as c:
-        assert c.get("/panel", headers={"cf-connecting-ip": "1.2.3.4"}).status_code == 403   # cloudflare tunnel
-        assert c.get("/panel", headers={"x-forwarded-for": "1.2.3.4"}).status_code == 403
-        assert c.get("/panel", headers={"host": "evil.example.com"}).status_code == 403
+        assert c.get("/panel/api/state", headers={**auth(), "cf-connecting-ip": "1.2.3.4"}).status_code == 403   # cloudflare tunnel
+        assert c.get("/panel/api/state", headers={**auth(), "x-forwarded-for": "1.2.3.4"}).status_code == 403
+        assert c.get("/panel/api/state", headers={**auth(), "host": "evil.example.com"}).status_code == 403
 
 
 def test_api_needs_the_token():
