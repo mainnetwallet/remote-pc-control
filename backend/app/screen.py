@@ -613,20 +613,60 @@ def key_map(keyboard) -> dict:
     return m
 
 
+def native_move(x: int, y: int, mon: dict) -> bool:
+    """Move the pointer with a real input event (SendInput-style absolute move). True when done.
+
+    pynput's `position = ...` is SetCursorPos, which Windows does not treat as mouse input while a button is held:
+    windows and icons do not follow it. A real absolute move does, exactly like a physical mouse."""
+    if not _on_windows(): return False
+    try:
+        import ctypes
+        w, h = max(2, mon["width"]), max(2, mon["height"])
+        ax = round((x - mon["left"]) * 65535 / (w - 1)); ay = round((y - mon["top"]) * 65535 / (h - 1))
+        ax, ay = max(0, min(65535, ax)), max(0, min(65535, ay))
+        ctypes.windll.user32.mouse_event(0x8001, ax, ay, 0, 0)   # MOVE | ABSOLUTE
+        return True
+    except Exception:
+        return False
+
+
+def _held(mouse_ctl) -> set:
+    """Buttons currently held down through this controller (kept on the controller so each session has its own)."""
+    h = getattr(mouse_ctl, "_held_buttons", None)
+    if h is None:
+        h = set()
+        try: mouse_ctl._held_buttons = h
+        except Exception: pass
+    return h
+
+
+def _move_pointer(mouse_ctl, target: tuple, mon: dict) -> None:
+    if _held(mouse_ctl) and native_move(target[0], target[1], mon): return
+    mouse_ctl.position = target
+
+
+def release_held(mouse_ctl) -> None:
+    """Let go of every button still held (the phone vanished mid-drag): a button must never stay stuck down."""
+    for b in list(_held(mouse_ctl)):
+        try: mouse_ctl.release(b)
+        except Exception: pass
+    _held(mouse_ctl).clear()
+
+
 def handle_input(d: dict, mon: dict, mouse_ctl, kb_ctl, mouse_mod, keys: dict) -> None:
     """Apply one input message. Raises nothing for malformed input; unknown messages are ignored."""
     kind = d.get("type")
     button = {"left": mouse_mod.Button.left, "right": mouse_mod.Button.right, "middle": mouse_mod.Button.middle}.get(d.get("button", "left"), mouse_mod.Button.left)
     pos = to_screen_xy(d, mon)
     if kind in ("move", "click", "down", "up") and pos is not None:
-        mouse_ctl.position = pos
+        _move_pointer(mouse_ctl, pos, mon)
     if kind == "rel":
         target = rel_screen_xy(d, mon, mouse_ctl.position)
-        if target is not None: mouse_ctl.position = target
+        if target is not None: _move_pointer(mouse_ctl, target, mon)
     elif kind == "click":
         mouse_ctl.click(button, 2 if int(d.get("count", 1)) == 2 else 1)
-    elif kind == "down": mouse_ctl.press(button)
-    elif kind == "up": mouse_ctl.release(button)
+    elif kind == "down": mouse_ctl.press(button); _held(mouse_ctl).add(button)
+    elif kind == "up": mouse_ctl.release(button); _held(mouse_ctl).discard(button)
     elif kind == "scroll":
         clamp = lambda v: max(-MAX_SCROLL, min(MAX_SCROLL, int(v)))
         dx, dy = clamp(d.get("dx", 0)), clamp(d.get("dy", 0))
@@ -668,7 +708,7 @@ def coalesce_input(messages: list[dict]) -> list[dict]:
 
 async def input_socket(ws: WebSocket):
     await ws.accept()
-    pump_task = None; cursor_task = None
+    pump_task = None; cursor_task = None; m = None
     try:
         if not await _authenticate(ws): return
         enable_dpi_awareness()
@@ -719,3 +759,6 @@ async def input_socket(ws: WebSocket):
     finally:
         if pump_task: pump_task.cancel()
         if cursor_task: cursor_task.cancel()
+        if m is not None:
+            try: release_held(m)
+            except Exception: pass

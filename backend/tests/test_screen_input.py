@@ -188,3 +188,26 @@ def test_old_messages_unchanged_after_rel_added():
     assert run({"type": "move", "nx": .5, "ny": .5})[0].position == (960, 540)
     assert run({"type": "click", "count": 2, "nx": 0, "ny": 0})[0].calls == [("click", "L", 2)]
     assert run({"type": "scroll", "dy": 3})[0].calls == [("scroll", 0, 3)]
+
+
+def test_moves_while_button_held_use_real_input_events(monkeypatch):
+    moves = []
+    monkeypatch.setattr(screen, "native_move", lambda x, y, mon: moves.append((x, y)) or True)
+    m, k = FakeMouse(), FakeKb()
+    screen.handle_input({"type": "down", "nx": .1, "ny": .1}, MON, m, k, MOUSE_MOD, KEYS)
+    assert moves == [] and m.position == (192, 108)            # nothing held yet: plain move, then press
+    screen.handle_input({"type": "move", "nx": .5, "ny": .5}, MON, m, k, MOUSE_MOD, KEYS)
+    screen.handle_input({"type": "rel", "dx": 10, "dy": 0}, MON, m, k, MOUSE_MOD, KEYS)
+    assert moves == [(960, 540), (202, 108)] and m.position == (192, 108)   # held: real input events, SetCursorPos untouched
+    screen.handle_input({"type": "up", "nx": .9, "ny": .9}, MON, m, k, MOUSE_MOD, KEYS)
+    assert moves[-1] == (1727, 971) and m.calls == [("press", "L"), ("release", "L")]
+    screen.handle_input({"type": "move", "nx": 0, "ny": 0}, MON, m, k, MOUSE_MOD, KEYS)
+    assert m.position == (0, 0)                                 # released: back to the plain move
+
+
+def test_release_held_lets_go_of_a_stuck_button():
+    m, k = FakeMouse(), FakeKb()
+    screen.handle_input({"type": "down", "nx": 0, "ny": 0}, MON, m, k, MOUSE_MOD, KEYS)
+    screen.release_held(m)
+    assert m.calls == [("press", "L"), ("release", "L")]
+    screen.release_held(m); assert len(m.calls) == 2

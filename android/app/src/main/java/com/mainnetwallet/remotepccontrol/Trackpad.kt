@@ -26,11 +26,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.dp
+import android.os.SystemClock
 import org.json.JSONObject
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 
 private const val TAP_TIMEOUT_MS = 300L          // finger down -> up shorter than this is a tap
+private const val HOLD_DRAG_MS = 380L            // one finger resting this long (no slide) = left button held; slide to drag, lift to drop
 private const val DOUBLE_TAP_WINDOW_MS = 300L    // a touch this soon after a tap is a double tap / tap-then-slide
 private const val MOVE_INTERVAL_MS = 8L          // up to about 120 pointer updates per second (the PC merges bursts)
 private const val START_MOVE_DP = 2f             // the pointer starts following the finger after this much travel (a tap may wobble)
@@ -42,7 +44,7 @@ private const val PAD_PC_PX_PER_DP = 2f          // PC pixels per dp of finger t
 /**
  * Laptop-style trackpad (plain black surface, no picture of the PC).
  *  one finger slide = relative move, tap = left click, second tap soon after = double click,
- *  tap then slide = drag (left button held), two-finger tap = right click, two-finger slide = scroll.
+ *  tap then slide = drag (left button held), hold still then slide = drag too, two-finger tap = right click, two-finger slide = scroll.
  *  Right strip (after a divider line): one-finger slide up/down = scroll.
  * Taps are sent as plain clicks at the current pointer; two quick taps become a double click on the PC.
  */
@@ -90,7 +92,12 @@ fun Trackpad(sensitivity: Float, send: (JSONObject) -> Unit, modifier: Modifier 
                         while (true) {
                             // While a throttled move is waiting, wake up on a timer so the last bit is not held back.
                             val waiting = (moved || moveStarted) && (abs(pendingX) >= 1f || abs(pendingY) >= 1f)
-                            val event = if (waiting) withTimeoutOrNull(MOVE_INTERVAL_MS) { awaitPointerEvent() } else awaitPointerEvent()
+                            // Hold-to-drag: still finger for HOLD_DRAG_MS presses the left button (like holding the mouse button down).
+                            val holdArmed = !dragging && !moved && maxPointers == 1 && prevPressed == 1
+                            val holdLeftMs = if (holdArmed) HOLD_DRAG_MS - (SystemClock.uptimeMillis() - downMs) else Long.MAX_VALUE
+                            if (holdArmed && holdLeftMs <= 0L) { dragging = true; sendNow(JSONObject().put("type", "down").put("button", "left")); continue }
+                            val waitMs = minOf(if (waiting) MOVE_INTERVAL_MS else Long.MAX_VALUE, holdLeftMs)
+                            val event = if (waitMs != Long.MAX_VALUE) withTimeoutOrNull(waitMs) { awaitPointerEvent() } else awaitPointerEvent()
                             if (event == null) { flush(true); continue }
                             val pressed = event.changes.filter { it.pressed }
                             if (pressed.size > maxPointers) maxPointers = pressed.size

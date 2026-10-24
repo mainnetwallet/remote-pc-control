@@ -8,6 +8,8 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -179,7 +181,31 @@ fun ScreenView(
                     )
                 }
                 .pointerInput(mode) {
-                    if (mode == TouchMode.OFF) return@pointerInput   // Click mode also moves the pointer on drag (a plain tap still clicks)
+                    // Drag mode = a held mouse button: press exactly where the finger lands (no touch-slop delay, so small
+                    // title bars and icons are hit), follow the finger, release where it lifts. A plain tap is a click.
+                    if (mode != TouchMode.DRAG) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var last = down.position
+                        var lastSentNs = 0L
+                        emit("down", last, size, "left")
+                        down.consume()
+                        try {
+                            while (true) {
+                                val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                last = c.position
+                                if (!c.pressed) break
+                                val now = System.nanoTime()
+                                if (now - lastSentNs >= 16_000_000L) { lastSentNs = now; emit("move", last, size) }
+                                c.consume()
+                            }
+                        } finally {
+                            emit("up", last, size, "left")   // also when cancelled: the button is never left held
+                        }
+                    }
+                }
+                .pointerInput(mode) {
+                    if (mode == TouchMode.OFF || mode == TouchMode.DRAG) return@pointerInput   // Click mode also moves the pointer on drag (a plain tap still clicks)
                     var last = Offset.Zero
                     var lastSentNs = 0L
                     var scrollAcc = 0f
