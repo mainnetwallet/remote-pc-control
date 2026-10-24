@@ -32,7 +32,7 @@ class Settings:
     token = os.getenv("REMOTE_PC_TOKEN", "")
     host = os.getenv("REMOTE_PC_HOST", "127.0.0.1")
     port = int(os.getenv("REMOTE_PC_PORT", "8888"))
-    fps = fps_setting(os.getenv("REMOTE_PC_FPS", ""), "20")
+    fps = fps_setting(os.getenv("REMOTE_PC_FPS", ""), "auto")
     jpeg_quality = max(25, min(85, int(os.getenv("REMOTE_PC_JPEG_QUALITY", "55"))))
     # Frames wider than this are downscaled before sending (0 = send full resolution).
     max_width = max(0, int(os.getenv("REMOTE_PC_MAX_WIDTH", "1280")))

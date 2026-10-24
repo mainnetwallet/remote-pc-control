@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import RemoteScreen from './RemoteScreen';
 type M={hostname:string;uptime_seconds:number;cpu_percent:number;memory:{total:number;used:number;percent:number};disk:{total:number;used:number;percent:number};network:{sent_bytes_per_sec:number;recv_bytes_per_sec:number}};
 const fmt=(n:number)=>n>=1073741824?(n/1073741824).toFixed(1)+' GB':n>=1048576?(n/1048576).toFixed(1)+' MB':n+' B';
-const QUALITY:Record<string,{label:string;w:number;fps:number;jpeg:number}>={low:{label:'Low',w:960,fps:20,jpeg:45},medium:{label:'Medium',w:1280,fps:30,jpeg:65},high:{label:'High',w:1920,fps:30,jpeg:80},native:{label:'Native',w:0,fps:30,jpeg:90}};
+const QUALITY:Record<string,{label:string;w:number;fps:number;jpeg:number}>={low:{label:'Low',w:960,fps:20,jpeg:45},medium:{label:'Medium',w:1280,fps:30,jpeg:65},high:{label:'High',w:1920,fps:30,jpeg:80},native:{label:'Native',w:0,fps:30,jpeg:90},ultra:{label:'Ultra 60',w:1920,fps:60,jpeg:80}};
 const qcfg=(k:string)=>{const p=QUALITY[k]||QUALITY.high;return JSON.stringify({type:'config',max_width:p.w,fps:p.fps,quality:p.jpeg})};
 function Metric({label,value,pct,detail=''}:{label:string;value:string;pct:number;detail?:string}){return <article className="metric"><small>{label}</small><strong>{value}</strong><div className="bar"><span style={{width:Math.min(100,Math.max(0,pct))+'%'}}/></div><small>{detail}</small></article>}
 export default function App(){

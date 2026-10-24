@@ -116,7 +116,7 @@ Details are in the header of `backend/app/webrtc.py`.
 | Variable | Default | Meaning |
 |---|---|---|
 | `REMOTE_PC_LATENCY_FIRST` | `1` | `1`: on a slow link the picture is made smaller at once (and grows back slowly, in steps of 10 quality / 80 px) so the delay stays low. `0`: always exactly the quality and width chosen in the app |
-| `REMOTE_PC_FPS` | `20` | Starting frames per second (1-60, or `auto`); clients can change it live |
+| `REMOTE_PC_FPS` | `auto` | Starting frames per second (1-60, or `auto`); clients can change it live |
 | `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality (25-85); clients can raise it to 90 live |
 | `REMOTE_PC_MAX_WIDTH` | `1280` | Starting width limit; wider frames are downscaled (`0` = native) |
 | `REMOTE_PC_MOTION_QUALITY` / `_WIDTH` | `100` / `100` | Motion-frame reduction, see [Motion quality](#motion-quality-less-lag) |

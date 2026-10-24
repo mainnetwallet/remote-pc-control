@@ -169,7 +169,7 @@ Settings live in `.env` in the project folder. Restart `start.ps1` after editing
 | `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, `nvenc`, `qsv`, `amf` or `x264` |
 | `REMOTE_PC_STUN_URL` | Google STUN | STUN server(s), comma separated |
 | `REMOTE_PC_TURN_URL` / `_USER` / `_PASS` | empty | Optional TURN relay for networks without a direct path |
-| `REMOTE_PC_FPS` | `20` | Starting frame rate of the WebSocket stream (1-60, or `auto`) |
+| `REMOTE_PC_FPS` | `auto` | Starting frame rate of the WebSocket stream (1-60, or `auto`) |
 | `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality of the WebSocket stream (25-85) |
 | `REMOTE_PC_MAX_WIDTH` | `1280` | Starting width limit of the WebSocket stream (`0` = native) |
 | `REMOTE_PC_LATENCY_FIRST` | `1` | Shrink the picture on slow links to keep delay low |
