@@ -69,6 +69,9 @@ REFINE_DELAY = 0.20       # the picture stood still this long after motion: send
 ACK_TIMEOUT = 1.0         # no ack for this long: assume the frames were lost and carry on
 KEEPALIVE_SECONDS = 3.0   # resend the last frame so idle screens don't hit client read timeouts
 MAX_SCROLL = 20
+EDGE_ZONE = 0.10        # holding the left button with the pointer this close (fraction of screen height) to the top/bottom auto-scrolls
+EDGE_TOP_DEAD = 0.03    # ...except the very top rows (browser tab strip: the wheel there would switch tabs)
+EDGE_TICK = 0.15        # seconds between auto-scroll steps (1 or 2 wheel clicks each, 2 when the pointer is right at the edge)
 MAX_REL = 500   # max pixels a single "rel" message may move the pointer on each axis
 BUTTONS = ("left", "right", "middle")
 
@@ -645,6 +648,41 @@ def _move_pointer(mouse_ctl, target: tuple, mon: dict) -> None:
     mouse_ctl.position = target
 
 
+def edge_scroll_clicks(y: float, press_y: float, mon: dict) -> int:
+    """Wheel clicks for one auto-scroll step while the left button is held (pynput: positive = up, negative = down).
+
+    Like dragging a text selection past the edge of a page: the page keeps scrolling and the selection grows.
+    Only when the drag began away from the edges, so dragging a window by its title bar or the taskbar never scrolls."""
+    h = mon["height"]
+    if h <= 0: return 0
+    fy = (y - mon["top"]) / h; fp = (press_y - mon["top"]) / h
+    if not (EDGE_ZONE <= fp <= 1 - EDGE_ZONE): return 0
+    if fy >= 1 - EDGE_ZONE:
+        return -(1 if (fy - (1 - EDGE_ZONE)) / EDGE_ZONE < 0.6 else 2)
+    if EDGE_TOP_DEAD <= fy <= EDGE_ZONE:
+        return 1 if (EDGE_ZONE - fy) / EDGE_ZONE < 0.6 else 2
+    return 0
+
+
+def autoscroll_step(mouse_ctl, mon: dict, left) -> int:
+    """One auto-scroll step: scrolls when the left button is held with the pointer near the top or bottom edge."""
+    if left not in _held(mouse_ctl): return 0
+    press = getattr(mouse_ctl, "_press_xy", None)
+    if press is None: return 0
+    try: y = mouse_ctl.position[1]
+    except Exception: return 0
+    n = edge_scroll_clicks(y, press[1], mon)
+    if n: mouse_ctl.scroll(0, n)
+    return n
+
+
+async def _autoscroll_loop(mouse_ctl, mon: dict, left) -> None:
+    while True:
+        await asyncio.sleep(EDGE_TICK)
+        try: autoscroll_step(mouse_ctl, mon, left)
+        except Exception: pass
+
+
 def release_held(mouse_ctl) -> None:
     """Let go of every button still held (the phone vanished mid-drag): a button must never stay stuck down."""
     for b in list(_held(mouse_ctl)):
@@ -665,7 +703,10 @@ def handle_input(d: dict, mon: dict, mouse_ctl, kb_ctl, mouse_mod, keys: dict) -
         if target is not None: _move_pointer(mouse_ctl, target, mon)
     elif kind == "click":
         mouse_ctl.click(button, 2 if int(d.get("count", 1)) == 2 else 1)
-    elif kind == "down": mouse_ctl.press(button); _held(mouse_ctl).add(button)
+    elif kind == "down":
+        try: mouse_ctl._press_xy = tuple(pos) if pos is not None else tuple(mouse_ctl.position)   # where the drag began
+        except Exception: pass
+        mouse_ctl.press(button); _held(mouse_ctl).add(button)
     elif kind == "up": mouse_ctl.release(button); _held(mouse_ctl).discard(button)
     elif kind == "scroll":
         clamp = lambda v: max(-MAX_SCROLL, min(MAX_SCROLL, int(v)))
@@ -708,7 +749,7 @@ def coalesce_input(messages: list[dict]) -> list[dict]:
 
 async def input_socket(ws: WebSocket):
     await ws.accept()
-    pump_task = None; cursor_task = None; m = None
+    pump_task = None; cursor_task = None; scroll_task = None; m = None
     try:
         if not await _authenticate(ws): return
         enable_dpi_awareness()
@@ -716,6 +757,7 @@ async def input_socket(ws: WebSocket):
         m, k = mouse.Controller(), keyboard.Controller()
         keys = key_map(keyboard)
         mon = await asyncio.to_thread(primary_monitor)
+        scroll_task = asyncio.create_task(_autoscroll_loop(m, mon, mouse.Button.left))
         await ws.send_json({"type": "ready"})
 
         # A separate reader keeps receiving while input is applied, so messages are batched (and pointer moves merged)
@@ -759,6 +801,7 @@ async def input_socket(ws: WebSocket):
     finally:
         if pump_task: pump_task.cancel()
         if cursor_task: cursor_task.cancel()
+        if scroll_task: scroll_task.cancel()
         if m is not None:
             try: release_held(m)
             except Exception: pass

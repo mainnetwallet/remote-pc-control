@@ -4,4 +4,4 @@
 .remote .screen{margin:0;cursor:crosshair;width:100%;max-height:70vh;pointer-events:none;-webkit-user-drag:none}.remote.full .screen{max-height:none;height:100%}
 .waiting{color:#98a7ba;padding:40px 0;font-size:14px}.hint{display:block}
 
-.keys .pressed{min-width:90px;padding:8px 11px;font-size:13px;font-weight:700;color:var(--accent,#7aa2ff)}
+.keys .pressed{min-width:90px;padding:8px 11px;font-size:13px;font-weight:600;opacity:.7}

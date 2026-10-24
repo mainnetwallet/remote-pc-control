@@ -211,3 +211,27 @@ def test_release_held_lets_go_of_a_stuck_button():
     screen.release_held(m)
     assert m.calls == [("press", "L"), ("release", "L")]
     screen.release_held(m); assert len(m.calls) == 2
+
+
+class ScrollMouse(FakeMouse):
+    pass
+
+
+def test_edge_scroll_only_near_the_edges_and_only_for_selection_drags():
+    clicks = lambda y, press=540: screen.edge_scroll_clicks(y, press, MON)
+    assert clicks(540) == 0                      # middle of the screen: nothing
+    assert clicks(1010) < 0 and clicks(1079) < 0  # bottom: scrolls down (negative)
+    assert clicks(1079) == -2 and clicks(985) == -1   # closer to the edge = faster
+    assert clicks(60) > 0 and clicks(10) == 0    # top: scrolls up, but not over the tab strip
+    assert clicks(1079, press=1070) == 0         # the drag began at the bottom edge (taskbar): never scroll
+    assert clicks(60, press=20) == 0             # the drag began on a title bar: never scroll
+
+
+def test_autoscroll_step_needs_the_left_button_held():
+    m, k = FakeMouse(), FakeKb()
+    m.position = (500, 540)
+    screen.handle_input({"type": "down"}, MON, m, k, MOUSE_MOD, KEYS)   # pressed in the middle
+    m.position = (500, 1070)
+    assert screen.autoscroll_step(m, MON, "L") < 0 and m.calls[-1][0] == "scroll" and m.calls[-1][2] < 0
+    screen.handle_input({"type": "up"}, MON, m, k, MOUSE_MOD, KEYS)
+    n = len(m.calls); assert screen.autoscroll_step(m, MON, "L") == 0 and len(m.calls) == n

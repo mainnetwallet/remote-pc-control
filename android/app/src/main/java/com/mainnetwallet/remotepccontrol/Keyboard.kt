@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -84,8 +85,8 @@ fun PcKeyboard(send: (JSONObject) -> Unit, onClose: () -> Unit, modifier: Modifi
         Box(Modifier.fillMaxWidth().height(26.dp), contentAlignment = Alignment.Center) {
             val text = shown
             if (text != null) {
-                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primary).padding(horizontal = 14.dp, vertical = 3.dp)) {
-                    Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1, color = MaterialTheme.colorScheme.onPrimary)
+                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 14.dp, vertical = 3.dp)) {
+                    Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -96,7 +97,7 @@ fun PcKeyboard(send: (JSONObject) -> Unit, onClose: () -> Unit, modifier: Modifi
                     if (key == null) Spacer(Modifier.weight(k.w))
                     else {
                         val active = when (key) { "CTRL" -> ctrl; "ALT" -> alt; "WIN" -> win; "SHIFT" -> shift; else -> false }
-                        KeyCap(k.label, k.w, active || (shownKey == key && key != "#CLOSE")) {
+                        KeyCap(k.label, k.w, active, flash = shownKey == key && key != "#CLOSE") {
                             when (key) {
                                 "CTRL" -> { ctrl = !ctrl; flash("Ctrl " + if (ctrl) "on" else "off", null) }
                                 "ALT" -> { alt = !alt; flash("Alt " + if (alt) "on" else "off", null) }
@@ -114,11 +115,11 @@ fun PcKeyboard(send: (JSONObject) -> Unit, onClose: () -> Unit, modifier: Modifi
 }
 
 @Composable
-private fun RowScope.KeyCap(label: String, weight: Float, active: Boolean, onClick: () -> Unit) {
+private fun RowScope.KeyCap(label: String, weight: Float, active: Boolean, flash: Boolean = false, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Box(
         Modifier.weight(weight).height(34.dp).clip(RoundedCornerShape(6.dp))
-            .background(if (active) scheme.primary else scheme.secondaryContainer)
+            .background(if (active) scheme.primary else if (flash) lerp(scheme.secondaryContainer, scheme.primary, 0.25f) else scheme.secondaryContainer)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
