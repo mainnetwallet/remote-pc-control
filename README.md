@@ -26,11 +26,17 @@ Live screen · touch-as-mouse · keyboard · system monitor · power controls ·
 ---
 
 > [!WARNING]
-> Use this only on a PC you own. Never port-forward port `8888` to the internet.
+> Only for a PC you own. Never expose port `8888` to the internet.
 
-A small server (the *agent*) runs on your Windows PC. Your phone reaches it over **Tailscale**, home Wi-Fi, or a **Cloudflare** tunnel, using a mobile browser or the Android app.
+Control your Windows PC from your phone over **Tailscale**, **Wi-Fi** or a **Cloudflare** tunnel, using the Android app or a mobile browser.
 
-Features: live screen (WebRTC H.264 with automatic JPEG fallback), touch and trackpad control, keyboard, CPU/RAM/disk/network monitor, lock / sleep / restart / shutdown, persistent PIN lock, token-protected API with rate limits.
+| Feature | What you get |
+|---|---|
+| 🖥 **Live screen** | WebRTC H.264, automatic JPEG fallback |
+| 👆 **Control** | Touch, trackpad, keyboard |
+| 📊 **Monitor** | CPU, RAM, disk, network |
+| ⚡ **Power** | Lock, sleep, restart, shutdown |
+| 🔐 **Protection** | PIN lock, token login, rate limits |
 
 ## 🚀 Install and run
 
