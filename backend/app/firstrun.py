@@ -28,30 +28,6 @@ def _redirect_output(folder):
     if sys.stderr is None: sys.stderr = log
 
 
-def _addresses():
-    found = set()
-    try:
-        for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
-            if not ip.startswith("127."): found.add(ip)
-    except OSError:
-        pass
-    return sorted(found, key=lambda ip: (not ip.startswith("100."), ip))   # Tailscale (100.x) first
-
-
-def _message_box(title, text):
-    try:
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(0, text, title, 0x40 | 0x40000)   # information icon, always on top
-    except Exception:
-        print(text)
-
-
-def _notify(title, text, wait=False):
-    t = threading.Thread(target=_message_box, args=(title, text), daemon=not wait)
-    t.start()
-    if wait: t.join()
-
-
 def prepare():
     """Create the data folder and, on the very first start, a .env with a random access token."""
     global _new_token
@@ -66,23 +42,33 @@ def prepare():
         env.write_text(_ENV.format(token=_new_token), encoding="ascii")
 
 
+def open_panel(port, token, wait_for_server=True):
+    """Open the control panel in the default browser (the token travels in the #hash: it never reaches the server)."""
+    url = f"http://127.0.0.1:{int(port)}/panel#{token}"
+
+    def work():
+        import time, webbrowser
+        if wait_for_server:
+            for _ in range(60):
+                try:
+                    socket.create_connection(("127.0.0.1", int(port)), timeout=1).close(); break
+                except OSError: time.sleep(0.5)
+        try: webbrowser.open(url)
+        except Exception as e: print("Could not open the browser:", e)
+
+    threading.Thread(target=work, daemon=True).start()
+
+
 def already_running(port) -> bool:
-    """Packaged exe only: True (and a message) when another copy already serves this port."""
+    """Packaged exe only: True when another copy already serves this port."""
     if not frozen():
         return False
     try:
         socket.create_connection(("127.0.0.1", int(port)), timeout=1).close()
     except OSError:
         return False
-    _notify("Remote PC Control", "Remote PC Control is already running on this PC.", wait=True)
     return True
 
 
-def announce(port):
-    """First start only: show the access token once, so it can be typed into the phone app."""
-    if not _new_token:
-        return
-    urls = "\n".join(f"http://{ip}:{port}" for ip in _addresses()) or f"http://<this PC's address>:{port}"
-    _notify("Remote PC Control is ready",
-            f"Enter this in the phone app.\n\nPC address (Tailscale address starts with 100.):\n{urls}\n\n"
-            f"Access token:\n{_new_token}\n\nThe token is saved in:\n{data_dir() / '.env'}")
+def first_run() -> bool:
+    return _new_token is not None

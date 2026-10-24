@@ -21,10 +21,10 @@ Source: "..\INSTALL_WINDOWS.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\scripts\register-installed-task.ps1"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{group}\Remote PC Control"; Filename: "{app}\RemotePCControl.exe"; WorkingDir: "{app}"
-Name: "{group}\Access token (.env)"; Filename: "notepad.exe"; Parameters: """{localappdata}\RemotePCControl\.env"""
 Name: "{autodesktop}\Remote PC Control"; Filename: "{app}\RemotePCControl.exe"; WorkingDir: "{app}"
 [Run]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Exe ""{app}\RemotePCControl.exe"""; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; StatusMsg: "Setting up autostart, administrator rights and firewall..."
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Remove"; Flags: runhidden waituntilterminated; RunOnceId: "RemovePCTask"
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Kind lock -Remove"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveLockTask"
 Filename: "taskkill.exe"; Parameters: "/F /IM RemotePCControl.exe"; Flags: runhidden; RunOnceId: "KillPC"

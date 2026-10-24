@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Remote PC Control</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--text:#18202b;--muted:#5d6b7e;--line:#dde3ec;--accent:#2563eb;--accent-text:#fff;--ok:#12805c;--bad:#b42318;--field:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f141b;--card:#18202b;--text:#e8edf4;--muted:#9aa8bb;--line:#2a3544;--accent:#4c8dff;--accent-text:#06101f;--ok:#4cc79a;--bad:#ff8a80;--field:#0f141b}}
+:root[data-theme=dark]{--bg:#0f141b;--card:#18202b;--text:#e8edf4;--muted:#9aa8bb;--line:#2a3544;--accent:#4c8dff;--accent-text:#06101f;--ok:#4cc79a;--bad:#ff8a80;--field:#0f141b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,"Segoe UI",Roboto,"Noto Sans Bengali",sans-serif}
+header{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;max-width:880px;margin:0 auto;padding:18px 16px 4px}
+h1{font-size:20px;margin:0}
+main{max-width:880px;margin:0 auto;padding:8px 16px 40px;display:grid;gap:14px}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+h2{font-size:16px;margin:0 0 4px}
+.help{color:var(--muted);margin:0 0 12px;font-size:13.5px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.row.between{justify-content:space-between}
+input,select{font:inherit;color:var(--text);background:var(--field);border:1px solid var(--line);border-radius:9px;padding:8px 10px;min-width:0}
+input[type=text],input[type=password],input[type=number]{flex:1 1 180px}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:9px;padding:8px 14px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text);font-weight:600}
+button.danger{color:var(--bad)}
+button:disabled{opacity:.5;cursor:default}
+.pill{display:inline-block;border-radius:99px;padding:2px 10px;font-size:12.5px;border:1px solid var(--line);color:var(--muted)}
+.pill.ok{color:var(--ok);border-color:var(--ok)}.pill.bad{color:var(--bad);border-color:var(--bad)}
+.addr{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin:6px 0}
+code{font:13.5px ui-monospace,Consolas,monospace;word-break:break-all}
+.switch{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+.switch:first-of-type{border-top:0}
+.switch input{width:20px;height:20px;margin-top:2px;flex:none;accent-color:var(--accent)}
+.switch small{display:block;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 16px}
+.grid label{display:grid;gap:4px;font-size:13.5px;color:var(--muted)}
+.grid input,.grid select{color:var(--text);width:100%}
+pre{background:var(--field);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:260px;overflow:auto;font-size:12.5px;white-space:pre-wrap;word-break:break-all;margin:8px 0 0}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:9px 16px;border-radius:10px;max-width:92vw;opacity:0;pointer-events:none;transition:opacity .2s;z-index:5}
+#toast.show{opacity:1}#toast.err{background:var(--bad);color:#fff}
+#login{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;padding:20px;z-index:4}
+#login .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;width:min(420px,100%)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="login"><div class="box">
+  <h2 data-i="login_title"></h2><p class="help" data-i="login_help"></p>
+  <div class="row"><input id="loginPw" type="password" autocomplete="current-password"><button class="primary" id="loginBtn" data-i="open"></button></div>
+  <p id="loginErr" class="help" style="color:var(--bad)"></p>
+</div></div>
+
+<header>
+  <div><h1>Remote PC Control</h1><span id="hostPill" class="pill"></span> <span id="adminPill" class="pill"></span></div>
+  <div class="row"><button id="langBtn">বাংলা</button></div>
+</header>
+
+<main id="main" class="hidden">
+  <section>
+    <h2 data-i="conn_title"></h2><p class="help" data-i="conn_help"></p>
+    <div id="addrs"></div>
+    <div class="row between"><b data-i="password"></b><span class="row" style="margin:0">
+      <code id="tokenView">••••••••</code>
+      <button id="tokenShow" data-i="show"></button><button id="tokenCopy" data-i="copy"></button></span></div>
+    <div class="row"><input id="newPw" type="text" autocomplete="off" spellcheck="false" data-ph="new_pw_ph">
+      <button class="primary" id="pwSave" data-i="save"></button><button id="pwRandom" data-i="random"></button></div>
+    <p class="help" data-i="pw_rules"></p>
+  </section>
+
+  <section>
+    <h2 data-i="startup_title"></h2><p id="sourceNote" class="help hidden" data-i="source_note"></p>
+    <label class="switch"><input type="checkbox" id="swAutostart"><span><b data-i="autostart"></b><small data-i="autostart_help"></small></span></label>
+    <label class="switch"><input type="checkbox" id="swFwTs"><span><b data-i="fw_ts"></b><small data-i="fw_ts_help"></small></span></label>
+    <label class="switch"><input type="checkbox" id="swFwLan"><span><b data-i="fw_lan"></b><small data-i="fw_lan_help"></small></span></label>
+  </section>
+
+  <section>
+    <h2 data-i="lock_title"></h2><p class="help" data-i="lock_help"></p>
+    <div class="row"><span id="lockPill" class="pill"></span><span id="pinPill" class="pill"></span></div>
+    <div class="row"><input id="pin" type="password" inputmode="numeric" maxlength="12" autocomplete="off" data-ph="pin_ph">
+      <button class="primary" id="pinSave" data-i="set_pin"></button>
+      <button id="lockNow" data-i="lock_now"></button><button id="unlock" data-i="unlock"></button></div>
+    <label class="switch"><input type="checkbox" id="swLockTask"><span><b data-i="lock_task"></b><small data-i="lock_task_help"></small></span></label>
+  </section>
+
+  <section>
+    <h2 data-i="tunnel_title"></h2><p class="help" data-i="tunnel_help"></p>
+    <div class="row"><span id="tunnelPill" class="pill"></span>
+      <button id="tInstall" class="hidden" data-i="install_cf"></button>
+      <button id="tStart" class="primary hidden" data-i="start_tunnel"></button>
+      <button id="tStop" class="hidden" data-i="stop_tunnel"></button></div>
+    <div id="tUrlRow" class="addr hidden"><code id="tUrl"></code><button id="tCopy" data-i="copy"></button></div>
+    <p id="tMsg" class="help"></p>
+  </section>
+
+  <section>
+    <h2 data-i="perf_title"></h2><p class="help" data-i="perf_help"></p>
+    <div id="fields" class="grid"></div>
+    <div class="row"><button class="primary" id="saveSettings" data-i="save_settings"></button></div>
+  </section>
+
+  <section>
+    <h2 data-i="agent_title"></h2>
+    <div class="row"><button id="restart" data-i="restart"></button><button id="quit" class="danger" data-i="quit"></button></div>
+    <div class="row"><b data-i="logs"></b><select id="logSel"><option value="agent">agent.log</option><option value="lock">lock_overlay.log</option></select>
+      <button id="logRefresh" data-i="refresh"></button></div>
+    <pre id="logText"></pre>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const TXT = {
+ en:{login_title:"Enter the password",login_help:"The access token of this PC (also used in the phone app).",open:"Open",bad_pw:"Wrong password",
+  conn_title:"Connect your phone",conn_help:"In the phone app enter one of these addresses and the password.",
+  tailscale:"Tailscale (recommended)",lan:"Same Wi-Fi",no_addr:"No network address found",
+  password:"Password (access token)",show:"Show",hide:"Hide",copy:"Copy",copied:"Copied",save:"Save",random:"Make a random one",
+  new_pw_ph:"New password",pw_rules:"At least 4 characters, no spaces, no quotes, backslash, $ or #. 12+ characters is much safer. The phone app must then use the new password.",
+  pw_saved:"Password saved. Use it in the phone app now.",
+  startup_title:"Start and permissions",source_note:"Running from source: use the PowerShell scripts for autostart and the lock screen task.",
+  autostart:"Start with Windows, as administrator",autostart_help:"Starts hidden when you sign in. Lets the mouse work in Task Manager and admin terminals.",
+  fw_ts:"Allow Tailscale connections (firewall)",fw_ts_help:"Port 8888 for Tailscale addresses (100.64.0.0/10) only.",
+  fw_lan:"Allow same Wi-Fi connections (firewall)",fw_lan_help:"Port 8888 for devices on your home network (private networks only). Use on a trusted Wi-Fi.",
+  admin_yes:"Administrator: yes",admin_no:"Administrator: no (Task Manager and admin windows will not respond)",
+  lock_title:"PIN lock screen",lock_help:"A full-screen PIN lock on this PC. Lock and unlock from here or from the phone app.",
+  locked:"Locked",unlocked:"Unlocked",pin_set:"PIN is set",pin_not_set:"No PIN yet",pin_ph:"New PIN (4-12 digits)",set_pin:"Set PIN",
+  lock_now:"Lock now",unlock:"Unlock",lock_task:"Show the lock screen at sign-in",lock_task_help:"Keeps the lock screen running, also after a restart.",
+  pin_saved:"PIN saved",
+  tunnel_title:"Internet link (Cloudflare)",tunnel_help:"Reach this PC from anywhere without Tailscale. The link changes every time and anyone with it still needs the password. Keep it private.",
+  install_cf:"Install cloudflared",start_tunnel:"Start link",stop_tunnel:"Stop link",tunnel_off:"Off",tunnel_on:"Running",tunnel_wait:"Waiting for the link...",
+  tunnel_missing:"cloudflared is not installed",installing:"Installing...",
+  perf_title:"Screen and speed",perf_help:"Changes are applied after you restart the agent.",save_settings:"Save settings",restart_needed:"Saved. Press \"Restart agent\" to apply.",
+  agent_title:"Agent",restart:"Restart agent",quit:"Stop agent",quit_confirm:"Stop the agent? The phone cannot connect until it is started again.",
+  logs:"Logs",refresh:"Refresh",restarting:"Restarting... this page reconnects in a few seconds.",stopped:"Agent stopped.",done:"Done",
+  f_REMOTE_PC_RTC_FPS:"Max frame rate (fast video)",f_REMOTE_PC_FPS:"Frame rate (fallback stream)",f_REMOTE_PC_RTC_BITRATE:"Video bitrate (kbit/s)",
+  f_REMOTE_PC_JPEG_QUALITY:"Picture quality (25-85)",f_REMOTE_PC_MAX_WIDTH:"Max picture width (0 = full)",f_REMOTE_PC_RTC_ENCODER:"Video encoder",
+  f_REMOTE_PC_CAPTURE:"Screen capture",f_REMOTE_PC_WEBRTC:"Fast video (WebRTC)",f_REMOTE_PC_SHOW_CURSOR:"Show pointer on the stream",on:"On",off:"Off"},
+ bn:{login_title:"পাসওয়ার্ড দিন",login_help:"এই PC র অ্যাক্সেস টোকেন (ফোন অ্যাপেও এটাই লাগে)।",open:"খুলুন",bad_pw:"ভুল পাসওয়ার্ড",
+  conn_title:"ফোন কানেক্ট করুন",conn_help:"ফোন অ্যাপে এই ঠিকানাগুলোর একটি আর পাসওয়ার্ড দিন।",
+  tailscale:"Tailscale (সবচেয়ে ভালো)",lan:"একই Wi-Fi",no_addr:"কোনো নেটওয়ার্ক ঠিকানা পাওয়া যায়নি",
+  password:"পাসওয়ার্ড (অ্যাক্সেস টোকেন)",show:"দেখান",hide:"লুকান",copy:"কপি",copied:"কপি হয়েছে",save:"সেভ",random:"র‍্যান্ডম বানান",
+  new_pw_ph:"নতুন পাসওয়ার্ড",pw_rules:"কমপক্ষে ৪ অক্ষর, স্পেস, কোটেশন, ব্যাকস্ল্যাশ, $ বা # চলবে না। ১২+ অক্ষর অনেক নিরাপদ। এরপর ফোন অ্যাপে নতুন পাসওয়ার্ড দিতে হবে।",
+  pw_saved:"পাসওয়ার্ড সেভ হয়েছে। এখন ফোন অ্যাপে এটা দিন।",
+  startup_title:"স্টার্ট ও পারমিশন",source_note:"সোর্স থেকে চলছে: অটোস্টার্ট ও লক স্ক্রিনের জন্য PowerShell স্ক্রিপ্ট ব্যবহার করুন।",
+  autostart:"Windows চালু হলে নিজে থেকে চালু হবে (অ্যাডমিন হিসেবে)",autostart_help:"সাইন-ইনের পর লুকিয়ে চালু হয়। Task Manager আর অ্যাডমিন টার্মিনালেও মাউস কাজ করে।",
+  fw_ts:"Tailscale কানেকশন অনুমতি (ফায়ারওয়াল)",fw_ts_help:"শুধু Tailscale ঠিকানা (100.64.0.0/10) থেকে পোর্ট 8888।",
+  fw_lan:"একই Wi-Fi কানেকশন অনুমতি (ফায়ারওয়াল)",fw_lan_help:"হোম নেটওয়ার্কের ডিভাইস থেকে পোর্ট 8888 (শুধু প্রাইভেট নেটওয়ার্ক)। বিশ্বস্ত Wi-Fi তে ব্যবহার করুন।",
+  admin_yes:"অ্যাডমিন: হ্যাঁ",admin_no:"অ্যাডমিন: না (Task Manager ও অ্যাডমিন উইন্ডোতে কাজ করবে না)",
+  lock_title:"PIN লক স্ক্রিন",lock_help:"এই PC তে ফুল-স্ক্রিন PIN লক। এখান থেকে বা ফোন অ্যাপ থেকে লক/আনলক করা যায়।",
+  locked:"লক করা",unlocked:"আনলক",pin_set:"PIN দেওয়া আছে",pin_not_set:"এখনো PIN নেই",pin_ph:"নতুন PIN (৪-১২ সংখ্যা)",set_pin:"PIN সেট করুন",
+  lock_now:"এখনই লক করুন",unlock:"আনলক",lock_task:"সাইন-ইনের সময় লক স্ক্রিন চালু রাখুন",lock_task_help:"রিস্টার্টের পরেও লক স্ক্রিন চালু থাকে।",
+  pin_saved:"PIN সেভ হয়েছে",
+  tunnel_title:"ইন্টারনেট লিংক (Cloudflare)",tunnel_help:"Tailscale ছাড়াই যেকোনো জায়গা থেকে এই PC চালান। প্রতিবার লিংক বদলায়, আর লিংক থাকলেও পাসওয়ার্ড লাগে। লিংক গোপন রাখুন।",
+  install_cf:"cloudflared ইনস্টল করুন",start_tunnel:"লিংক চালু করুন",stop_tunnel:"লিংক বন্ধ করুন",tunnel_off:"বন্ধ",tunnel_on:"চালু",tunnel_wait:"লিংকের জন্য অপেক্ষা...",
+  tunnel_missing:"cloudflared ইনস্টল করা নেই",installing:"ইনস্টল হচ্ছে...",
+  perf_title:"স্ক্রিন ও স্পিড",perf_help:"এজেন্ট রিস্টার্ট করার পর পরিবর্তন কাজ করবে।",save_settings:"সেটিংস সেভ করুন",restart_needed:"সেভ হয়েছে। প্রয়োগ করতে \"এজেন্ট রিস্টার্ট\" চাপুন।",
+  agent_title:"এজেন্ট",restart:"এজেন্ট রিস্টার্ট",quit:"এজেন্ট বন্ধ করুন",quit_confirm:"এজেন্ট বন্ধ করবেন? আবার চালু না করা পর্যন্ত ফোন কানেক্ট হবে না।",
+  logs:"লগ",refresh:"রিফ্রেশ",restarting:"রিস্টার্ট হচ্ছে... কয়েক সেকেন্ডে পেজ আবার কানেক্ট হবে।",stopped:"এজেন্ট বন্ধ হয়েছে।",done:"হয়েছে",
+  f_REMOTE_PC_RTC_FPS:"সর্বোচ্চ ফ্রেম রেট (দ্রুত ভিডিও)",f_REMOTE_PC_FPS:"ফ্রেম রেট (ব্যাকআপ স্ট্রিম)",f_REMOTE_PC_RTC_BITRATE:"ভিডিও বিটরেট (kbit/s)",
+  f_REMOTE_PC_JPEG_QUALITY:"ছবির কোয়ালিটি (25-85)",f_REMOTE_PC_MAX_WIDTH:"ছবির সর্বোচ্চ প্রস্থ (0 = পুরো)",f_REMOTE_PC_RTC_ENCODER:"ভিডিও এনকোডার",
+  f_REMOTE_PC_CAPTURE:"স্ক্রিন ক্যাপচার",f_REMOTE_PC_WEBRTC:"দ্রুত ভিডিও (WebRTC)",f_REMOTE_PC_SHOW_CURSOR:"স্ট্রিমে পয়েন্টার দেখান",on:"চালু",off:"বন্ধ"}
+};
+let lang = "en", token = "", S = {}, SYS = null, tokenShown = false;
+try { const saved = localStorage.getItem("lang"); lang = saved || ((navigator.language || "").startsWith("bn") ? "bn" : "en"); } catch (e) {}
+const $ = id => document.getElementById(id);
+const t = k => (TXT[lang][k] ?? TXT.en[k] ?? k);
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i]").forEach(n => n.textContent = t(n.dataset.i));
+  document.querySelectorAll("[data-ph]").forEach(n => n.placeholder = t(n.dataset.ph));
+  $("langBtn").textContent = lang === "en" ? "বাংলা" : "English";
+  $("tokenShow").textContent = t(tokenShown ? "hide" : "show");
+  if (S.fields) { renderAddrs(); renderFields(); renderState(); renderTunnel(S.tunnel); }
+}
+function toast(msg, err) {
+  const n = $("toast"); n.textContent = msg; n.className = "show" + (err ? " err" : "");
+  clearTimeout(toast.t); toast.t = setTimeout(() => n.className = "", 3500);
+}
+async function api(path, method = "GET", body) {
+  const r = await fetch("/panel/api" + path, { method, headers: { Authorization: "Bearer " + token, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  let data = {}; try { data = await r.json(); } catch (e) {}
+  if (r.status === 401) { showLogin(); throw new Error(t("bad_pw")); }
+  if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Error " + r.status);
+  return data;
+}
+const act = async (fn, okMsg) => { try { await fn(); if (okMsg) toast(okMsg); } catch (e) { toast(e.message, true); } };
+async function copy(text) { try { await navigator.clipboard.writeText(text); toast(t("copied")); } catch (e) { toast(text); } }
+
+function showLogin() { $("login").style.display = "flex"; $("main").classList.add("hidden"); $("loginPw").focus(); }
+async function enter(pw) {
+  token = pw; $("loginErr").textContent = "";
+  try { S = await api("/state"); } catch (e) { $("loginErr").textContent = e.message; return; }
+  $("login").style.display = "none"; $("main").classList.remove("hidden");
+  renderAddrs(); renderFields(); renderState(); renderTunnel(S.tunnel); loadToken(); loadSystem(); loadLog();
+}
+async function loadToken() { try { token = (await api("/token")).token; renderToken(); } catch (e) {} }
+function renderToken() { $("tokenView").textContent = tokenShown ? token : "•".repeat(Math.min(token.length, 16)); $("tokenShow").textContent = t(tokenShown ? "hide" : "show"); }
+
+function renderAddrs() {
+  const box = $("addrs"); box.replaceChildren();
+  if (!S.addresses.length) { const p = document.createElement("p"); p.className = "help"; p.textContent = t("no_addr"); box.append(p); }
+  for (const a of S.addresses) {
+    const url = `http://${a.ip}:${S.port}`, d = document.createElement("div"), c = document.createElement("code"), b = document.createElement("button");
+    d.className = "addr"; c.textContent = url + "  (" + t(a.kind) + ")"; b.textContent = t("copy"); b.onclick = () => copy(url);
+    d.append(c, b); box.append(d);
+  }
+}
+function renderState() {
+  $("hostPill").textContent = S.hostname;
+  const p = $("adminPill"); p.textContent = t(S.elevated ? "admin_yes" : "admin_no"); p.className = "pill " + (S.elevated ? "ok" : "bad");
+  const l = S.lock || {}; $("lockPill").textContent = t(l.locked ? "locked" : "unlocked"); $("lockPill").className = "pill " + (l.locked ? "bad" : "ok");
+  $("pinPill").textContent = t(l.pin_set ? "pin_set" : "pin_not_set");
+  $("sourceNote").classList.toggle("hidden", S.installed);
+}
+function renderFields() {
+  const box = $("fields"); box.replaceChildren();
+  for (const f of S.fields) {
+    const lab = document.createElement("label"), span = document.createElement("span"); span.textContent = t("f_" + f.key); let inp;
+    if (f.kind === "choice") { inp = document.createElement("select"); for (const o of f.options) inp.add(new Option(o, o)); inp.value = f.value; }
+    else if (f.kind === "bool") { inp = document.createElement("select"); inp.add(new Option(t("on"), "1")); inp.add(new Option(t("off"), "0")); inp.value = f.value === "0" ? "0" : "1"; }
+    else { inp = document.createElement("input"); inp.type = "number"; inp.min = f.min; inp.max = f.max; inp.value = f.value; }
+    inp.dataset.key = f.key; lab.append(span, inp); box.append(lab);
+  }
+}
+async function loadSystem() {
+  try { SYS = await api("/system"); } catch (e) { SYS = null; return; }
+  const tools = !!SYS.task_tools, set = (id, on, dis) => { $(id).checked = !!on; $(id).disabled = !!dis; };
+  set("swAutostart", SYS.autostart && SYS.autostart.exists, !tools); set("swLockTask", SYS.lock_task && SYS.lock_task.exists, !tools);
+  set("swFwTs", SYS.fw_tailscale && SYS.fw_tailscale.exists, false); set("swFwLan", SYS.fw_lan && SYS.fw_lan.exists, false);
+}
+function renderTunnel(s) {
+  if (!s) return; S.tunnel = s;
+  const on = s.running; $("tunnelPill").textContent = on ? t("tunnel_on") : t("tunnel_off"); $("tunnelPill").className = "pill " + (on ? "ok" : "");
+  $("tInstall").classList.toggle("hidden", s.installed || !s.supported); $("tInstall").disabled = s.installing;
+  $("tStart").classList.toggle("hidden", !s.installed || on); $("tStop").classList.toggle("hidden", !on);
+  $("tUrlRow").classList.toggle("hidden", !s.url); $("tUrl").textContent = s.url || "";
+  $("tMsg").textContent = s.installing ? t("installing") : (s.error || s.install_message || (on && !s.url ? t("tunnel_wait") : (!s.installed ? t("tunnel_missing") : "")));
+  clearTimeout(renderTunnel.t);
+  if (s.installing || (on && !s.url)) renderTunnel.t = setTimeout(async () => { try { renderTunnel(await api("/tunnel")); } catch (e) {} }, 2000);
+}
+async function loadLog() { try { $("logText").textContent = (await api("/logs/" + $("logSel").value)).text || "-"; const p = $("logText"); p.scrollTop = p.scrollHeight; } catch (e) {} }
+
+function toggle(id, call, reload) {
+  $(id).addEventListener("change", async e => { const box = e.target, want = box.checked; box.disabled = true;
+    try { await call(want); toast(t("done")); } catch (er) { box.checked = !want; toast(er.message, true); }
+    await reload(); });
+}
+toggle("swAutostart", on => api("/autostart", "POST", { enabled: on }), loadSystem);
+toggle("swLockTask", on => api("/lock-task", "POST", { enabled: on }), loadSystem);
+toggle("swFwTs", on => api("/firewall", "POST", { rule: "tailscale", enabled: on }), loadSystem);
+toggle("swFwLan", on => api("/firewall", "POST", { rule: "lan", enabled: on }), loadSystem);
+
+$("langBtn").onclick = () => { lang = lang === "en" ? "bn" : "en"; try { localStorage.setItem("lang", lang); } catch (e) {} applyLang(); };
+$("loginBtn").onclick = () => enter($("loginPw").value.trim());
+$("loginPw").onkeydown = e => { if (e.key === "Enter") $("loginBtn").click(); };
+$("tokenShow").onclick = () => { tokenShown = !tokenShown; renderToken(); };
+$("tokenCopy").onclick = () => copy(token);
+$("pwSave").onclick = () => act(async () => { const v = $("newPw").value; await api("/token", "POST", { token: v }); token = v; $("newPw").value = ""; renderToken(); }, t("pw_saved"));
+$("pwRandom").onclick = () => act(async () => { token = (await api("/token/random", "POST")).token; tokenShown = true; renderToken(); }, t("pw_saved"));
+$("pinSave").onclick = () => act(async () => { await api("/pin", "POST", { pin: $("pin").value }); $("pin").value = ""; S.lock = (await api("/state")).lock; renderState(); }, t("pin_saved"));
+$("lockNow").onclick = () => act(async () => { await api("/lock", "POST", { locked: true }); S.lock = (await api("/state")).lock; renderState(); }, t("done"));
+$("unlock").onclick = () => act(async () => { await api("/lock", "POST", { locked: false }); S.lock = (await api("/state")).lock; renderState(); }, t("done"));
+$("tInstall").onclick = () => act(async () => renderTunnel(await api("/tunnel/install", "POST")));
+$("tStart").onclick = () => act(async () => renderTunnel(await api("/tunnel/start", "POST")));
+$("tStop").onclick = () => act(async () => renderTunnel(await api("/tunnel/stop", "POST")));
+$("tCopy").onclick = () => copy($("tUrl").textContent);
+$("saveSettings").onclick = () => act(async () => {
+  const values = {}; document.querySelectorAll("#fields [data-key]").forEach(n => values[n.dataset.key] = n.value);
+  await api("/settings", "POST", { values }); S = await api("/state"); renderFields();
+}, t("restart_needed"));
+$("restart").onclick = () => act(async () => { await api("/restart", "POST"); toast(t("restarting")); setTimeout(() => location.reload(), 9000); });
+$("quit").onclick = () => { if (confirm(t("quit_confirm"))) act(async () => { await api("/quit", "POST"); toast(t("stopped")); }); };
+$("logSel").onchange = loadLog; $("logRefresh").onclick = loadLog;
+
+applyLang();
+(function start() {
+  const h = decodeURIComponent((location.hash || "").slice(1));
+  if (h) { history.replaceState(null, "", location.pathname); enter(h); } else showLogin();
+})();
+</script>
+</body>
+</html>

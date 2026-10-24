@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .config import validate_settings
 from .security import require_auth
-from . import monitor, control, pinlock
+from . import monitor, control, pinlock, panel
 from .screen import screen_socket, input_socket
 import threading
 from .webrtc import rtc_socket, shutdown_all as rtc_shutdown, warm_up as rtc_warm_up
@@ -19,6 +19,7 @@ async def lifespan(app):
     yield
     await rtc_shutdown()   # close WebRTC sessions: tracks, capture handles, peer connections
 app=FastAPI(title="Remote PC Control",docs_url=None,redoc_url=None,lifespan=lifespan)
+app.include_router(panel.router)
 @app.exception_handler(pinlock.StateFileError)
 def _lock_state_error(request,exc): return JSONResponse({"detail":"Lock state file is unreadable or unwritable; see lock_overlay.log"},status_code=503)
 class PowerRequest(BaseModel): confirm: bool=False

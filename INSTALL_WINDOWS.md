@@ -52,10 +52,16 @@ Set-ExecutionPolicy -Scope Process Bypass
    - registers the scheduled task `RemotePCControl` that starts the agent at sign-in with **administrator rights** (no prompt), so mouse and keyboard also work in Task Manager, Registry Editor and admin terminals
    - adds the firewall rule `RemotePCControl Tailscale only` (TCP 8888 from `100.64.0.0/10`)
    - starts the agent right away
-3. On the first start a window shows the **PC address and the access token**; type them into the phone app. The token is saved in `%LOCALAPPDATA%\RemotePCControl\.env` (Start Menu → *Access token (.env)* opens it). To change the password, edit `REMOTE_PC_TOKEN` there and restart the program.
-4. The agent has no window. Logs: `%LOCALAPPDATA%\RemotePCControl\agent.log`. Uninstalling removes the task and the firewall rule.
+3. On the first start the **control panel** opens in your browser (English / বাংলা). It shows the **PC address and the access token** for the phone app. Open it again any time with the **Remote PC Control** shortcut (or `http://127.0.0.1:8888/panel` on the PC). From the panel you can, without any terminal:
+   - change the password, or make a random one
+   - turn **Start with Windows (as administrator)** on or off
+   - add or remove the Tailscale and same-Wi-Fi firewall rules
+   - set a PIN, lock and unlock, and keep the PIN lock screen running at sign-in
+   - start a Cloudflare internet link (installs `cloudflared` for you)
+   - change screen and speed settings, read the logs, restart or stop the agent
+4. The panel opens **only on the PC itself** (never from the phone, Tailscale, Wi-Fi or a tunnel) and also asks for the password. Files: `%LOCALAPPDATA%\\RemotePCControl\\.env` (settings) and `agent.log`. Uninstalling removes the tasks and the firewall rule.
 
-Not included in the installer: the PIN lock screen (`lock_overlay.py`), the tunnel scripts and a LAN firewall rule. Use Option A for those. Because the agent runs as administrator, use a strong token.
+Because the agent runs as administrator, use a strong token.
 
 ## Connect the phone
 
