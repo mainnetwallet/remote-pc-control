@@ -106,14 +106,15 @@ the path specified" (and a bare `cmake -B build -A x64` run from the wrong folde
 too, with "does not appear to contain CMakeLists.txt").
 
 ```powershell
-cd C:\Users\<you>\remote-pc-control\windows\unlock-provider   # use your repo's actual path
+cd C:\Users\mainw\remote-pc-control\windows\unlock-provider
 cmake -B build -A x64
 cmake --build build --config Release
 signtool sign /fd SHA256 /a build\Release\RemoteUnlockProvider.dll   # or your own signing step
 ```
 
-> Not sure of your repo's path? From a regular terminal: `dir C:\Users\<you>\remote-pc-control`
-> to confirm it's there before switching to the Native Tools shell.
+> If your repo ever lives somewhere else, swap the path above. Not sure where it is? From a
+> regular terminal: `dir C:\Users\mainw\remote-pc-control` to confirm before switching to the
+> Native Tools shell.
 
 ### Step 2 — Register it
 
@@ -132,7 +133,7 @@ Add to `.env`:
 
 ```ini
 REMOTE_PC_UNLOCK=1
-REMOTE_PC_UNLOCK_ACCOUNT=<your Windows username>
+REMOTE_PC_UNLOCK_ACCOUNT=mainw
 REMOTE_PC_UNLOCK_REQUIRE_BIOMETRIC=0
 ```
 
