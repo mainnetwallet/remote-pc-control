@@ -36,7 +36,7 @@ private val wsClient = http.newBuilder()
     .pingInterval(20, TimeUnit.SECONDS)
     .build()
 
-private const val DEFAULT_URL = "http://100.82.180.82:8888"
+private const val DEFAULT_URL = "http://100.124.106.76:8888"
 private const val PREF_TOKEN = "pc_token_enc"   // password, encrypted with an Android Keystore key (see SecureStore)
 private const val PREF_URL = "pc_url"        // the token is never stored, only the address
 private const val PREF_QUALITY = "quality"
