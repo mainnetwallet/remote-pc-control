@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="Remote PC Control" width="100%">
-
 # Remote PC Control
 
 **See and control your own Windows PC from your phone.**<br>

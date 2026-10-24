@@ -36,7 +36,7 @@ The current source tree, runtime paths, APIs, security boundaries, tests and bui
 ├── tools/wol_sender.py      Standalone Wake-on-LAN magic-packet utility
 ├── tests/                   Wake-on-LAN packet tests
 ├── docs/                    ARCHITECTURE.md (this file)
-├── assets/                  README banner
+├── assets/                  App icon and README feature graphic
 ├── .github/workflows/       CI, Android APK and Windows installer workflows
 ├── README.md                Install, run, connect, configure, troubleshoot
 ├── .env.example             Supported configuration settings
