@@ -161,3 +161,14 @@ def test_start_server_launches_a_background_copy(monkeypatch):
     gui.start_server()
     assert seen["cmd"][0] == sys.executable and seen["cmd"][-1] == "--background"
     assert seen["env"]["PYINSTALLER_RESET_ENVIRONMENT"] == "1"
+
+
+def test_packaged_window_selftest_flag(window, tmp_path):
+    """run_agent.py --gui-selftest is what the Windows build runs on the finished exe."""
+    import subprocess, sys
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    out = tmp_path / "result.txt"
+    r = subprocess.run([sys.executable, str(root / "run_agent.py"), "--gui-selftest", str(out)], cwd=tmp_path, timeout=60,
+                       env={**__import__("os").environ, "PYTHONPATH": str(root / "backend")})
+    assert r.returncode == 0 and out.read_text().startswith("ok tk=")

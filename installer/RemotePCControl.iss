@@ -32,6 +32,7 @@ Type: filesandordirs; Name: "{userprograms}\Remote PC Control"
 Type: files; Name: "{userdesktop}\Remote PC Control.lnk"
 [Run]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Exe ""{app}\RemotePCControl.exe"""; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; StatusMsg: "Setting up autostart, administrator rights and firewall..."
+Filename: "{app}\RemotePCControl.exe"; Description: "Open Remote PC Control now"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Remove"; Flags: runhidden waituntilterminated; RunOnceId: "RemovePCTask"
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Kind lock -Remove"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveLockTask"

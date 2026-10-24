@@ -23,6 +23,7 @@ Install the agent, connect your phone, and optionally start it at Windows sign-i
 | | Needed for |
 |---|---|
 | Windows 10 or 11, x64 | Both install options |
+| Nothing else for the **Setup installer** (Option B): Python, Node.js and the repository are not needed; everything is inside `RemotePCControl.exe` | Option B |
 | Python 3.11+ x64 (3.12 recommended), Node.js 22, Git | Option A (from source) only |
 | Tailscale on the PC and phone | Private remote access (recommended) |
 

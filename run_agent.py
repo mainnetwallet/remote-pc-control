@@ -19,6 +19,21 @@ def main():
     if "--lock-overlay" in sys.argv:   # packaged exe: the PIN lock screen runs as a second copy of this program
         import lock_overlay
         sys.exit(lock_overlay.main())
+    if "--gui-selftest" in sys.argv:   # build check: can the packaged exe open its window? (writes "ok ..." or the error to the given file)
+        out = sys.argv[sys.argv.index("--gui-selftest") + 1]
+        try:
+            import tkinter as tk
+            from app import gui
+            class Down:
+                token = "x"
+                def call(self, *a, **k): raise gui.ApiError("")
+            root = tk.Tk(); win = gui.App(root, Down(), starting=True)
+            root.update(); tabs = len(win.nb.tabs()); root.destroy()
+            if tabs != 6: raise RuntimeError(f"expected 6 tabs, found {tabs}")
+            text = f"ok tk={tk.TkVersion} tabs={tabs}"
+        except BaseException:
+            open(out, "w", encoding="utf-8").write(traceback.format_exc()); sys.exit(1)
+        open(out, "w", encoding="utf-8").write(text); sys.exit(0)
     from app import firstrun
     firstrun.prepare()   # packaged exe: create .env on first start; must run before app.config is imported
     from app.config import settings
