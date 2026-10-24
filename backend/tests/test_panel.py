@@ -92,7 +92,9 @@ def test_logs_only_known_files():
         assert c.get("/panel/api/logs/..%2F.env", headers=auth()).status_code in (404, 422)
 
 
-def test_windows_actions_report_clean_errors_elsewhere():
+def test_windows_actions_report_clean_errors_elsewhere(monkeypatch):
+    from app import winadmin
+    monkeypatch.setattr(winadmin, "IS_WINDOWS", False)   # never touch the real firewall of the machine running the tests
     with local() as c:
         r = c.post("/panel/api/firewall", headers=auth(), json={"rule": "lan", "enabled": True})
         assert r.status_code == 400 and "Windows" in r.json()["detail"]

@@ -265,7 +265,7 @@ def test_unavailable_when_too_many_sessions(monkeypatch):
 
 
 def test_websocket_stream_endpoints_are_still_registered():
-    paths = {r.path for r in app.routes}
+    paths = {r.path for r in app.routes if hasattr(r, "path")}   # newer FastAPI wraps included routers in objects without a path
     assert {"/ws/screen", "/ws/input", "/ws/rtc"} <= paths
 
 
