@@ -19,14 +19,22 @@ EXTRA = {
            "offline": "Agent not reachable", "loading": "Loading...", "restarting_app": "Restarting... this window reconnects in a few seconds.",
            "server_on": "Server: ON", "server_off": "Server: OFF", "server_starting": "Server: starting...", "server_stopping": "Server: stopping...",
            "turn_on": "Turn on server", "turn_off": "Turn off server", "server_off_note": "The phone cannot connect while the server is off.",
-           "server_stopped": "Server turned off."},
+           "server_stopped": "Server turned off.",
+           "ts_title": "Built-in Tailscale (no Tailscale install on this PC)", "ts_help": "Lets the phone reach this PC through your Tailscale account without installing Tailscale here. The phone still needs the Tailscale app, signed in to the same account. Screen video then uses the slower WebSocket mode.",
+           "ts_on": "Turn on", "ts_off": "Turn off", "ts_signin": "Open sign-in page", "ts_copy": "Copy link",
+           "ts_state_off": "Off", "ts_state_starting": "Starting...", "ts_state_login": "Sign in to Tailscale once with the link below", "ts_state_running": "Connected",
+           "ts_missing": "The built-in Tailscale part is missing: install the newest setup.", "ts_addr": "Phone address"},
     "bn": {"tab_connect": "কানেক্ট", "tab_startup": "স্টার্টআপ", "tab_lock": "লক", "tab_link": "ইন্টারনেট",
            "tab_settings": "সেটিংস", "tab_agent": "এজেন্ট", "no_server": "এই PC র এজেন্টের সাথে যোগাযোগ হচ্ছে না। এটা কি চালু আছে?",
            "closing_note": "এই উইন্ডো বন্ধ করলেও এজেন্ট ব্যাকগ্রাউন্ডে চালু থাকে। আবার অ্যাপ খুললে এটা দেখা যাবে।",
            "offline": "এজেন্ট পাওয়া যাচ্ছে না", "loading": "লোড হচ্ছে...", "restarting_app": "রিস্টার্ট হচ্ছে... কয়েক সেকেন্ডে উইন্ডো আবার কানেক্ট হবে।",
            "server_on": "সার্ভার: চালু", "server_off": "সার্ভার: বন্ধ", "server_starting": "সার্ভার: চালু হচ্ছে...", "server_stopping": "সার্ভার: বন্ধ হচ্ছে...",
            "turn_on": "সার্ভার চালু করুন", "turn_off": "সার্ভার বন্ধ করুন", "server_off_note": "সার্ভার বন্ধ থাকলে ফোন কানেক্ট হবে না।",
-           "server_stopped": "সার্ভার বন্ধ হয়েছে।"},
+           "server_stopped": "সার্ভার বন্ধ হয়েছে।",
+           "ts_title": "অ্যাপের ভেতরের Tailscale (এই PC তে Tailscale ইনস্টল লাগবে না)", "ts_help": "এই PC তে Tailscale ইনস্টল না করেই আপনার Tailscale অ্যাকাউন্ট দিয়ে ফোন থেকে PC তে ঢোকা যায়। ফোনে Tailscale অ্যাপ লাগবে, একই অ্যাকাউন্টে সাইন-ইন করা। স্ক্রিন তখন ধীর WebSocket মোডে চলে।",
+           "ts_on": "চালু করুন", "ts_off": "বন্ধ করুন", "ts_signin": "সাইন-ইন পেজ খুলুন", "ts_copy": "লিংক কপি",
+           "ts_state_off": "বন্ধ", "ts_state_starting": "চালু হচ্ছে...", "ts_state_login": "নিচের লিংক দিয়ে একবার Tailscale এ সাইন-ইন করুন", "ts_state_running": "কানেক্টেড",
+           "ts_missing": "অ্যাপের ভেতরের Tailscale অংশ নেই: নতুন সেটআপ ইনস্টল করুন।", "ts_addr": "ফোনের ঠিকানা"},
 }
 OK, BAD, MUTED = "#12805c", "#b42318", "#5d6b7e"
 
@@ -264,6 +272,16 @@ class App:
 
     def _build_link(self):
         f = self.tab("tab_link")
+        self.heading(f, "ts_title"); self.helptext(f, "ts_help")
+        r = self.row(f); self.ts_pill = self.ttk.Label(r, font=self.f_head); self.ts_pill.pack(side="left", padx=(0, 14))
+        self.ts_btn = self.ttk.Button(r, command=self.toggle_tailnet, style="Primary.TButton"); self.ts_btn.pack(side="left", padx=(0, 8))
+        self.ts_url = self.tk.StringVar()
+        self.ts_row = self.row(f, 6)
+        self.ttk.Entry(self.ts_row, textvariable=self.ts_url, state="readonly").pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.button(self.ts_row, "ts_signin", lambda: __import__("webbrowser").open(self.ts_url.get()), primary=True)
+        self.button(self.ts_row, "ts_copy", lambda: self.copy(self.ts_url.get()), padx=0)
+        self.ts_msg = self.label(f, "", muted=True, wrap=True); self.ts_msg.pack(anchor="w", pady=(0, 4))
+        self.ttk.Separator(f).pack(fill="x", pady=10)
         self.heading(f, "tunnel_title"); self.helptext(f, "tunnel_help")
         r = self.row(f); self.tunnel_pill = self.ttk.Label(r, font=self.f_head); self.tunnel_pill.pack(side="left", padx=(0, 14))
         self.t_install = self.ttk.Button(r, text=self.t("install_cf"), command=lambda: self.tunnel("install"))
@@ -301,7 +319,7 @@ class App:
     def refresh_all(self):
         self.bg(lambda: self.client.call("/state"), self._got_state, self._offline)
         self.bg(lambda: self.client.call("/token"), lambda d: self._set_token(d.get("token")), lambda e: None)
-        self.load_system(); self.load_log()
+        self.load_system(); self.load_log(); self.load_tailnet()
 
     def _set_token(self, tok):
         if tok: self.client.token = tok; self.render_token()
@@ -313,15 +331,18 @@ class App:
     def _got_state(self, s):
         self.S = s
         self.set_online(True)
-        self.render_pills(); self.render_addrs(); self.render_fields(); self.render_lock(); self.render_tunnel(s.get("tunnel"))
+        self.render_pills(); self.render_addrs(); self.render_fields(); self.render_lock(); self.render_tunnel(s.get("tunnel")); self.render_tailnet(s.get("tailnet"))
         self.source_note.configure(text="" if s.get("installed") else self.t("source_note"))
 
     def poll(self):
         """Keep the pills (lock state, tunnel) in step with changes made from the phone."""
         def got(s):
-            self.S.update({k: s[k] for k in ("lock", "tunnel", "elevated", "hostname", "addresses") if k in s})
+            old_addr = self.S.get("addresses")
+            self.S.update({k: s[k] for k in ("lock", "tunnel", "tailnet", "elevated", "hostname", "addresses") if k in s})
             if self.set_online(True) is False: return
             self.render_pills(); self.render_lock(); self.render_tunnel(s.get("tunnel"))
+            if s.get("tailnet"): self.render_tailnet(s["tailnet"])
+            if s.get("addresses") != old_addr: self.render_addrs()   # e.g. the built-in Tailscale just got its address
         self.bg(lambda: self.client.call("/state", timeout=8), got, lambda e: self.set_online(False))
         fast = self.online is not True or time.time() < self.stop_until or time.time() < self.deadline
         self.root.after(1500 if fast else 5000, self.poll)
@@ -419,6 +440,31 @@ class App:
                 var.set(f["value"]); w = ttk.Spinbox(cell, textvariable=var, from_=f["min"], to=f["max"])
             w.pack(fill="x"); self.field_vars[f["key"]] = (var, f)
 
+    def load_tailnet(self):
+        self.bg(lambda: self.client.call("/tailscale"), self.render_tailnet, lambda e: None)
+
+    def render_tailnet(self, s):
+        if not s: return
+        self.S["tailnet"] = s
+        st, on = s.get("state") or "Off", bool(s.get("running"))
+        text = ("ts_state_off" if not on else "ts_state_login" if (s.get("auth_url") or st == "NeedsLogin") else
+                "ts_state_running" if st == "Running" else "ts_state_starting")
+        color = OK if (on and st == "Running") else MUTED
+        self.ts_pill.configure(text="● " + self.t(text), foreground=color)
+        self.ts_btn.configure(text=self.t("ts_off" if s.get("enabled") else "ts_on"))
+        self.ts_btn.state(["disabled"] if (not s.get("available") and not s.get("enabled")) else ["!disabled"])
+        self.ts_url.set(s.get("auth_url") or "")
+        if s.get("auth_url"): self.ts_row.pack(fill="x", pady=6, before=self.ts_msg)
+        else: self.ts_row.pack_forget()
+        ips = ", ".join(f"http://{ip}:{self.S.get('port', 8888)}" for ip in (s.get("ips") or []) if "." in ip)
+        msg = s.get("error") or (self.t("ts_missing") if not s.get("available") else (self.t("ts_addr") + ": " + ips if ips else ""))
+        self.ts_msg.configure(text=msg)
+
+    def toggle_tailnet(self):
+        want = "disable" if (self.S.get("tailnet") or {}).get("enabled") else "enable"
+        self.ts_btn.state(["disabled"])
+        self.bg(lambda: self.client.call("/tailscale/" + want, "POST"), self.render_tailnet, lambda e: (self.toast(self._msg(e), True), self.load_tailnet()))
+
     def render_tunnel(self, s):
         if not s: return
         self.S["tunnel"] = s
@@ -447,7 +493,7 @@ class App:
         sel = self.nb.index(self.nb.select())
         self._ui_font(); self.build(); self.nb.select(sel)
         if self.S:
-            self.render_pills(); self.render_addrs(); self.render_fields(); self.render_lock(); self.render_tunnel(self.S.get("tunnel"))
+            self.render_pills(); self.render_addrs(); self.render_fields(); self.render_lock(); self.render_tunnel(self.S.get("tunnel")); self.render_tailnet(self.S.get("tailnet"))
         self.load_system(); self.load_log()
 
     def toggle_token(self): self.token_shown = not self.token_shown; self.render_token()
