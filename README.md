@@ -32,11 +32,27 @@ using the Android app or a mobile browser.
 
 ## 🚀 Install and run
 
-For a **Windows 10/11 x64** PC. Pick **one** option:
+For a **Windows 10/11 x64** PC. Pick **one** option.
 
-<img src="assets/install-options.svg" alt="Option A: from source. Option B: Windows installer." width="100%">
+> ### 🅰️ Option A · From source
+> *Full features, updates with `git pull`*
+>
+> - **Needs:** Python 3.11+, Node.js 22, Git
+> - **Terminal:** yes, a few commands
+> - **Best for:** full features and the PIN lock screen
+> - **Update:** `git pull`, then run again
+>
+> [**Go to Option A ↓**](#option-a--from-source)
 
-<p align="center"><a href="#option-a--from-source"><b>Option A · From source ↓</b></a> &nbsp;·&nbsp; <a href="#option-b--windows-installer"><b>Option B · Windows installer ↓</b></a></p>
+> ### 🅱️ Option B · Windows installer
+> *Quick install, no terminal*
+>
+> - **Needs:** nothing to install first
+> - **Terminal:** no
+> - **Best for:** quick and easy setup
+> - **Update:** run the newer `Setup.exe`
+>
+> [**Go to Option B ↓**](#option-b--windows-installer)
 
 Run commands in **PowerShell**, as your normal user, in the signed-in desktop session you want to control.
 
