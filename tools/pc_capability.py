@@ -25,7 +25,8 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CODE_FPS_CAP = 60          # FPS_CEILING in backend/app/config.py
+CODE_FPS_CAP = 120         # FPS_CEILING (WebRTC) in backend/app/config.py
+WS_FPS_CAP = 60            # WS_FPS_CEILING (JPEG over WebSocket)
 TEST_SECONDS = 2.0
 WIDTHS = (960, 1280, 1920)
 
@@ -175,8 +176,8 @@ def measure_h264(size: tuple[int, int]) -> dict[str, float | None]:
     return out
 
 
-def clamp(v: float) -> int:
-    return max(1, min(CODE_FPS_CAP, int(v)))
+def clamp(v: float, cap: int = CODE_FPS_CAP) -> int:
+    return max(1, min(cap, int(v)))
 
 
 def set_env(path: Path, values: dict[str, str]) -> None:
@@ -224,11 +225,11 @@ def main() -> int:
     limits_ws = [cap_fps] + [v for k, v in jpeg.items() if k == 1280 and v]
     limits_rtc = [cap_fps] + ([working[best]] if best else [])
     if hz: limits_ws.append(hz); limits_rtc.append(hz)
-    rec_ws = clamp(min(limits_ws) * 0.8)
+    rec_ws = clamp(min(limits_ws) * 0.8, WS_FPS_CAP)
     rec_rtc = clamp(min(limits_rtc) * 0.8)
 
     print("\n=== Recommendation ===")
-    print(f"REMOTE_PC_FPS={rec_ws}          (WebSocket JPEG mode, 1280 wide)")
+    print(f"REMOTE_PC_FPS={rec_ws}          (WebSocket JPEG mode, 1280 wide, max 60)")
     print(f"REMOTE_PC_RTC_FPS={rec_rtc}      (WebRTC mode)")
     if best: print(f"REMOTE_PC_RTC_ENCODER={best}   (hardware encoder preferred; 'auto' picks the same)")
     if min(limits_rtc) * 0.8 > CODE_FPS_CAP:

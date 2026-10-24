@@ -2,8 +2,10 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-# Highest frame rate the app accepts anywhere (settings, client requests, encoder). Raised from 30 to 60.
-FPS_CEILING = 60
+# Highest frame rate the app accepts: WebRTC video (H.264, hardware encoder) up to 120, the WebSocket JPEG stream up to 60
+# (JPEG encoding on the CPU cannot keep up with more).
+FPS_CEILING = 120
+WS_FPS_CEILING = 60
 
 def monitor_hz():
     """Refresh rate of the primary monitor (Windows), or None when it cannot be read."""
@@ -18,21 +20,21 @@ def monitor_hz():
         return None
 
 
-def fps_setting(raw: str, default: str) -> int:
-    """A frame rate from an env value: a number (1..FPS_CEILING), or "auto" / "0" = what this PC's monitor shows
-    (its refresh rate), at most FPS_CEILING. The stream can never go faster than the PC captures and encodes anyway."""
+def fps_setting(raw: str, default: str, ceiling: int = FPS_CEILING) -> int:
+    """A frame rate from an env value: a number (1..ceiling), or "auto" / "0" = what this PC's monitor shows
+    (its refresh rate), at most `ceiling`. The stream can never go faster than the PC captures and encodes anyway."""
     raw = (raw or default).strip().lower()
     if raw in ("auto", "0", "max"):
-        return max(1, min(FPS_CEILING, monitor_hz() or FPS_CEILING))
-    try: return max(1, min(FPS_CEILING, int(raw)))
-    except ValueError: return max(1, min(FPS_CEILING, int(default)))
+        return max(1, min(ceiling, monitor_hz() or ceiling))
+    try: return max(1, min(ceiling, int(raw)))
+    except ValueError: return fps_setting(default, default, ceiling)   # garbage: use the default
 
 
 class Settings:
     token = os.getenv("REMOTE_PC_TOKEN", "")
     host = os.getenv("REMOTE_PC_HOST", "127.0.0.1")
     port = int(os.getenv("REMOTE_PC_PORT", "8888"))
-    fps = fps_setting(os.getenv("REMOTE_PC_FPS", ""), "auto")
+    fps = fps_setting(os.getenv("REMOTE_PC_FPS", ""), "auto", WS_FPS_CEILING)
     jpeg_quality = max(25, min(85, int(os.getenv("REMOTE_PC_JPEG_QUALITY", "55"))))
     # Frames wider than this are downscaled before sending (0 = send full resolution).
     max_width = max(0, int(os.getenv("REMOTE_PC_MAX_WIDTH", "1280")))
@@ -52,7 +54,7 @@ class Settings:
     # --- WebRTC transport (/ws/rtc). The WebSocket JPEG stream stays available as the fallback. ---
     # 1 (default) = offer WebRTC; 0 = /ws/rtc answers "unavailable" and clients use the WebSocket stream.
     webrtc = os.getenv("REMOTE_PC_WEBRTC", "1").strip().lower() not in ("0", "false", "no", "off")
-    # Max frames per second of the WebRTC video: a number 1-60, or "auto" (default) = the monitor's refresh rate, up to 60.
+    # Max frames per second of the WebRTC video: a number 1-120, or "auto" (default) = the monitor's refresh rate, up to 120.
     # The phone's quality preset still decides how many frames it asks for; this is only the ceiling.
     rtc_fps = fps_setting(os.getenv("REMOTE_PC_RTC_FPS", ""), "auto")
     # Upper limit of the video bitrate in kbit/s (the link's own estimate can only lower it). 300-30000.

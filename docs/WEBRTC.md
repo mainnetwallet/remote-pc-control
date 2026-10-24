@@ -62,7 +62,7 @@ Set in `.env`; restart `start.ps1` after changing.
 | Variable | Default | Meaning |
 |---|---|---|
 | `REMOTE_PC_WEBRTC` | `1` | `0` turns WebRTC off; clients then always use the WebSocket stream |
-| `REMOTE_PC_RTC_FPS` | `auto` | Maximum video frames per second: `auto` = monitor refresh rate (up to 60), or a number 1-60. The phone's quality preset decides how many it asks for. |
+| `REMOTE_PC_RTC_FPS` | `auto` | Maximum video frames per second: `auto` = monitor refresh rate (up to 120), or a number 1-120. The phone's quality preset decides how many it asks for. |
 | `REMOTE_PC_RTC_BITRATE` | `4000` | Starting upper video bitrate limit in kbit/s (300-30000). A client's `config` message (the Android quality preset) replaces it for its session, up to 30000. The receiver's own bandwidth estimate lowers the live bitrate, but never below the *floor*: 1 Mbit/s, or one sixth of the limit when that is higher (3.3 Mbit/s for the 20 Mbit/s Native preset), and never below the limit itself if that is lower |
 | `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, or force `nvenc`, `qsv`, `amf` or `x264`. libx264 is always the last resort |
 | `REMOTE_PC_STUN_URL` | `stun:stun.l.google.com:19302` | STUN server(s), comma separated |
@@ -116,7 +116,7 @@ Details are in the header of `backend/app/webrtc.py`.
 | Variable | Default | Meaning |
 |---|---|---|
 | `REMOTE_PC_LATENCY_FIRST` | `1` | `1`: on a slow link the picture is made smaller at once (and grows back slowly, in steps of 10 quality / 80 px) so the delay stays low. `0`: always exactly the quality and width chosen in the app |
-| `REMOTE_PC_FPS` | `auto` | Starting frames per second (1-60, or `auto`); clients can change it live |
+| `REMOTE_PC_FPS` | `auto` | Starting frames per second (1-60, or `auto`; the JPEG stream is limited to 60); clients can change it live |
 | `REMOTE_PC_JPEG_QUALITY` | `55` | Starting JPEG quality (25-85); clients can raise it to 90 live |
 | `REMOTE_PC_MAX_WIDTH` | `1280` | Starting width limit; wider frames are downscaled (`0` = native) |
 | `REMOTE_PC_MOTION_QUALITY` / `_WIDTH` | `100` / `100` | Motion-frame reduction, see [Motion quality](#motion-quality-less-lag) |

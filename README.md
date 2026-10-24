@@ -164,7 +164,7 @@ Settings live in `.env` in the project folder. Restart `start.ps1` after editing
 | `REMOTE_PC_TOKEN` | generated | Access password. **Required.** Minimum 4 characters, 12+ strongly recommended |
 | `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `127.0.0.1` in code, `0.0.0.0` / `8888` in `.env.example` | Listen address. Used by the packaged `RemotePCControl.exe` only (see note below) |
 | `REMOTE_PC_WEBRTC` | `1` | WebRTC on or off (the WebSocket stream is the fallback) |
-| `REMOTE_PC_RTC_FPS` | `auto` | WebRTC max frames per second: `auto` = your monitor's refresh rate, up to 60, or a number 1-60 |
+| `REMOTE_PC_RTC_FPS` | `auto` | WebRTC max frames per second: `auto` = your monitor's refresh rate, up to 120, or a number 1-120 |
 | `REMOTE_PC_RTC_BITRATE` | `4000` | Starting WebRTC bitrate limit in kbit/s (300-30000). The app's quality preset replaces it for its session (up to 30000) |
 | `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, `nvenc`, `qsv`, `amf` or `x264` |
 | `REMOTE_PC_STUN_URL` | Google STUN | STUN server(s), comma separated |

@@ -48,7 +48,8 @@ enum class Quality(val label: String, val maxWidth: Int, val fps: Int, val jpeg:
     MEDIUM("Medium", 1280, 30, 65, 3000, "1280 px wide, up to 30 fps."),
     HIGH("High", 1920, 30, 80, 8000, "1920 px wide, up to 30 fps. Sharp text."),
     NATIVE("Native", 0, 30, 90, 20000, "The PC's full resolution, up to 30 fps, best picture. Needs a fast link (same Wi-Fi or Tailscale)."),
-    ULTRA("Ultra 60", 1920, 60, 80, 12000, "1920 px wide, up to 60 fps. Smoothest. Needs a fast link and a PC that can keep up (see tools/pc_capability.py).");
+    ULTRA("Ultra 60", 1920, 60, 80, 12000, "1920 px wide, up to 60 fps. Smoothest. Needs a fast link and a PC that can keep up (see tools/pc_capability.py)."),
+    ULTRA120("Ultra 120", 1920, 120, 80, 16000, "1920 px wide, up to 120 fps. For 120 Hz phones; needs a fast link, a strong PC and a phone that decodes 1080p120.");
 
     /** The same preset for the WebRTC video: bitrate (kbit/s) instead of JPEG quality. */
     fun rtcConfigMessage(): String = JSONObject()

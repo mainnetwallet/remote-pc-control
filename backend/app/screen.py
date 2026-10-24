@@ -41,7 +41,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from fastapi import WebSocket, WebSocketDisconnect
 from PIL import Image, ImageDraw
-from .config import settings, FPS_CEILING
+from .config import settings, WS_FPS_CEILING
 from . import security
 
 # Timing of frames and acks uses this clock, not the event loop's: on Windows with Python 3.12 time.monotonic()
@@ -147,7 +147,7 @@ def _draw_cursor(img: Image.Image, x: float, y: float) -> None:
 
 
 WIDTH_MIN, WIDTH_MAX = 320, 3840
-FPS_MIN, FPS_MAX = 1, FPS_CEILING
+FPS_MIN, FPS_MAX = 1, WS_FPS_CEILING
 QUALITY_MIN, QUALITY_MAX = 25, 90
 SHARP_QUALITY = 85   # from this JPEG quality up: Lanczos downscale and full-resolution (4:4:4) colour, at the cost of bigger frames
 
