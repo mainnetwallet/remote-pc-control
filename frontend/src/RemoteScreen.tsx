@@ -20,7 +20,8 @@ const clamp01=(v:number)=>Math.min(1,Math.max(0,v));
 
 export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
  const wrap=useRef<HTMLDivElement>(null),img=useRef<HTMLImageElement>(null);
- const [mode,setMode]=useState<Mode>('click'),[full,setFull]=useState(false),[showKeys,setShowKeys]=useState(false);
+ const [mode,setMode]=useState<Mode>('click'),[full,setFull]=useState(false),[showKeys,setShowKeys]=useState(false),[pressed,setPressed]=useState('');const pressedTimer=useRef(0);
+ const showPressed=(label:string)=>{setPressed(label);window.clearTimeout(pressedTimer.current);pressedTimer.current=window.setTimeout(()=>setPressed(''),400)};
  const pointers=useRef(new Map<number,{x:number;y:number}>());
  const g=useRef({start:{x:0,y:0},moved:false,long:false,timer:0 as number,down:false,multi:false,lastMove:0,scrollAcc:0,accX:0,accY:0,lastPos:{nx:.5,ny:.5}});
 
@@ -105,7 +106,7 @@ export default function RemoteScreen({frame,send}:{frame:string;send:Send}){
    {frame?<img ref={img} className="screen" src={frame} draggable={false} alt="Live PC screen"/>:<div className="waiting">Waiting for the PC screen…</div>}
   </div>
   <small className="muted hint">{hint}</small>
-  {showKeys&&<div className="keys">{QUICK.map(k=><button key={k.label} className="secondary" onClick={()=>send(k.msg)}>{k.label}</button>)}</div>}
+  {showKeys&&<div className="keys">{QUICK.map(k=><button key={k.label} className="secondary" onClick={()=>{send(k.msg);showPressed(k.label)}}>{k.label}</button>)}<span className="pressed">{pressed}</span></div>}
   <div className="row"><input placeholder="Type text, then press Enter" onKeyDown={e=>{if(e.key==='Enter'&&e.currentTarget.value){send({type:'type',text:e.currentTarget.value});e.currentTarget.value=''}}}/><button onClick={()=>send({type:'key',key:'ENTER'})}>Enter</button></div>
  </div>;
 }
