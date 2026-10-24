@@ -84,7 +84,7 @@ Health check: `http://localhost:8888/api/health` returns `"ok":true`.
 
 ### Option B · Windows installer
 
-1. Download `RemotePCControl-Setup.exe` from **Releases** and run it. It installs the app, autostart (admin) and the Tailscale-only firewall rule, then starts the agent.
+1. [**Download RemotePCControl-Setup.exe**](https://github.com/mainnetwallet/remote-pc-control/releases/latest/download/RemotePCControl-Setup.exe) (latest release) and run it. It installs the app, autostart (admin) and the Tailscale-only firewall rule, then starts the agent.
 2. The app window shows the **PC address and token** for the phone, and has server on/off, password, autostart, firewall, PIN and logs.
 3. To update, run the newer Setup.exe.
 
@@ -160,7 +160,7 @@ Needs a free Cloudflare account and a domain on Cloudflare (Active). The tunnel 
 
 ## 📱 Android app
 
-1. Download the APK from **Releases** (`RemotePCControl-Android.apk`) or **Actions → Android APK**, and allow installation from this source.
+1. [**Download the latest APK**](https://github.com/mainnetwallet/remote-pc-control/releases/latest/download/RemotePCControl-Android.apk) (tap it on the phone, or download on the PC and copy it over) and allow installation from this source. All builds: [Releases](https://github.com/mainnetwallet/remote-pc-control/releases).
 2. Enter the *PC URL* (`http://100.x.x.x:8888`, LAN address, `https://….trycloudflare.com` or `gist:<id>`) and the token, then **Connect**. Both are stored encrypted; **Log out** forgets them.
 
 It is a personal-use debug build, not a Play Store release. Screens: **Dashboard** (gauges, power buttons, PIN lock, quality) and **Session** (live screen, touch modes, trackpad, keys).
