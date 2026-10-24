@@ -10,7 +10,6 @@ LOCK_TASK = "RemotePCControlLock"
 FW_TAILSCALE = "RemotePCControl Tailscale only"
 FW_LAN = "RemotePCControl LAN"
 IS_WINDOWS = platform.system() == "Windows"
-RESTART_WITH_WINDOW = False   # set by run_agent when this copy was opened by the user (it shows the app window)
 _NO_WINDOW = 0x08000000
 
 
@@ -97,7 +96,7 @@ def restart_agent() -> None:
     """Start a new copy a few seconds after this one has ended (so the port is free), then end this one."""
     if not (IS_WINDOWS and frozen()): raise AdminError("Restart is available in the installed program only")
     exe = str(exe_path())
-    flag = "" if RESTART_WITH_WINDOW else " --background"   # opened by the user: the new copy shows the window again
-    subprocess.Popen(["cmd.exe", "/c", f'timeout /t 4 /nobreak >nul & start "" "{exe}"{flag}'],
+    env = dict(os.environ); env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"   # the new copy must not reuse this copy's temp folder
+    subprocess.Popen(["cmd.exe", "/c", f'timeout /t 4 /nobreak >nul & start "" "{exe}" --background'], env=env,
                      creationflags=_NO_WINDOW | 0x00000008, close_fds=True)   # DETACHED_PROCESS
     _exit_soon()

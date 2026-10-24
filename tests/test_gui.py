@@ -113,3 +113,51 @@ def test_window_toggle_failure_reverts_switch(window, tmp_path, monkeypatch):
     app.v_fwlan.set(True); app.toggle(app.v_fwlan, app.c_fwlan, lambda on: app.client.call("/firewall", "POST", {"rule": "lan", "enabled": on}))
     _settle(window, 0.8)
     assert app.v_fwlan.get() is False and "Access denied" in app.status.cget("text")
+
+
+def test_server_bar_on_off_and_on_again(window, tmp_path, monkeypatch):
+    """Turn the server off from the window (it stays open), then turn it on again."""
+    import tkinter.messagebox as mb
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(mb, "askokcancel", lambda *a, **k: True)
+    started = []
+    monkeypatch.setattr(gui, "start_server", lambda: started.append(1))
+    calls = []
+    class Switchable(FakeClient):
+        up = True
+        def call(self, path, method="GET", body=None, timeout=60):
+            if not self.up: raise gui.ApiError("")
+            if path == "/quit": calls.append(path); self.up = False; return {"ok": True}
+            return super().call(path, method, body, timeout)
+    client = Switchable()
+    app = gui.App(window, client)
+    _settle(window, 0.8)
+    assert "ON" in app.srv_pill.cget("text") and "Turn off" in app.srv_btn.cget("text")
+    app.toggle_server(); _settle(window, 0.4)
+    assert calls == ["/quit"] and "stopping" in app.srv_pill.cget("text")   # a late answer from the dying server is ignored
+    app.stop_until = 0; app.poll(); _settle(window, 0.6)
+    assert app.online is False and "OFF" in app.srv_pill.cget("text") and "Turn on" in app.srv_btn.cget("text")
+    assert app.srv_note.cget("text")   # tells that the phone cannot connect now
+    client.up = True
+    app.toggle_server(); _settle(window, 0.4)
+    assert started == [1] and "starting" in app.srv_pill.cget("text")
+    app.poll(); _settle(window, 0.8)   # the server answers again: the window loads everything again
+    assert app.online is True and "ON" in app.srv_pill.cget("text") and app.host_pill.cget("text") == "MY-PC"
+
+
+def test_window_opens_while_server_is_still_starting(window, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    class Down(FakeClient):
+        def call(self, *a, **k): raise gui.ApiError("")
+    app = gui.App(window, Down(), starting=True)
+    _settle(window, 0.8)
+    assert "starting" in app.srv_pill.cget("text") and app.status.cget("text") == ""   # no error pop-up while it starts
+
+
+def test_start_server_launches_a_background_copy(monkeypatch):
+    import subprocess, sys
+    seen = {}
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: seen.update(cmd=cmd, **kw))
+    gui.start_server()
+    assert seen["cmd"][0] == sys.executable and seen["cmd"][-1] == "--background"
+    assert seen["env"]["PYINSTALLER_RESET_ENVIRONMENT"] == "1"

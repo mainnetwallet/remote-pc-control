@@ -1,4 +1,4 @@
-import os, socket, sys, traceback
+import os, sys, traceback
 
 
 def _report_crash(text):
@@ -21,10 +21,8 @@ def main():
         sys.exit(lock_overlay.main())
     from app import firstrun
     firstrun.prepare()   # packaged exe: create .env on first start; must run before app.config is imported
-    import uvicorn
     from app.config import settings
-    from app.main import app   # imported (not a string) so PyInstaller bundles the whole app
-    background = "--background" in sys.argv   # started by the Windows autostart task: do not open the browser
+    background = "--background" in sys.argv   # started by the Windows autostart task or by the app window: no window
     state = firstrun.server_state(settings.port)
     if state == "old":   # an older version (e.g. the PowerShell/source one) still holds the port: replace it
         if not firstrun.stop_old_server(settings.port):
@@ -34,34 +32,27 @@ def main():
     if state == "other":
         firstrun.message(f"Port {settings.port} is used by another program, so Remote PC Control cannot start.\nClose that program (or restart the PC) and open Remote PC Control again.")
         sys.exit(1)
-    if state == "current":   # the server already runs (autostart): just show the app window, then leave the server alone
+    if state == "current":   # the server already runs: just show the app window, then leave the server alone
         if not background: show_panel(settings.port, settings.token)
         sys.exit(0)
-    if background or not (firstrun.first_run() or firstrun.frozen()):
-        uvicorn.run(app, host=settings.host, port=settings.port, reload=False, ws_per_message_deflate=False)
+    if not background and firstrun.frozen():
+        # Opened by the user and the server is off: start it as its own background program, then show the app window.
+        # The window can turn the server off and on; closing the window leaves the server as it is.
+        from app import gui
+        try: gui.start_server()
+        except Exception as e: print("Could not start the server:", e)
+        show_panel(settings.port, settings.token, starting=True)
         return
-    # Opened by the user (Start menu / desktop icon): run the server in a thread and show the app window on the main
-    # thread. Closing the window leaves the server running in the background, like the autostart one.
-    import threading, time
-    server = threading.Thread(target=uvicorn.run, args=(app,), daemon=False, name="server",
-                              kwargs=dict(host=settings.host, port=settings.port, reload=False, ws_per_message_deflate=False))
-    server.start()
-    for _ in range(120):   # wait (up to 60 s) until the server answers
-        if not server.is_alive(): break
-        try: socket.create_connection(("127.0.0.1", int(settings.port)), timeout=1).close(); break
-        except OSError: time.sleep(0.5)
-    if server.is_alive():
-        from app import winadmin
-        winadmin.RESTART_WITH_WINDOW = True   # "Restart agent" in the window brings the window back after the restart
-        show_panel(settings.port, settings.token, hosted=True)
-    server.join()
+    import uvicorn
+    from app.main import app   # imported (not a string) so PyInstaller bundles the whole app
+    uvicorn.run(app, host=settings.host, port=settings.port, reload=False, ws_per_message_deflate=False)
 
 
-def show_panel(port, token, hosted=False):
+def show_panel(port, token, starting=False):
     """Show the app window (a real desktop UI)."""
     from app import firstrun, gui
-    if gui.run(port, token, hosted=hosted): return
-    firstrun.message("The Remote PC Control window could not be opened.\nThe agent keeps running in the background; the phone app still works.\nDetails are in agent.log.")
+    if gui.run(port, token, starting=starting): return
+    firstrun.message("The Remote PC Control window could not be opened.\nThe server keeps running in the background; the phone app still works.\nDetails are in agent.log.")
 
 
 if __name__ == "__main__":

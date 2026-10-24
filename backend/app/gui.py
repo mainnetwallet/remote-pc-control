@@ -4,10 +4,10 @@ It does everything the browser control panel does (connect the phone, password, 
 internet link, speed settings, restart/stop, logs). It talks to the local agent through the same private
 /panel/api (loopback only + access token), so it works whether the agent runs inside this program or was started
 earlier by the autostart task."""
-import json, queue, sys, threading, urllib.error, urllib.request
+import json, os, queue, subprocess, sys, threading, time, urllib.error, urllib.request
 from pathlib import Path
 from .gui_text import TEXT
-from .paths import data_dir
+from .paths import data_dir, frozen
 
 TITLE = "Remote PC Control"
 
@@ -16,11 +16,17 @@ EXTRA = {
     "en": {"tab_connect": "Connect", "tab_startup": "Startup", "tab_lock": "Lock", "tab_link": "Internet",
            "tab_settings": "Settings", "tab_agent": "Agent", "no_server": "Cannot reach the agent on this PC. Is it running?",
            "closing_note": "Closing this window keeps the agent running in the background. Open the app again to see it.",
-           "offline": "Agent not reachable", "loading": "Loading...", "restarting_app": "Restarting... this window reconnects in a few seconds."},
+           "offline": "Agent not reachable", "loading": "Loading...", "restarting_app": "Restarting... this window reconnects in a few seconds.",
+           "server_on": "Server: ON", "server_off": "Server: OFF", "server_starting": "Server: starting...", "server_stopping": "Server: stopping...",
+           "turn_on": "Turn on server", "turn_off": "Turn off server", "server_off_note": "The phone cannot connect while the server is off.",
+           "server_stopped": "Server turned off."},
     "bn": {"tab_connect": "কানেক্ট", "tab_startup": "স্টার্টআপ", "tab_lock": "লক", "tab_link": "ইন্টারনেট",
            "tab_settings": "সেটিংস", "tab_agent": "এজেন্ট", "no_server": "এই PC র এজেন্টের সাথে যোগাযোগ হচ্ছে না। এটা কি চালু আছে?",
            "closing_note": "এই উইন্ডো বন্ধ করলেও এজেন্ট ব্যাকগ্রাউন্ডে চালু থাকে। আবার অ্যাপ খুললে এটা দেখা যাবে।",
-           "offline": "এজেন্ট পাওয়া যাচ্ছে না", "loading": "লোড হচ্ছে...", "restarting_app": "রিস্টার্ট হচ্ছে... কয়েক সেকেন্ডে উইন্ডো আবার কানেক্ট হবে।"},
+           "offline": "এজেন্ট পাওয়া যাচ্ছে না", "loading": "লোড হচ্ছে...", "restarting_app": "রিস্টার্ট হচ্ছে... কয়েক সেকেন্ডে উইন্ডো আবার কানেক্ট হবে।",
+           "server_on": "সার্ভার: চালু", "server_off": "সার্ভার: বন্ধ", "server_starting": "সার্ভার: চালু হচ্ছে...", "server_stopping": "সার্ভার: বন্ধ হচ্ছে...",
+           "turn_on": "সার্ভার চালু করুন", "turn_off": "সার্ভার বন্ধ করুন", "server_off_note": "সার্ভার বন্ধ থাকলে ফোন কানেক্ট হবে না।",
+           "server_stopped": "সার্ভার বন্ধ হয়েছে।"},
 }
 OK, BAD, MUTED = "#12805c", "#b42318", "#5d6b7e"
 
@@ -60,12 +66,15 @@ class PanelClient:
 
 
 class App:
-    def __init__(self, root, client, hosted=False):
+    def __init__(self, root, client, starting=False):
         import tkinter as tk
         from tkinter import ttk, font as tkfont
         self.tk, self.ttk = tk, ttk
-        self.root, self.client, self.hosted = root, client, hosted
+        self.root, self.client = root, client
         self.S, self.SYS = {}, None
+        self.online = None   # None = not known yet, True = the server answers, False = it does not
+        self.stop_until = 0.0   # right after "turn off" the server may still answer once or twice: ignore that
+        self.deadline = time.time() + 45 if starting else 0.0   # until then "not answering" means "starting"
         self.token_shown = False
         self.lang = self._load_lang()
         self.q = queue.Queue(); self.pending = {}; self._job = 0
@@ -88,7 +97,7 @@ class App:
         self.build()
         root.after(80, self._pump)
         root.after(300, self.refresh_all)
-        root.after(5000, self.poll)
+        root.after(1500, self.poll)
 
     # ---- helpers -------------------------------------------------------------------------------------------
     def _ui_font(self):
@@ -198,6 +207,10 @@ class App:
         self.admin_pill = ttk.Label(head); self.admin_pill.pack(side="right", padx=12)
         self.host_pill = ttk.Label(head, foreground=MUTED); self.host_pill.pack(side="right", padx=4)
 
+        bar = ttk.Frame(self.root, padding=(16, 8, 16, 0)); bar.pack(fill="x")
+        self.srv_pill = ttk.Label(bar, font=self.f_head); self.srv_pill.pack(side="left")
+        self.srv_note = ttk.Label(bar, foreground=MUTED); self.srv_note.pack(side="left", padx=12)
+        self.srv_btn = ttk.Button(bar, command=self.toggle_server, style="Primary.TButton"); self.srv_btn.pack(side="right")
         foot = ttk.Frame(self.root, padding=(16, 0, 16, 10)); foot.pack(side="bottom", fill="x")
         self.status = ttk.Label(foot, text="", wraplength=700); self.status.pack(anchor="w")
         self.label(foot, self.t("closing_note"), muted=True, wrap=True).pack(anchor="w")
@@ -206,6 +219,7 @@ class App:
         self.nb.bind("<Configure>", self._rewrap)
         self._build_connect(); self._build_startup(); self._build_lock()
         self._build_link(); self._build_settings(); self._build_agent()
+        self.render_server()
 
     def _rewrap(self, e):
         for lab in self.wrap:
@@ -271,7 +285,7 @@ class App:
     def _build_agent(self):
         f = self.tab("tab_agent")
         self.heading(f, "agent_title")
-        r = self.row(f); self.button(r, "restart", self.restart); self.button(r, "quit", self.quit_agent)
+        r = self.row(f); self.button(r, "restart", self.restart)
         r = self.row(f, 8); self.label(r, self.t("logs"), font=self.f_head).pack(side="left", padx=(0, 8))
         self.log_sel = self.tk.StringVar(value="agent")
         cb = self.ttk.Combobox(r, textvariable=self.log_sel, values=["agent", "lock"], state="readonly", width=10)
@@ -293,11 +307,12 @@ class App:
         if tok: self.client.token = tok; self.render_token()
 
     def _offline(self, e):
-        self.host_pill.configure(text=""); self.admin_pill.configure(text="● " + self.t("offline"), foreground=BAD)
-        self.toast(self._msg(e), True)
+        self.set_online(False)
+        if self.online is False and time.time() >= self.deadline: self.toast(self._msg(e), True)
 
     def _got_state(self, s):
         self.S = s
+        self.set_online(True)
         self.render_pills(); self.render_addrs(); self.render_fields(); self.render_lock(); self.render_tunnel(s.get("tunnel"))
         self.source_note.configure(text="" if s.get("installed") else self.t("source_note"))
 
@@ -305,12 +320,35 @@ class App:
         """Keep the pills (lock state, tunnel) in step with changes made from the phone."""
         def got(s):
             self.S.update({k: s[k] for k in ("lock", "tunnel", "elevated", "hostname", "addresses") if k in s})
+            if self.set_online(True) is False: return
             self.render_pills(); self.render_lock(); self.render_tunnel(s.get("tunnel"))
-        self.bg(lambda: self.client.call("/state", timeout=8), got, lambda e: self._offline_quiet())
-        self.root.after(5000, self.poll)
+        self.bg(lambda: self.client.call("/state", timeout=8), got, lambda e: self.set_online(False))
+        fast = self.online is not True or time.time() < self.stop_until or time.time() < self.deadline
+        self.root.after(1500 if fast else 5000, self.poll)
 
-    def _offline_quiet(self):
-        self.admin_pill.configure(text="● " + self.t("offline"), foreground=BAD)
+    def set_online(self, flag):
+        """Remember whether the server answers and update the ON/OFF bar. Returns False when the answer is ignored."""
+        if flag and time.time() < self.stop_until: return False   # "turn off" was just pressed: this is the dying server
+        was, self.online = self.online, flag
+        if flag:
+            self.deadline = 0.0
+            if was is False: self.refresh_all()   # the server came back: load everything again
+        else:
+            self.stop_until = 0.0
+            self.admin_pill.configure(text=""); self.host_pill.configure(text="")
+        self.render_server()
+        return True
+
+    def render_server(self):
+        starting = self.online is not True and time.time() < self.deadline
+        stopping = time.time() < self.stop_until
+        if stopping: text, color, btn, dis = "server_stopping", MUTED, "turn_off", True
+        elif self.online: text, color, btn, dis = "server_on", OK, "turn_off", False
+        elif starting or self.online is None: text, color, btn, dis = "server_starting", MUTED, "turn_on", True
+        else: text, color, btn, dis = "server_off", BAD, "turn_on", False
+        self.srv_pill.configure(text="● " + self.t(text), foreground=color)
+        self.srv_note.configure(text=self.t("server_off_note") if (self.online is False and not starting and not stopping) else "")
+        self.srv_btn.configure(text=self.t(btn)); self.srv_btn.state(["disabled"] if dis else ["!disabled"])
 
     def load_system(self):
         def got(d):
@@ -454,13 +492,31 @@ class App:
 
     def restart(self):
         def done(_):
-            self.toast(self.t("restarting_app")); self.root.after(9000, self.refresh_all)
+            self.toast(self.t("restarting_app")); self.deadline = time.time() + 45; self.render_server()
         self.bg(lambda: self.client.call("/restart", "POST"), done)
 
-    def quit_agent(self):
-        from tkinter import messagebox
-        if not messagebox.askokcancel(TITLE, self.t("quit_confirm"), parent=self.root): return
-        self.bg(lambda: self.client.call("/quit", "POST"), lambda _: self.toast(self.t("stopped")))
+    def toggle_server(self):
+        """Turn the server off (it stops answering the phone) or on again, without closing this window."""
+        if self.online:
+            from tkinter import messagebox
+            if not messagebox.askokcancel(TITLE, self.t("quit_confirm"), parent=self.root): return
+            self.stop_until = time.time() + 6; self.render_server()
+            def done(_): self.toast(self.t("server_stopped"))
+            def fail(e): self.stop_until = 0.0; self.render_server(); self.toast(self._msg(e), True)
+            self.bg(lambda: self.client.call("/quit", "POST"), done, fail)
+        else:
+            self.deadline = time.time() + 45; self.render_server()
+            def fail(e): self.deadline = 0.0; self.render_server(); self.toast(str(e) or self.t("no_server"), True)
+            self.bg(start_server, None, fail)
+
+
+def start_server():
+    """Start the agent as its own background process: it keeps running when this window is closed."""
+    if frozen(): cmd = [sys.executable, "--background"]
+    else: cmd = [sys.executable, str(Path(__file__).resolve().parents[2] / "run_agent.py"), "--background"]
+    env = dict(os.environ); env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"   # a new, independent copy of the one-file exe
+    kw = {"creationflags": 0x08000000 | 0x00000008} if sys.platform == "win32" else {"start_new_session": True}   # no console, detached
+    subprocess.Popen(cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
 
 
 def _single_instance() -> bool:
@@ -487,7 +543,7 @@ def _dpi_aware():
         pass
 
 
-def run(port, token, hosted=False) -> bool:
+def run(port, token, starting=False) -> bool:
     """Show the app window and block until it is closed (must be the main thread).
     Returns False when the window cannot be created, so the caller can open the browser panel instead."""
     try: import tkinter as tk
@@ -498,6 +554,6 @@ def run(port, token, hosted=False) -> bool:
     try: root = tk.Tk()
     except Exception as e:
         print("Could not open the app window:", e); return False
-    App(root, PanelClient(port, token), hosted)
+    App(root, PanelClient(port, token), starting)
     root.mainloop()
     return True
