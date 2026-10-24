@@ -86,6 +86,18 @@ def test_encode_frame_quality_changes_jpeg_size():
     assert Image.open(io.BytesIO(large)).size == (320, 200)
 
 
+def test_encode_frame_sharp_quality_keeps_full_resolution_colour():
+    from PIL import JpegImagePlugin
+
+    def sampling(quality):
+        jpeg, size = screen.encode_frame(RAW, (W, H), max_width=400, quality=quality)
+        assert size == (400, 225)
+        return JpegImagePlugin.get_sampling(Image.open(io.BytesIO(jpeg)))
+
+    assert sampling(screen.SHARP_QUALITY) == 0          # 4:4:4: coloured text keeps its edges
+    assert sampling(screen.SHARP_QUALITY - 1) == 2      # 4:2:0 below that (Pillow's default), smaller frames
+
+
 # ---- /ws/screen end to end (fake capture, so it runs on any OS) ------------
 
 @pytest.fixture

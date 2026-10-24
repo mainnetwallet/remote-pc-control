@@ -756,6 +756,19 @@ def test_encoder_bitrate_follows_the_receiver_within_floor_and_cap():
     webrtc_encoder.Limits.set("t", None)
 
 
+def test_encoder_floor_rises_with_a_high_cap_but_never_exceeds_it():
+    assert webrtc_encoder.floor_for(4_000_000) == webrtc_encoder.FLOOR_BITRATE        # unchanged for the default cap
+    assert webrtc_encoder.floor_for(600_000) == 600_000                               # never above the cap
+    assert webrtc_encoder.floor_for(20_000_000) == 20_000_000 // webrtc_encoder.FLOOR_SHARE
+    cls = webrtc_encoder.install()
+    enc = cls()
+    webrtc_encoder.Limits.set("t", 20_000_000)
+    enc.target_bitrate = 50_000                                           # a quiet screen on the Native preset...
+    assert enc.target_bitrate == webrtc_encoder.floor_for(20_000_000) > webrtc_encoder.FLOOR_BITRATE   # ...keeps a sharp floor
+    enc.target_bitrate = 50_000_000; assert enc.target_bitrate == 20_000_000
+    webrtc_encoder.Limits.set("t", None)
+
+
 # ---------------------------------------------------------------- start-up warm-up
 
 def test_warm_up_does_nothing_when_webrtc_is_unavailable(monkeypatch):

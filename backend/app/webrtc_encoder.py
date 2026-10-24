@@ -19,6 +19,8 @@ MIN_BITRATE = 300_000
 INITIAL_BITRATE = 3_000_000    # used until the receiver reports its own estimate
 FLOOR_BITRATE = 1_000_000      # the receiver's estimate never lowers the bitrate below this (or below the cap, if that is lower):
                                # on a mostly still screen the estimate sinks, and the next scroll would arrive blocky
+FLOOR_SHARE = 6                # ...and never below 1/FLOOR_SHARE of the cap when that is higher, so a High/Native preset
+                               # (cap 8-20 Mbit/s) does not sink to the picture of a Low one between two scrolls
 REOPEN_RATIO = 0.25            # the encoder is re-opened only when the target moved by more than this fraction...
 REOPEN_MIN_SECONDS = 2.0       # ...and not more often than this (re-opening a hardware encoder takes a moment)
 GOP_FRAMES = 120               # a key frame at least this often; receivers also ask for one (PLI) after packet loss
@@ -47,6 +49,12 @@ class Limits:
     @classmethod
     def reset(cls) -> None:
         with cls._lock: cls._per_owner.clear()
+
+
+def floor_for(cap: int) -> int:
+    """Lowest bitrate the receiver's estimate may push the encoder to: 1 Mbit/s, or 1/FLOOR_SHARE of the cap when that is
+    higher; never above the cap itself."""
+    return min(cap, max(FLOOR_BITRATE, cap // FLOOR_SHARE))
 
 
 def backend_order(preference: str, failed: set[str], available=None) -> list[str]:
@@ -91,7 +99,7 @@ def make_encoder_class():
         def target_bitrate(self) -> int:
             cap = max(MIN_BITRATE, Limits.cap())
             asked = self._requested if self._requested is not None else INITIAL_BITRATE
-            return max(min(cap, FLOOR_BITRATE), min(cap, asked))
+            return max(floor_for(cap), min(cap, asked))
 
         @target_bitrate.setter
         def target_bitrate(self, bitrate: int) -> None:

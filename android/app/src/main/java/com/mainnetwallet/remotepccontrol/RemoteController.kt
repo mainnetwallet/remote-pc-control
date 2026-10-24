@@ -46,8 +46,8 @@ private const val LOCAL_CURSOR_NS = 250_000_000L   // after the finger moved the
 enum class Quality(val label: String, val maxWidth: Int, val fps: Int, val jpeg: Int, val kbps: Int, val hint: String) {
     LOW("Low", 960, 20, 45, 1500, "960 px wide, up to 20 fps. Saves data."),
     MEDIUM("Medium", 1280, 30, 65, 3000, "1280 px wide, up to 30 fps."),
-    HIGH("High", 1920, 30, 78, 6000, "1920 px wide, up to 30 fps."),
-    NATIVE("Native", 0, 20, 85, 10000, "The PC's full resolution, up to 20 fps. Needs a fast link.");
+    HIGH("High", 1920, 30, 80, 8000, "1920 px wide, up to 30 fps. Sharp text."),
+    NATIVE("Native", 0, 30, 90, 20000, "The PC's full resolution, up to 30 fps, best picture. Needs a fast link (same Wi-Fi or Tailscale).");
 
     /** The same preset for the WebRTC video: bitrate (kbit/s) instead of JPEG quality. */
     fun rtcConfigMessage(): String = JSONObject()

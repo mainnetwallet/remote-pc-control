@@ -149,6 +149,7 @@ def _draw_cursor(img: Image.Image, x: float, y: float) -> None:
 WIDTH_MIN, WIDTH_MAX = 320, 3840
 FPS_MIN, FPS_MAX = 1, 30
 QUALITY_MIN, QUALITY_MAX = 25, 90
+SHARP_QUALITY = 85   # from this JPEG quality up: Lanczos downscale and full-resolution (4:4:4) colour, at the cost of bigger frames
 
 
 def _number(value) -> float | None:
@@ -188,14 +189,17 @@ def encode_frame(raw: bytes, size: tuple[int, int], cursor: tuple[float, float] 
     max_width = settings.max_width if max_width is None else max_width
     quality = settings.jpeg_quality if quality is None else quality
     img = Image.frombytes("RGB", size, raw, "raw", "BGRX")
+    sharp = quality >= SHARP_QUALITY
     scale = 1.0
     if max_width and img.width > max_width:
         scale = max_width / img.width
-        img = img.resize((max_width, max(1, round(img.height * scale))), Image.BILINEAR)
+        img = img.resize((max_width, max(1, round(img.height * scale))), Image.LANCZOS if sharp else Image.BILINEAR)
     if cursor is not None:
         _draw_cursor(img, cursor[0] * scale, cursor[1] * scale)
     buf = io.BytesIO()
-    img.save(buf, "JPEG", quality=quality)
+    # Sharp mode keeps the colour at full resolution (4:4:4): the default 4:2:0 smears coloured text and thin UI lines.
+    if sharp: img.save(buf, "JPEG", quality=quality, subsampling=0)
+    else: img.save(buf, "JPEG", quality=quality)
     return buf.getvalue(), img.size
 
 

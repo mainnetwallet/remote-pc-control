@@ -22,6 +22,8 @@ The server's `.env` values below are only the *starting* values of every `/ws/sc
 
 All fields are optional. `max_width` is `0` (native) or 320-3840, `fps` is 1-30, `quality` is JPEG 25-90; out-of-range numbers are clamped and unusable values are ignored. Settings are per connection. The server answers with a fresh `{"type":"screen","width":W,"height":H,"max_width":..,"fps":..,"quality":..}` (the values now in effect) followed by a new frame. Frames are never upscaled, so a `max_width` above the PC's resolution just sends native size. Clients that never send `config` get exactly the `.env` behaviour.
 
+**Sharp mode.** From JPEG quality 85 up the server downscales with Lanczos instead of bilinear and keeps full-resolution colour (4:4:4 instead of 4:2:0), so coloured text and thin UI lines stay crisp. Frames get noticeably bigger, which the flow control absorbs on a fast link. The Native preset (quality 90, in the app and in the web dashboard) uses it; the other presets do not.
+
 ### Motion quality (less lag)
 
 While the picture keeps changing (scrolling, window animations, dragging) the server sends frames at `REMOTE_PC_MOTION_QUALITY` percent of the JPEG quality (40-100, default `100` = off), so they are smaller and reach the phone sooner. As soon as the picture rests for about 0.2 s it sends one full-quality frame, so text is sharp again. Frames are also scaled to `REMOTE_PC_MOTION_WIDTH` percent of their width (50-100, default `100` = off) while the picture moves. Set both to `100` in `.env` to turn this off. No client change is needed.
@@ -61,7 +63,7 @@ Set in `.env`; restart `start.ps1` after changing.
 |---|---|---|
 | `REMOTE_PC_WEBRTC` | `1` | `0` turns WebRTC off; clients then always use the WebSocket stream |
 | `REMOTE_PC_RTC_FPS` | `30` | Maximum video frames per second (1-30) |
-| `REMOTE_PC_RTC_BITRATE` | `4000` | Upper video bitrate limit in kbit/s (300-30000). The app's quality preset can lower it for its session. The receiver's own bandwidth estimate can lower the live bitrate, but not below 1 Mbit/s (or this limit if it is lower) |
+| `REMOTE_PC_RTC_BITRATE` | `4000` | Starting upper video bitrate limit in kbit/s (300-30000). A client's `config` message (the Android quality preset) replaces it for its session, up to 30000. The receiver's own bandwidth estimate lowers the live bitrate, but never below the *floor*: 1 Mbit/s, or one sixth of the limit when that is higher (3.3 Mbit/s for the 20 Mbit/s Native preset), and never below the limit itself if that is lower |
 | `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, or force `nvenc`, `qsv`, `amf` or `x264`. libx264 is always the last resort |
 | `REMOTE_PC_STUN_URL` | `stun:stun.l.google.com:19302` | STUN server(s), comma separated |
 | `REMOTE_PC_TURN_URL` / `_USER` / `_PASS` | empty | Optional TURN relay, see below |
@@ -95,7 +97,7 @@ The PC sends the TURN details only to clients that signed in with the token, and
 |---|---|
 | **Android** | The small label in the corner of the picture starts with the transport, e.g. `WebRTC · 1280×720 · 30 fps · 38 ms` or `WebSocket · 1280×720 · 20/30 fps`. After a fallback a notice says why |
 | **PC** | `start.ps1`'s window logs `WebRTC connection connected` (and `WebRTC encoder: h264_nvenc ...` or `libx264`) for every WebRTC session. If the app fell back, there is a `/ws/screen` connection instead and no such lines |
-| **Web dashboard** | The corner label says `WebRTC` or `WebSocket`; `chrome://webrtc-internals` shows details |
+| **Web dashboard** | It always uses the JPEG WebSocket stream (no WebRTC); the PC shows a `/ws/screen` connection |
 
 ### Protocol (for other clients)
 

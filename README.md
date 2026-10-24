@@ -45,7 +45,7 @@ flowchart LR
 
 | | Feature | What you get |
 |---|---|---|
-| 🖥 | **Live screen** | WebRTC (H.264 over UDP) first, JPEG over WebSocket as automatic fallback; quality changes live |
+| 🖥 | **Live screen** | Android app: WebRTC (H.264 over UDP) first, JPEG over WebSocket as automatic fallback. Web dashboard: JPEG over WebSocket. Quality presets change live in both |
 | 👆 | **Touch control** | Tap = click, long-press = right click, drag, scroll, double-click, fullscreen and landscape |
 | 🖱 | **Trackpad (Android)** | Laptop-style pad: move, tap, double-tap, two-finger right click and scroll, tap-then-slide drag |
 | ⌨ | **Keyboard** | Text box plus quick keys (Esc, Tab, arrows, Win, Alt+Tab, Ctrl+C/V/A/Z) |
@@ -146,12 +146,14 @@ It is a personal-use debug build, not a Play Store release. Build details: [andr
 | **Dashboard** | CPU, memory and disk gauges, network speed, power buttons (Sleep, Restart, Shutdown ask for confirmation), PIN lock card, Quality setting |
 | **Session** | Live screen, touch modes, trackpad, keys, a transport / resolution / fps overlay and a Rotate button |
 
-| Quality preset | Width | Max FPS | WebRTC bitrate | JPEG quality |
+| Quality preset | Width | Max FPS | WebRTC bitrate (upper limit) | JPEG quality |
 |---|---|---|---|---|
 | Low | 960 px | 20 | 1.5 Mbit/s | 45 |
 | Medium (default) | 1280 px | 30 | 3 Mbit/s | 65 |
-| High | 1920 px | 30 | 6 Mbit/s | 78 |
-| Native | PC resolution | 20 | 10 Mbit/s | 85 |
+| High | 1920 px | 30 | 8 Mbit/s | 80 |
+| Native | PC resolution | 30 | 20 Mbit/s | 90 |
+
+**Sharpest picture (closest to the PC):** choose **Native** on the same Wi-Fi or over Tailscale. Native sends the PC's full resolution at up to 30 fps; the WebSocket fallback then uses 4:4:4 colour and a Lanczos downscale (JPEG quality 85 and up), so coloured text and thin lines stay crisp. The bitrate figures are ceilings: the link's own estimate still lowers them, so a slow connection never gets more than it can carry. If you prefer exactly the chosen quality even on a slow link (at the cost of lag), add `REMOTE_PC_LATENCY_FIRST=0` to `.env`. The web dashboard has the same four presets in a **Quality** menu above the screen (default High, remembered in the browser; it uses the JPEG stream only).
 
 ## ⚙ Configuration
 
@@ -163,7 +165,7 @@ Settings live in `.env` in the project folder. Restart `start.ps1` after editing
 | `REMOTE_PC_HOST` / `REMOTE_PC_PORT` | `127.0.0.1` in code, `0.0.0.0` / `8888` in `.env.example` | Listen address. Used by the packaged `RemotePCControl.exe` only (see note below) |
 | `REMOTE_PC_WEBRTC` | `1` | WebRTC on or off (the WebSocket stream is the fallback) |
 | `REMOTE_PC_RTC_FPS` | `30` | WebRTC max frames per second (1-30) |
-| `REMOTE_PC_RTC_BITRATE` | `4000` | WebRTC bitrate limit in kbit/s (300-30000) |
+| `REMOTE_PC_RTC_BITRATE` | `4000` | Starting WebRTC bitrate limit in kbit/s (300-30000). The app's quality preset replaces it for its session (up to 30000) |
 | `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, `nvenc`, `qsv`, `amf` or `x264` |
 | `REMOTE_PC_STUN_URL` | Google STUN | STUN server(s), comma separated |
 | `REMOTE_PC_TURN_URL` / `_USER` / `_PASS` | empty | Optional TURN relay for networks without a direct path |

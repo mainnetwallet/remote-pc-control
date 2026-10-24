@@ -65,14 +65,14 @@ The app can only control the logged-in interactive Windows desktop. It cannot by
 
 The live screen first tries WebRTC (low-latency H.264 video over UDP, input over data channels) through the PC's `/ws/rtc` endpoint. If the PC has no WebRTC, the network blocks UDP, or nothing connects within about 20 seconds, the app switches to the WebSocket JPEG stream by itself and shows a short notice. The corner label shows which transport is active (`WebRTC` or `WebSocket`), the frame rate and, for WebRTC, the round-trip time.
 
-| Quality preset | WebRTC bitrate |
-|---|---|
-| Low | 1500 kbit/s |
-| Medium | 3000 kbit/s |
-| High | 6000 kbit/s |
-| Native | 10000 kbit/s |
+| Quality preset | WebRTC bitrate (upper limit) | Width | Max FPS |
+|---|---|---|---|
+| Low | 1500 kbit/s | 960 px | 20 |
+| Medium (default) | 3000 kbit/s | 1280 px | 30 |
+| High | 8000 kbit/s | 1920 px | 30 |
+| Native | 20000 kbit/s | PC resolution | 30 |
 
-The presets also map to picture size and frame rate. Over a Cloudflare quick tunnel only the signaling travels through the tunnel; the video needs a direct path (same Wi-Fi, Tailscale, or a TURN relay configured on the PC with `REMOTE_PC_TURN_URL`). Details: [WebRTC guide](../docs/WEBRTC.md).
+Pick **Native** for the sharpest picture on the same Wi-Fi or Tailscale. The bitrate is a ceiling that the link's own estimate can still lower. Over a Cloudflare quick tunnel only the signaling travels through the tunnel; the video needs a direct path (same Wi-Fi, Tailscale, or a TURN relay configured on the PC with `REMOTE_PC_TURN_URL`). Details: [WebRTC guide](../docs/WEBRTC.md).
 
 Library: `io.getstream:stream-webrtc-android` (package `org.webrtc`).
 
