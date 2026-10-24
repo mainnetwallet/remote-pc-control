@@ -247,6 +247,8 @@ A separate, persistent lock screen for the PC itself -- not the agent's `/api/v1
 
 ```powershell
 cd $HOME\remote-pc-control
+git pull
+.\scripts\setup.ps1
 .\scripts\set-pin.ps1
 .\scripts\install-lock-overlay.ps1
 ```
