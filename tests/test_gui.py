@@ -74,7 +74,12 @@ def window():
     except tk.TclError: pytest.skip("no display")
     root.withdraw()
     yield root
+    # Free the window's Tk variables (StringVar, ...) now, on this thread and while the interpreter is alive. Left for
+    # later, another test's garbage collection would delete them from the wrong thread ("main thread is not in main loop").
+    import gc
+    root.update_idletasks(); gc.collect()
     root.destroy()
+    gc.collect()
 
 
 def _settle(root, seconds=1.0):
