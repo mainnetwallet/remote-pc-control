@@ -32,13 +32,13 @@ using the Android app or a mobile browser.
 
 ## 🚀 Install and run
 
-Use **PowerShell on the Windows PC**, as your normal user, in the signed-in desktop session you want to control. Pick **one** option.
+For a **Windows 10/11 x64** PC. Pick **one** option:
 
-| | Option A · From source | Option B · Windows installer |
-|---|---|---|
-| Needs | Windows 10/11 x64, Python 3.11+, Node.js 22, Git | Windows 10/11 x64 only |
-| Terminal | Yes | No |
-| Best for | Full features, PIN lock screen, `git pull` updates | Quick install |
+<img src="assets/install-options.svg" alt="Option A: from source. Option B: Windows installer." width="100%">
+
+<p align="center"><a href="#option-a--from-source"><b>Option A · From source ↓</b></a> &nbsp;·&nbsp; <a href="#option-b--windows-installer"><b>Option B · Windows installer ↓</b></a></p>
+
+Run commands in **PowerShell**, as your normal user, in the signed-in desktop session you want to control.
 
 ### Option A · From source
 
