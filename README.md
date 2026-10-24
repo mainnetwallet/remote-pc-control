@@ -30,18 +30,7 @@ Control your Windows PC from your phone over <b>Tailscale</b>, <b>Wi-Fi</b> or a
 using the Android app or a mobile browser.
 </p>
 
-<table width="100%">
-<tr align="center">
-<td width="33%"><h3>🖥</h3><b>Live screen</b><br><sub>WebRTC H.264<br>automatic JPEG fallback</sub></td>
-<td width="33%"><h3>👆</h3><b>Full control</b><br><sub>Touch, trackpad<br>and keyboard</sub></td>
-<td width="33%"><h3>📊</h3><b>Monitor</b><br><sub>CPU, RAM, disk<br>and network</sub></td>
-</tr>
-<tr align="center">
-<td width="33%"><h3>⚡</h3><b>Power</b><br><sub>Lock, sleep,<br>restart, shutdown</sub></td>
-<td width="33%"><h3>🔐</h3><b>PIN lock</b><br><sub>Persistent full-screen<br>lock for the PC</sub></td>
-<td width="33%"><h3>🛡</h3><b>Secure</b><br><sub>Token login<br>and rate limits</sub></td>
-</tr>
-</table>
+<img src="assets/features.svg" alt="Live screen, full control, monitor, power, PIN lock, secure" width="100%">
 
 ## 🚀 Install and run
 
