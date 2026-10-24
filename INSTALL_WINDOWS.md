@@ -44,22 +44,18 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 `setup.ps1` installs dependencies, builds the dashboard, and creates `.env` with a random access token (printed once, and stored in `.env`). Keep the token private and never commit `.env`. Keep the `start.ps1` window open while you use the agent; press **Ctrl+C** to stop it.
 
-### Option B · Windows installer (packaged `RemotePCControl.exe`)
+### Option B · Windows installer (packaged `RemotePCControl.exe`), no terminal needed
 
-1. Get `RemotePCControl-Setup.exe`: open **GitHub → Actions → Windows installer**, run the workflow (or push a version tag such as `v1.0.0`), and download the artifact `RemotePCControl-Windows-x64`.
-2. Run the setup. It installs per user (no administrator rights) into `%LOCALAPPDATA%\Programs\RemotePCControl`, adds Start Menu and desktop shortcuts, and offers to run `configure-installed.ps1` when it finishes.
-3. `configure-installed.ps1` creates `.env` next to the program, with a random token printed in its PowerShell window, **only if `.env` does not exist yet**. Save the token from that window; it stays in `.env`.
-4. Start **Remote PC Control** from the shortcut. It runs from its own folder, reads `.env` there, and serves on port 8888. It runs as a console program: close its window to stop it.
+1. Get `RemotePCControl-Setup.exe`: it is built automatically on every push to `main` and published on the **Releases** page (`windows-build-N`). You can also run **GitHub → Actions → Windows installer** by hand, or push a tag such as `v1.0.0`.
+2. Run the setup and accept the Windows (UAC) prompt. The installer does everything itself:
+   - installs into `Program Files\RemotePCControl` and adds Start Menu and desktop shortcuts
+   - registers the scheduled task `RemotePCControl` that starts the agent at sign-in with **administrator rights** (no prompt), so mouse and keyboard also work in Task Manager, Registry Editor and admin terminals
+   - adds the firewall rule `RemotePCControl Tailscale only` (TCP 8888 from `100.64.0.0/10`)
+   - starts the agent right away
+3. On the first start a window shows the **PC address and the access token**; type them into the phone app. The token is saved in `%LOCALAPPDATA%\RemotePCControl\.env` (Start Menu → *Access token (.env)* opens it). To change the password, edit `REMOTE_PC_TOKEN` there and restart the program.
+4. The agent has no window. Logs: `%LOCALAPPDATA%\RemotePCControl\agent.log`. Uninstalling removes the task and the firewall rule.
 
-What the installer does **not** do or include:
-
-- It does not create a firewall rule; the script only prints a reminder. From an **Administrator PowerShell** create the same Tailscale-only rule that `setup.ps1` would create:
-
-  ```powershell
-  New-NetFirewallRule -DisplayName "RemotePCControl Tailscale only" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8888 -RemoteAddress "100.64.0.0/10" -Profile Any
-  ```
-
-- The helper scripts (`set-password.ps1`, `install-autostart.ps1`, tunnel and PIN-lock scripts) and `lock_overlay.py` are not packaged. Change the password by editing `REMOTE_PC_TOKEN` in `.env`, then restart the program. For autostart and the PIN lock use Option A.
+Not included in the installer: the PIN lock screen (`lock_overlay.py`), the tunnel scripts and a LAN firewall rule. Use Option A for those. Because the agent runs as administrator, use a strong token.
 
 ## Connect the phone
 
@@ -117,7 +113,7 @@ Verify the rules if setup warns; never replace them with a public inbound rule.
 | Artifact | Where | Trigger |
 |---|---|---|
 | **Android APK** | GitHub Actions → *Android APK*, or the Releases page | Push to `main` touching `android/`, or run manually. See the [Android guide](https://github.com/mainnetwallet/remote-pc-control/blob/main/android/README.md) |
-| **Windows installer** | GitHub Actions → *Windows installer* | Run manually, or push a tag matching `v*`. Packages `RemotePCControl.exe` and builds an Inno Setup installer |
+| **Windows installer** | Releases page (`windows-build-N`), or GitHub Actions → *Windows installer* | Every push to `main` (docs-only changes excluded), a tag matching `v*`, or run manually. Packages `RemotePCControl.exe` (runs as administrator) and builds the Inno Setup installer |
 
 ## Security and limitations
 

@@ -2,7 +2,14 @@ name: Windows installer
 on:
   workflow_dispatch:
   push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
     tags: ["v*"]
+
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: windows-latest
@@ -26,7 +33,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force backend/app/static | Out-Null
           Copy-Item -Recurse -Force frontend/dist/* backend/app/static/
-          pyinstaller --noconfirm --clean --onefile --name RemotePCControl --paths backend --add-data "backend/app/static;backend/app/static" --hidden-import mss --hidden-import pynput.keyboard --hidden-import pynput.mouse --collect-all aiortc --collect-all av --collect-all aioice --collect-all pylibsrtp --collect-all google_crc32c run_agent.py
+          pyinstaller --noconfirm --clean --onefile --noconsole --uac-admin --name RemotePCControl --paths backend --add-data "backend/app/static;backend/app/static" --hidden-import mss --hidden-import pynput.keyboard --hidden-import pynput.mouse --collect-all aiortc --collect-all av --collect-all aioice --collect-all pylibsrtp --collect-all google_crc32c run_agent.py
       - name: Build setup installer
         shell: pwsh
         run: |
@@ -41,3 +48,12 @@ jobs:
           path: |
             dist/RemotePCControl.exe
             dist-installer/RemotePCControl-Setup.exe
+      - name: Publish installer to GitHub Release
+        if: github.event_name != 'workflow_dispatch' || github.ref_type == 'branch'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "windows-build-${{ github.run_number }}"
+          Copy-Item dist-installer/RemotePCControl-Setup.exe "RemotePCControl-Setup-$tag.exe"
+          gh release create $tag "RemotePCControl-Setup-$tag.exe" --target "${{ github.sha }}" --title "Windows installer #${{ github.run_number }}" --notes "RemotePCControl-Setup.exe built from commit ${{ github.sha }}. Run it once: it sets up administrator rights, autostart and the firewall rule."

@@ -1,4 +1,4 @@
-import os
+import logging, os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, WebSocket
@@ -14,6 +14,7 @@ from .webrtc import rtc_socket, shutdown_all as rtc_shutdown, warm_up as rtc_war
 @asynccontextmanager
 async def lifespan(app):
     validate_settings()
+    if not monitor.is_elevated(): logging.getLogger("uvicorn.error").warning("Not running as Administrator: mouse/keyboard will NOT work in Task Manager, admin terminals or other elevated windows. Run scripts\\install-autostart.ps1 -Admin from an Administrator PowerShell.")
     threading.Thread(target=rtc_warm_up,name="rtc-warm-up",daemon=True).start()   # first WebRTC connection after boot must not be slow
     yield
     await rtc_shutdown()   # close WebRTC sessions: tracks, capture handles, peer connections

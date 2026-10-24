@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
-load_dotenv()
+from .paths import data_dir, frozen
+load_dotenv(data_dir() / ".env" if frozen() else None)   # exe: the .env in its data folder; source: found from the current folder as before
 
 # Highest frame rate the app accepts: WebRTC video (H.264, hardware encoder) up to 120, the WebSocket JPEG stream up to 60
 # (JPEG encoding on the CPU cannot keep up with more).
