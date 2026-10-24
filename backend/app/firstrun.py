@@ -73,15 +73,68 @@ def open_panel(port, token, wait_for_server=True):
     threading.Thread(target=work, daemon=True).start()
 
 
-def already_running(port) -> bool:
-    """Packaged exe only: True when another copy already serves this port."""
-    if not frozen():
-        return False
+def _listener(port):
+    """The process that listens on this port (psutil), or None."""
     try:
-        socket.create_connection(("127.0.0.1", int(port)), timeout=1).close()
-    except OSError:
-        return False
-    return True
+        import psutil
+        for c in psutil.net_connections(kind="tcp"):
+            if c.status == "LISTEN" and c.laddr and c.laddr.port == int(port) and c.pid:
+                return psutil.Process(c.pid)
+    except Exception:
+        pass
+    return None
+
+
+def _health(port):
+    import json, urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{int(port)}/api/health", timeout=2) as r:
+            return json.loads(r.read().decode("utf-8", "replace"))
+    except Exception:
+        return None
+
+
+def classify(listening, health):
+    """none = port free, current = this version already runs, old = an older Remote PC Control (no control panel),
+    other = some other program."""
+    if not listening: return "none"
+    if isinstance(health, dict) and health.get("service") == "remote-pc-control":
+        return "current" if health.get("panel") else "old"
+    return "other"
+
+
+def server_state(port) -> str:
+    """Packaged exe only (source runs always report "none")."""
+    if not frozen(): return "none"
+    try: socket.create_connection(("127.0.0.1", int(port)), timeout=1).close()
+    except OSError: return "none"
+    return classify(True, _health(port))
+
+
+def stop_old_server(port) -> bool:
+    """End an older Remote PC Control that still holds the port (for example the PowerShell/source version), so this
+    version can start. Only used when /api/health proved that it is a Remote PC Control."""
+    import time
+    proc = _listener(port)
+    try:
+        if proc is not None:
+            for child in proc.children(recursive=True): child.kill()
+            proc.kill()
+    except Exception as e:
+        print("Could not stop the old server:", e)
+    for _ in range(40):
+        try: socket.create_connection(("127.0.0.1", int(port)), timeout=0.5).close()
+        except OSError: return True
+        time.sleep(0.5)
+    return False
+
+
+def message(text, title="Remote PC Control"):
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, text, title, 0x40 | 0x40000)
+    except Exception:
+        print(text)
 
 
 def first_run() -> bool:

@@ -25,7 +25,7 @@ def _lock_state_error(request,exc): return JSONResponse({"detail":"Lock state fi
 class PowerRequest(BaseModel): confirm: bool=False
 class PinRequest(BaseModel): pin: str
 @app.get("/api/health")
-def health(): return {"ok":True,"service":"remote-pc-control"}
+def health(): return {"ok":True,"service":"remote-pc-control","panel":True}
 @app.get("/api/v1/status",dependencies=[Depends(require_auth)])
 def status(): return monitor.snapshot()
 @app.get("/api/v1/metrics",dependencies=[Depends(require_auth)])

@@ -14,7 +14,7 @@ def test_source_run_changes_nothing(tmp_path, monkeypatch):
     firstrun.prepare()
     assert not (tmp_path / ".env").exists()
     assert paths.data_dir() == tmp_path
-    assert firstrun.already_running(8888) is False
+    assert firstrun.server_state(8888) == "none"
 
 
 def test_first_start_of_exe_creates_env_with_token(tmp_path, monkeypatch):
@@ -38,3 +38,15 @@ def test_existing_env_next_to_exe_is_kept(tmp_path, monkeypatch):
     firstrun.prepare()
     assert paths.data_dir() == exe.resolve()
     assert firstrun._new_token is None and not local.exists()
+
+
+def test_classify_running_servers():
+    assert firstrun.classify(False, None) == "none"
+    assert firstrun.classify(True, {"ok": True, "service": "remote-pc-control", "panel": True}) == "current"
+    assert firstrun.classify(True, {"ok": True, "service": "remote-pc-control"}) == "old"   # older version without the panel
+    assert firstrun.classify(True, None) == "other"
+    assert firstrun.classify(True, {"service": "something-else"}) == "other"
+
+
+def test_server_state_is_none_when_not_packaged():
+    assert firstrun.server_state(8888) == "none"

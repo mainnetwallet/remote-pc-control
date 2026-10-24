@@ -25,7 +25,16 @@ def main():
     from app.config import settings
     from app.main import app   # imported (not a string) so PyInstaller bundles the whole app
     background = "--background" in sys.argv   # started by the Windows autostart task: do not open the browser
-    if firstrun.already_running(settings.port):
+    state = firstrun.server_state(settings.port)
+    if state == "old":   # an older version (e.g. the PowerShell/source one) still holds the port: replace it
+        if not firstrun.stop_old_server(settings.port):
+            firstrun.message(f"An older Remote PC Control still uses port {settings.port} and could not be stopped.\nRestart the PC, then open Remote PC Control again.")
+            sys.exit(1)
+        state = "none"
+    if state == "other":
+        firstrun.message(f"Port {settings.port} is used by another program, so Remote PC Control cannot start.\nClose that program (or restart the PC) and open Remote PC Control again.")
+        sys.exit(1)
+    if state == "current":
         if not background: firstrun.open_panel(settings.port, settings.token, wait_for_server=False)
         import time; time.sleep(1.5)   # the browser thread is a daemon: give it time to start
         sys.exit(0)
