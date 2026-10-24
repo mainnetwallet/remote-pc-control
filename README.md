@@ -34,25 +34,32 @@ using the Android app or a mobile browser.
 
 For a **Windows 10/11 x64** PC. Pick **one** option.
 
-> ### 🅰️ Option A · From source
-> *Full features, updates with `git pull`*
->
-> - **Needs:** Python 3.11+, Node.js 22, Git
-> - **Terminal:** yes, a few commands
-> - **Best for:** full features and the PIN lock screen
-> - **Update:** `git pull`, then run again
->
-> [**Go to Option A ↓**](#option-a--from-source)
-
-> ### 🅱️ Option B · Windows installer
-> *Quick install, no terminal*
->
-> - **Needs:** nothing to install first
-> - **Terminal:** no
-> - **Best for:** quick and easy setup
-> - **Update:** run the newer `Setup.exe`
->
-> [**Go to Option B ↓**](#option-b--windows-installer)
+<table width="100%">
+<tr>
+<td width="50%" valign="top">
+<h3>🅰️ Option A · From source</h3>
+<i>Full features, updates with <code>git pull</code></i>
+<ul>
+<li><b>Needs:</b> Python 3.11+, Node.js 22, Git</li>
+<li><b>Terminal:</b> yes, a few commands</li>
+<li><b>Best for:</b> full features and the PIN lock screen</li>
+<li><b>Update:</b> <code>git pull</code>, then run again</li>
+</ul>
+<a href="#option-a--from-source"><b>Go to Option A ↓</b></a>
+</td>
+<td width="50%" valign="top">
+<h3>🅱️ Option B · Windows installer</h3>
+<i>Quick install, no terminal</i>
+<ul>
+<li><b>Needs:</b> nothing to install first</li>
+<li><b>Terminal:</b> no</li>
+<li><b>Best for:</b> quick and easy setup</li>
+<li><b>Update:</b> run the newer <code>Setup.exe</code></li>
+</ul>
+<a href="#option-b--windows-installer"><b>Go to Option B ↓</b></a>
+</td>
+</tr>
+</table>
 
 Run commands in **PowerShell**, as your normal user, in the signed-in desktop session you want to control.
 
