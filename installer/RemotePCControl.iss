@@ -20,6 +20,7 @@ WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
 [Files]
 Source: "..\dist\RemotePCControl.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\tsbridge.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\INSTALL_WINDOWS.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\scripts\register-installed-task.ps1"; DestDir: "{app}"; Flags: ignoreversion
@@ -38,6 +39,7 @@ Filename: "{app}\RemotePCControl.exe"; Description: "Open Remote PC Control now"
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Remove"; Flags: runhidden waituntilterminated; RunOnceId: "RemovePCTask"
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Kind lock -Remove"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveLockTask"
 Filename: "taskkill.exe"; Parameters: "/F /IM RemotePCControl.exe"; Flags: runhidden; RunOnceId: "KillPC"
+Filename: "taskkill.exe"; Parameters: "/F /IM tsbridge.exe"; Flags: runhidden; RunOnceId: "KillTsBridge"
 
 [Code]
 // An installed Remote PC Control keeps running (agent, PIN lock screen) and its scheduled tasks start it again when it
@@ -59,6 +61,7 @@ begin
   Quiet(Tasks, '/End /TN "RemotePCControl"');
   Quiet(Tasks, '/End /TN "RemotePCControlLock"');
   Quiet(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM RemotePCControl.exe');
+  Quiet(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM tsbridge.exe');
   Sleep(2000);
   Quiet(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM RemotePCControl.exe');   // a second pass for a copy that was just restarted
   Sleep(500);

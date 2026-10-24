@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .config import validate_settings
 from .security import require_auth
-from . import monitor, control, pinlock, panel
+from . import monitor, control, pinlock, panel, tailnet
 from .screen import screen_socket, input_socket
 import threading
 from .webrtc import rtc_socket, shutdown_all as rtc_shutdown, warm_up as rtc_warm_up
@@ -16,7 +16,10 @@ async def lifespan(app):
     validate_settings()
     if not monitor.is_elevated(): logging.getLogger("uvicorn.error").warning("Not running as Administrator: mouse/keyboard will NOT work in Task Manager, admin terminals or other elevated windows. Run scripts\\install-autostart.ps1 -Admin from an Administrator PowerShell.")
     threading.Thread(target=rtc_warm_up,name="rtc-warm-up",daemon=True).start()   # first WebRTC connection after boot must not be slow
+    from .config import settings
+    threading.Thread(target=tailnet.autostart,args=(settings.port,),name="tailnet",daemon=True).start()   # built-in Tailscale, if the user turned it on
     yield
+    tailnet.stop()
     await rtc_shutdown()   # close WebRTC sessions: tracks, capture handles, peer connections
 app=FastAPI(title="Remote PC Control",docs_url=None,redoc_url=None,lifespan=lifespan)
 app.include_router(panel.router)

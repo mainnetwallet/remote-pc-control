@@ -34,6 +34,20 @@ jobs:
           New-Item -ItemType Directory -Force backend/app/static | Out-Null
           Copy-Item -Recurse -Force frontend/dist/* backend/app/static/
           pyinstaller --noconfirm --clean --onefile --noconsole --uac-admin --icon assets/app.ico --name RemotePCControl --paths backend --add-data "backend/app/static;backend/app/static" --add-data "backend/app/static;app/static" --add-data "assets/app.ico;assets" --hidden-import tkinter --hidden-import mss --hidden-import pynput.keyboard --hidden-import pynput.mouse --collect-all aiortc --collect-all av --collect-all aioice --collect-all pylibsrtp --collect-all google_crc32c run_agent.py
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Build built-in Tailscale (tsbridge.exe)
+        shell: pwsh
+        working-directory: tsbridge
+        run: |
+          go get tailscale.com/tsnet@latest
+          go mod tidy
+          New-Item -ItemType Directory -Force ../dist | Out-Null
+          go build -trimpath -ldflags "-s -w -H=windowsgui" -o ../dist/tsbridge.exe .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Item ../dist/tsbridge.exe | ForEach-Object { Write-Host "tsbridge.exe $([math]::Round($_.Length/1MB,1)) MB" }
       - name: Smoke test the packaged exe
         shell: pwsh
         run: |

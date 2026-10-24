@@ -25,7 +25,7 @@ Install the agent, connect your phone, and optionally start it at Windows sign-i
 | Windows 10 or 11, x64 | Both install options |
 | Nothing else for the **Setup installer** (Option B): Python, Node.js and the repository are not needed; everything is inside `RemotePCControl.exe` | Option B |
 | Python 3.11+ x64 (3.12 recommended), Node.js 22, Git | Option A (from source) only |
-| Tailscale on the PC and phone | Private remote access (recommended) |
+| Tailscale on the phone, and either Tailscale on the PC **or** the built-in Tailscale of the app (Option B: app window → Internet tab → Turn on) | Private remote access (recommended) |
 
 ## Install
 
@@ -63,6 +63,12 @@ Set-ExecutionPolicy -Scope Process Bypass
 4. The panel opens **only on the PC itself** (never from the phone, Tailscale, Wi-Fi or a tunnel) and also asks for the password. Files: `%LOCALAPPDATA%\RemotePCControl\.env` (settings) and `agent.log`. The installer's autostart and firewall step writes its result to `%ProgramData%\RemotePCControl\setup.log` (look there if the Startup tab shows autostart or the firewall as off). Uninstalling removes the tasks and the firewall rule.
 
 Because the agent runs as administrator, use a strong token.
+
+### Built-in Tailscale (Option B, no Tailscale install on the PC)
+
+The installer includes `tsbridge.exe`, a small Tailscale node. In the app window open **Internet → Built-in Tailscale → Turn on**, then open the sign-in link once and log in with the same Tailscale account as the phone. The phone then connects to `http://<address shown in the app>:8888`. It needs no driver, no administrator step and no firewall rule. The choice is remembered and it starts with the server.
+
+Limits: screen video uses the WebSocket (JPEG) mode, because the faster WebRTC video cannot pass through the built-in node; and the phone still needs the Tailscale app.
 
 ## Connect the phone
 

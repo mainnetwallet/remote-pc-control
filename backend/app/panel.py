@@ -6,7 +6,7 @@ from collections import deque
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from . import envfile, monitor, pinlock, tunnel, winadmin
+from . import envfile, monitor, pinlock, tailnet, tunnel, winadmin
 from .config import settings
 from .paths import data_dir, frozen
 from .security import LOOPBACK, require_auth
@@ -35,6 +35,8 @@ def addresses():
         for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
             if not ip.startswith(("127.", "169.254.")): found.add(ip)
     except OSError: pass
+    try: found.update(ip for ip in tailnet.status()["ips"] if "." in ip)   # address of the built-in Tailscale
+    except Exception: pass
     return [{"ip": ip, "kind": "tailscale" if ip.startswith("100.") else "lan"} for ip in sorted(found, key=lambda i: (not i.startswith("100."), i))]
 
 
@@ -56,7 +58,7 @@ def state():
     try: lock = pinlock.status()
     except Exception as e: lock = {"error": str(e)}
     return {"hostname": socket.gethostname(), "port": settings.port, "elevated": monitor.is_elevated(), "installed": frozen(),
-            "addresses": addresses(), "fields": fields, "lock": lock, "tunnel": tunnel.status(), "env_file": str(env_path())}
+            "addresses": addresses(), "tailnet": tailnet.status(), "fields": fields, "lock": lock, "tunnel": tunnel.status(), "env_file": str(env_path())}
 
 
 @api.get("/system")
@@ -128,6 +130,17 @@ def lock(body: LockBody):
     try: pinlock.lock() if body.locked else pinlock.unlock()
     except ValueError as e: fail(e)
     return {"ok": True}
+
+
+@api.get("/tailscale")
+def tailscale_status(): return tailnet.status()
+
+
+@api.post("/tailscale/{action}")
+def tailscale_action(action: str):
+    if action not in ("enable", "disable"): raise HTTPException(404, "Unknown action")
+    try: return tailnet.set_enabled(action == "enable", settings.port)
+    except RuntimeError as e: fail(e)
 
 
 @api.get("/tunnel")
