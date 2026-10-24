@@ -78,22 +78,17 @@ cd $HOME\remote-pc-control
 ```
 
 > [!TIP]
-> With autostart (task `RemotePCControl`): for ② run `Stop-ScheduledTask -TaskName RemotePCControl`, then `git pull`, `.\scripts\setup.ps1`, then `Start-ScheduledTask -TaskName RemotePCControl`. For ③ run only `Start-ScheduledTask -TaskName RemotePCControl`.
+> With autostart, run `Stop-ScheduledTask -TaskName RemotePCControl` before ② and `Start-ScheduledTask -TaskName RemotePCControl` instead of `start.ps1`. For ③ run only the second command.
 
-Health check on the PC: `http://localhost:8888/api/health` should contain `"ok":true`.
+Health check: `http://localhost:8888/api/health` returns `"ok":true`.
 
 ### Option B · Windows installer
 
-1. Download `RemotePCControl-Setup.exe` from the repository **Releases** page (each release also has `RemotePCControl-Android.apk`).
-2. Run it and accept the UAC prompt. It installs to `Program Files\RemotePCControl`, adds shortcuts, registers the autostart task (administrator rights), adds the firewall rule `RemotePCControl Tailscale only` (TCP 8888 from `100.64.0.0/10`) and starts the agent.
-3. The **app window** opens and shows the **PC address and token** for the phone. From it you can turn the server on/off, change the password, toggle autostart, manage firewall rules, set a PIN, start a Cloudflare link, change screen settings and read logs. It works only on the PC itself.
-4. To update, run the newer `RemotePCControl-Setup.exe`.
+1. Download `RemotePCControl-Setup.exe` from **Releases** and run it. It installs the app, autostart (admin) and the Tailscale-only firewall rule, then starts the agent.
+2. The app window shows the **PC address and token** for the phone, and has server on/off, password, autostart, firewall, PIN and logs.
+3. To update, run the newer Setup.exe.
 
-Settings and logs: `%LOCALAPPDATA%\RemotePCControl\` (`.env`, `agent.log`); installer log: `%ProgramData%\RemotePCControl\setup.log`.
-
-**Built-in Tailscale** (no Tailscale install on the PC): app window → **Internet → Built-in Tailscale → Turn on**, then sign in once with the same account as the phone. Video uses the JPEG WebSocket mode only.
-
-The installer does not include the PIN lock screen (use Option A for that). The agent runs as administrator, so use a strong token.
+**Built-in Tailscale:** app window → Internet → Built-in Tailscale → Turn on, then sign in with the phone's account (JPEG video only). No PIN lock screen in the installer; the agent runs as admin, so use a strong token. Files: `%LOCALAPPDATA%\RemotePCControl\`.
 
 ## 🌐 Connect your phone
 
