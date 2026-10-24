@@ -8,6 +8,7 @@ FIELDS = [
      "options": ["auto", "30", "45", "60", "90", "120"]},
     {"key": "REMOTE_PC_FPS", "group": "video", "kind": "choice", "default": "auto",
      "options": ["auto", "15", "20", "30", "45", "60"]},
+    {"key": "REMOTE_PC_RTC_STEADY", "group": "video", "kind": "bool", "default": "1"},
     {"key": "REMOTE_PC_RTC_BITRATE", "group": "video", "kind": "int", "default": "4000", "min": 300, "max": 30000},
     {"key": "REMOTE_PC_JPEG_QUALITY", "group": "video", "kind": "int", "default": "55", "min": 25, "max": 85},
     {"key": "REMOTE_PC_MAX_WIDTH", "group": "video", "kind": "int", "default": "1280", "min": 0, "max": 7680},

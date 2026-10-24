@@ -58,6 +58,10 @@ class Settings:
     # Max frames per second of the WebRTC video: a number 1-120, or "auto" (default) = the monitor's refresh rate, up to 120.
     # The phone's quality preset still decides how many frames it asks for; this is only the ceiling.
     rtc_fps = fps_setting(os.getenv("REMOTE_PC_RTC_FPS", ""), "auto")
+    # 1 (default) = send frames at the full frame rate even when the screen does not change (the picture is re-sent, which
+    # costs almost no bandwidth in H.264), so the phone always shows the maximum fps. 0 = send only when something changed
+    # (plus a keepalive every 0.5 s, which shows as ~2 fps on a still screen).
+    rtc_steady = os.getenv("REMOTE_PC_RTC_STEADY", "1").strip().lower() not in ("0", "false", "no", "off")
     # Upper limit of the video bitrate in kbit/s (the link's own estimate can only lower it). 300-30000.
     rtc_bitrate = max(300, min(30000, int(os.getenv("REMOTE_PC_RTC_BITRATE", "4000") or "4000")))
     # H.264 encoder: auto (try nvenc, qsv, amf, then libx264) or force one of nvenc / qsv / amf / x264.

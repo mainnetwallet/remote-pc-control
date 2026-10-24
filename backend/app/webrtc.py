@@ -231,7 +231,10 @@ def _screen_track_class():
             self.native = size
             out = output_size(size, cfg.max_width)
             key = (digest, cur, out)
-            if not force and key == self._key and self._frame is not None: return None
+            if not force and key == self._key and self._frame is not None:
+                # Unchanged screen: in steady mode re-send the converted frame (no new capture conversion, and H.264
+                # codes an identical picture in a few bytes) so the receiver sees the full frame rate.
+                return self._frame if settings.rtc_steady else None
             self._key = key; self.size = out
             self._frame = make_video_frame(raw, size, out, cur)
             return self._frame

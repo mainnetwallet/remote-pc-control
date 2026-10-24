@@ -525,7 +525,20 @@ def test_track_delivers_newest_frames_with_increasing_timestamps():
     assert cap.n >= 4   # every frame came from a fresh capture, nothing was queued
 
 
+def test_track_keeps_full_fps_on_a_still_screen_in_steady_mode(monkeypatch):
+    monkeypatch.setattr(settings, "rtc_steady", True)
+    cap = FakeCapture((64, 48))
+    async def body(t):
+        await t.recv(); cap.change = False
+        loop = asyncio.get_running_loop(); t0 = loop.time()
+        for _ in range(5): await t.recv()
+        return loop.time() - t0
+    waited = run_track(cap, webrtc.RtcConfig(0, 30, 2000), body)
+    assert waited < 0.5   # 5 frames at 30 fps, not one per keepalive
+
+
 def test_track_does_not_resend_a_still_screen_until_keepalive(monkeypatch):
+    monkeypatch.setattr(settings, "rtc_steady", False)
     monkeypatch.setattr(webrtc, "KEEPALIVE", 0.3)
     cap = FakeCapture((64, 48))
     async def body(t):
