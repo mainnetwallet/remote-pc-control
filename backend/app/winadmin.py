@@ -43,8 +43,24 @@ def register_script() -> Path: return install_dir() / "register-installed-task.p
 
 _STATUS_PS = f"""
 $ErrorActionPreference = 'SilentlyContinue'
-function T($n) {{ $t = Get-ScheduledTask -TaskName $n; if ($t) {{ @{{exists=$true; state=[string]$t.State; admin=([string]$t.Principal.RunLevel -eq 'Highest')}} }} else {{ @{{exists=$false}} }} }}
-function F($n) {{ @{{exists=[bool](Get-NetFirewallRule -DisplayName $n)}} }}
+# A missing task/rule must read as "off", but a failed query (cmdlet or module problem) must not: fall back to
+# schtasks.exe / netsh.exe, which answer with an exit code, so one broken cmdlet never shows everything as off.
+function T($n) {{
+  $t = $null; $failed = $false
+  try {{ $t = Get-ScheduledTask -TaskName $n -ErrorAction Stop }}
+  catch {{ if ($_.CategoryInfo.Category -ne 'ObjectNotFound') {{ $failed = $true }} }}
+  if ($t) {{ return @{{exists=$true; state=[string]$t.State; admin=([string]$t.Principal.RunLevel -eq 'Highest')}} }}
+  if ($failed) {{ & "$env:SystemRoot\\System32\\schtasks.exe" /Query /TN $n *> $null; return @{{exists=($LASTEXITCODE -eq 0)}} }}
+  return @{{exists=$false}}
+}}
+function F($n) {{
+  $r = $null; $failed = $false
+  try {{ $r = Get-NetFirewallRule -DisplayName $n -ErrorAction Stop }}
+  catch {{ if ($_.CategoryInfo.Category -ne 'ObjectNotFound') {{ $failed = $true }} }}
+  if ($r) {{ return @{{exists=$true}} }}
+  if ($failed) {{ & "$env:SystemRoot\\System32\\netsh.exe" advfirewall firewall show rule name="$n" *> $null; return @{{exists=($LASTEXITCODE -eq 0)}} }}
+  return @{{exists=$false}}
+}}
 @{{autostart=(T {q(TASK)}); lock_task=(T {q(LOCK_TASK)}); fw_tailscale=(F {q(FW_TAILSCALE)}); fw_lan=(F {q(FW_LAN)})}} | ConvertTo-Json -Compress -Depth 4
 """
 

@@ -60,7 +60,7 @@ Set-ExecutionPolicy -Scope Process Bypass
    - set a PIN, lock and unlock, and keep the PIN lock screen running at sign-in
    - start a Cloudflare internet link (installs `cloudflared` for you)
    - change screen and speed settings, read the logs, restart or stop the agent
-4. The panel opens **only on the PC itself** (never from the phone, Tailscale, Wi-Fi or a tunnel) and also asks for the password. Files: `%LOCALAPPDATA%\RemotePCControl\.env` (settings) and `agent.log`. Uninstalling removes the tasks and the firewall rule.
+4. The panel opens **only on the PC itself** (never from the phone, Tailscale, Wi-Fi or a tunnel) and also asks for the password. Files: `%LOCALAPPDATA%\RemotePCControl\.env` (settings) and `agent.log`. The installer's autostart and firewall step writes its result to `%ProgramData%\RemotePCControl\setup.log` (look there if the Startup tab shows autostart or the firewall as off). Uninstalling removes the tasks and the firewall rule.
 
 Because the agent runs as administrator, use a strong token.
 

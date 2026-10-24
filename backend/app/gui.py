@@ -350,15 +350,21 @@ class App:
         self.srv_note.configure(text=self.t("server_off_note") if (self.online is False and not starting and not stopping) else "")
         self.srv_btn.configure(text=self.t(btn)); self.srv_btn.state(["disabled"] if dis else ["!disabled"])
 
-    def load_system(self):
+    def load_system(self, attempt=0):
+        rows = ((self.v_auto, self.c_auto, "autostart", True), (self.v_locktask, self.c_locktask, "lock_task", True),
+                (self.v_fwts, self.c_fwts, "fw_tailscale", False), (self.v_fwlan, self.c_fwlan, "fw_lan", False))
+        for _var, cb, _key, _need in rows: cb.state(["disabled"])   # never show a guess: locked until Windows answered
         def got(d):
             self.SYS = d
             tools = bool(d.get("task_tools"))
-            for var, cb, key, need_tools in ((self.v_auto, self.c_auto, "autostart", True), (self.v_locktask, self.c_locktask, "lock_task", True),
-                                             (self.v_fwts, self.c_fwts, "fw_tailscale", False), (self.v_fwlan, self.c_fwlan, "fw_lan", False)):
+            for var, cb, key, need_tools in rows:
                 var.set(bool((d.get(key) or {}).get("exists")))
                 cb.state(["disabled"] if (need_tools and not tools) else ["!disabled"])
-        self.bg(lambda: self.client.call("/system"), got, lambda e: None)
+        def failed(e):
+            # Used to be ignored silently, which left every box unticked. Retry, then say so.
+            if attempt < 3: self.root.after(4000, lambda: self.load_system(attempt + 1))
+            else: self.toast(self._msg(e), True)
+        self.bg(lambda: self.client.call("/system"), got, failed)
 
     def load_log(self):
         def got(d):
