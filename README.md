@@ -318,24 +318,98 @@ The PC hands the TURN details only to clients that signed in with the token and 
 
 ## 🧰 Other commands
 
-Run from `$HOME\remote-pc-control` in PowerShell. Only needed when you want the feature.
+Run from `$HOME\remote-pc-control` in PowerShell. Only needed when you want the feature. Each block has its own copy button.
 
-| I want to… | Command |
-|---|---|
-| Change the password | `.\scripts\set-password.ps1` (asks for it; min 4 characters, no spaces), then restart the server |
-| Start the agent hidden at sign-in | `.\scripts\install-autostart.ps1` |
-| Remove autostart | `.\scripts\install-autostart.ps1 -Remove` |
-| Stop / start the autostart task | `Stop-ScheduledTask -TaskName RemotePCControl` / `Start-ScheduledTask -TaskName RemotePCControl` |
-| Control elevated windows (Task Manager, Registry Editor, admin terminals) | **Administrator PowerShell**, once: `.\scripts\install-autostart.ps1 -Admin`, then `Start-ScheduledTask -TaskName RemotePCControl`. Gives the agent full admin rights, so use a strong password; the UAC secure desktop still cannot be controlled |
-| Set the PC-side PIN | `.\scripts\set-pin.ps1` |
-| Install the PIN lock screen at sign-in | `.\scripts\install-lock-overlay.ps1` (remove with `-Remove`) |
-| Start a quick Cloudflare tunnel | `.\scripts\start-tunnel.ps1` |
-| Remove the Tailscale firewall rule | `.\scripts\remove-firewall.ps1` (Administrator PowerShell) |
-| Reinstall everything from scratch | `.\scripts\setup.ps1 -Force` |
-| What FPS can my PC do? | `python tools\pc_capability.py` (add `--apply` to write the recommended values into `.env`) |
-| Run backend tests | `.\.venv\Scripts\python.exe -m pytest backend/tests tests -q` |
-| Build the dashboard by hand | `cd frontend; npm install; npm run build` |
-| Show the access token | `Get-Content .env \| Select-String '^REMOTE_PC_TOKEN='` |
+**Show the access token**
+
+```powershell
+Get-Content .env | Select-String '^REMOTE_PC_TOKEN='
+```
+
+**Change the password** (asks for it; min 4 characters, no spaces; then restart the server)
+
+```powershell
+.\scripts\set-password.ps1
+```
+
+**Start the agent hidden at sign-in / remove it**
+
+```powershell
+.\scripts\install-autostart.ps1
+```
+
+```powershell
+.\scripts\install-autostart.ps1 -Remove
+```
+
+**Stop / start the autostart task**
+
+```powershell
+Stop-ScheduledTask -TaskName RemotePCControl
+```
+
+```powershell
+Start-ScheduledTask -TaskName RemotePCControl
+```
+
+**Control elevated windows** (Task Manager, Registry Editor, admin terminals). Run once in an **Administrator PowerShell**. It gives the agent full admin rights, so use a strong password; the UAC secure desktop still cannot be controlled.
+
+```powershell
+.\scripts\install-autostart.ps1 -Admin
+Start-ScheduledTask -TaskName RemotePCControl
+```
+
+**Set the PC-side PIN, and install the PIN lock screen at sign-in** (remove it with `-Remove`)
+
+```powershell
+.\scripts\set-pin.ps1
+```
+
+```powershell
+.\scripts\install-lock-overlay.ps1
+```
+
+**Start a quick Cloudflare tunnel** (server must be running)
+
+```powershell
+.\scripts\start-tunnel.ps1
+```
+
+**Remove the Tailscale firewall rule** (Administrator PowerShell)
+
+```powershell
+.\scripts\remove-firewall.ps1
+```
+
+**Reinstall everything from scratch**
+
+```powershell
+.\scripts\setup.ps1 -Force
+```
+
+**What FPS can my PC do?** (`--apply` writes the recommended values into `.env`)
+
+```powershell
+python tools\pc_capability.py
+```
+
+```powershell
+python tools\pc_capability.py --apply
+```
+
+**Run backend tests**
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests tests -q
+```
+
+**Build the dashboard by hand**
+
+```powershell
+cd frontend
+npm install
+npm run build
+```
 
 **Autostart details.** The task `RemotePCControl` starts the agent hidden 10 seconds after **your user signs in** (screen capture and input need that session, so it cannot run before sign-in). The runner waits for the network and restarts the server 10 seconds after it exits. Logs are in the project folder: `autostart.log`, `server.out.log`, `server.err.log` (a log over 1 MB is deleted at the next runner start). Stopping only the python process makes the runner restart it; use `Stop-ScheduledTask` to really stop it.
 
