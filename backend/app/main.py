@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, WebSocket
 from fastapi.responses import FileResponse, JSONResponse
@@ -27,7 +28,13 @@ def status(): return monitor.snapshot()
 @app.get("/api/v1/metrics",dependencies=[Depends(require_auth)])
 def metrics(): return monitor.snapshot()
 @app.post("/api/v1/control/lock",dependencies=[Depends(require_auth)])
-def lock(): control.lock_workstation(); return {"ok":True,"action":"lock"}
+def lock():
+    # With a PIN set, the app's Lock button uses the PIN lock screen: it is a normal desktop window, so remote
+    # control keeps working and Unlock from the app works. Windows' own lock leads to the sign-in screen, which no
+    # ordinary program can click or stream. Set REMOTE_PC_LOCK_BUTTON=windows to always use the Windows lock.
+    if os.getenv("REMOTE_PC_LOCK_BUTTON","pin").strip().lower()!="windows" and pinlock.status()["pin_set"]:
+        pinlock.lock(); return {"ok":True,"action":"lock","mode":"pin"}
+    control.lock_workstation(); return {"ok":True,"action":"lock","mode":"windows"}
 @app.post("/api/v1/control/sleep",dependencies=[Depends(require_auth)])
 def sleep(): control.sleep_pc(); return {"ok":True,"action":"sleep-requested"}
 @app.post("/api/v1/control/{action}",dependencies=[Depends(require_auth)])

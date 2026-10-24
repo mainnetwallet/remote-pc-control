@@ -94,3 +94,36 @@ def test_api_rejects_bad_pin():
     with TestClient(app) as c:
         r = c.post("/api/v1/lock/pin", json={"pin": "abcd"}, headers=_auth())
         assert r.status_code == 400
+
+
+def test_power_lock_button_uses_pin_lock_when_pin_is_set(monkeypatch):
+    from app import control
+    calls = []
+    monkeypatch.setattr(control, "lock_workstation", lambda: calls.append("windows"))
+    with TestClient(app) as c:
+        c.post("/api/v1/lock/pin", json={"pin": "5678"}, headers=_auth())
+        r = c.post("/api/v1/control/lock", headers=_auth())
+        assert r.status_code == 200 and r.json()["mode"] == "pin"
+        assert pinlock.status()["locked"] is True and calls == []
+        c.post("/api/v1/lock/unlock", headers=_auth())
+        assert pinlock.status()["locked"] is False
+
+
+def test_power_lock_button_falls_back_to_windows_without_pin(monkeypatch):
+    from app import control
+    calls = []
+    monkeypatch.setattr(control, "lock_workstation", lambda: calls.append("windows"))
+    with TestClient(app) as c:
+        r = c.post("/api/v1/control/lock", headers=_auth())
+        assert r.json()["mode"] == "windows" and calls == ["windows"]
+
+
+def test_power_lock_button_can_be_forced_to_windows_lock(monkeypatch):
+    from app import control
+    calls = []
+    monkeypatch.setattr(control, "lock_workstation", lambda: calls.append("windows"))
+    monkeypatch.setenv("REMOTE_PC_LOCK_BUTTON", "windows")
+    with TestClient(app) as c:
+        c.post("/api/v1/lock/pin", json={"pin": "5678"}, headers=_auth())
+        assert c.post("/api/v1/control/lock", headers=_auth()).json()["mode"] == "windows"
+        assert calls == ["windows"] and pinlock.status()["locked"] is False
