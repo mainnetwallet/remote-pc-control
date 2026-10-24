@@ -100,14 +100,20 @@ a **plain** PowerShell window. Those tools only live inside the Visual Studio de
 
 ### Step 1 — Build the provider
 
-In the Native Tools shell, on the Windows PC:
+The Native Tools shell opens in the Visual Studio install folder, **not your repo** — `cd` to the
+repo's full path first, or `cd windows\unlock-provider` will fail with "The system cannot find
+the path specified" (and a bare `cmake -B build -A x64` run from the wrong folder will then fail
+too, with "does not appear to contain CMakeLists.txt").
 
 ```powershell
-cd windows\unlock-provider
+cd C:\Users\<you>\remote-pc-control\windows\unlock-provider   # use your repo's actual path
 cmake -B build -A x64
 cmake --build build --config Release
 signtool sign /fd SHA256 /a build\Release\RemoteUnlockProvider.dll   # or your own signing step
 ```
+
+> Not sure of your repo's path? From a regular terminal: `dir C:\Users\<you>\remote-pc-control`
+> to confirm it's there before switching to the Native Tools shell.
 
 ### Step 2 — Register it
 
