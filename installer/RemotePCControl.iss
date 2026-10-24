@@ -9,7 +9,8 @@ DefaultGroupName=Remote PC Control
 DisableProgramGroupPage=yes
 SetupIconFile=..\assets\app.ico
 PrivilegesRequired=admin
-CloseApplications=force
+CloseApplications=no
+SetupLogging=yes
 UninstallDisplayIcon={app}\RemotePCControl.exe
 OutputDir=..\dist-installer
 OutputBaseFilename=RemotePCControl-Setup
@@ -35,3 +36,39 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Remove"; Flags: runhidden waituntilterminated; RunOnceId: "RemovePCTask"
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Kind lock -Remove"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveLockTask"
 Filename: "taskkill.exe"; Parameters: "/F /IM RemotePCControl.exe"; Flags: runhidden; RunOnceId: "KillPC"
+
+[Code]
+// An installed Remote PC Control keeps running (agent, PIN lock screen) and its scheduled tasks start it again when it
+// is ended, which blocks replacing RemotePCControl.exe. So before anything is copied: switch the tasks off, end the
+// program, and after the copy switch the tasks on again.
+procedure Quiet(const Exe, Params: String);
+var Code: Integer;
+begin
+  Exec(Exe, Params, '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var Tasks: String;
+begin
+  Result := '';
+  Tasks := ExpandConstant('{sys}\schtasks.exe');
+  Quiet(Tasks, '/Change /TN "RemotePCControl" /DISABLE');
+  Quiet(Tasks, '/Change /TN "RemotePCControlLock" /DISABLE');
+  Quiet(Tasks, '/End /TN "RemotePCControl"');
+  Quiet(Tasks, '/End /TN "RemotePCControlLock"');
+  Quiet(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM RemotePCControl.exe');
+  Sleep(2000);
+  Quiet(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM RemotePCControl.exe');   // a second pass for a copy that was just restarted
+  Sleep(500);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var Tasks: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    Tasks := ExpandConstant('{sys}\schtasks.exe');
+    Quiet(Tasks, '/Change /TN "RemotePCControl" /ENABLE');       // the setup script registers it again as well
+    Quiet(Tasks, '/Change /TN "RemotePCControlLock" /ENABLE');   // only exists when the user turned the lock screen on
+  end;
+end;
