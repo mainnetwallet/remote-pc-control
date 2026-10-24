@@ -25,15 +25,23 @@ Live screen · touch-as-mouse · keyboard · system monitor · power controls ·
 
 ---
 
-Control your Windows PC from your phone over **Tailscale**, **Wi-Fi** or a **Cloudflare** tunnel, using the Android app or a mobile browser.
+<p align="center">
+Control your Windows PC from your phone over <b>Tailscale</b>, <b>Wi-Fi</b> or a <b>Cloudflare</b> tunnel,<br>
+using the Android app or a mobile browser.
+</p>
 
-| Feature | What you get |
-|---|---|
-| 🖥 **Live screen** | WebRTC H.264, automatic JPEG fallback |
-| 👆 **Control** | Touch, trackpad, keyboard |
-| 📊 **Monitor** | CPU, RAM, disk, network |
-| ⚡ **Power** | Lock, sleep, restart, shutdown |
-| 🔐 **Protection** | PIN lock, token login, rate limits |
+<table width="100%">
+<tr align="center">
+<td width="33%"><h3>🖥</h3><b>Live screen</b><br><sub>WebRTC H.264<br>automatic JPEG fallback</sub></td>
+<td width="33%"><h3>👆</h3><b>Full control</b><br><sub>Touch, trackpad<br>and keyboard</sub></td>
+<td width="33%"><h3>📊</h3><b>Monitor</b><br><sub>CPU, RAM, disk<br>and network</sub></td>
+</tr>
+<tr align="center">
+<td width="33%"><h3>⚡</h3><b>Power</b><br><sub>Lock, sleep,<br>restart, shutdown</sub></td>
+<td width="33%"><h3>🔐</h3><b>PIN lock</b><br><sub>Persistent full-screen<br>lock for the PC</sub></td>
+<td width="33%"><h3>🛡</h3><b>Secure</b><br><sub>Token login<br>and rate limits</sub></td>
+</tr>
+</table>
 
 ## 🚀 Install and run
 
