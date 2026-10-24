@@ -104,11 +104,45 @@ class App:
             if hasattr(self, f): getattr(self, f).configure(family=family)
 
     def _icon(self):
+        """Window + taskbar icon. iconbitmap() alone often leaves the taskbar button with a generic icon (Tk picks one
+        size), so the big and small icons are also set on the window with WM_SETICON."""
         for base in (getattr(sys, "_MEIPASS", None), Path(__file__).resolve().parents[2]):
             p = Path(base or "") / "assets" / "app.ico"
-            if base and p.exists():
-                try: self.root.iconbitmap(default=str(p)); return
-                except Exception: pass
+            if not (base and p.exists()): continue
+            try: self.root.iconbitmap(default=str(p))
+            except Exception: pass
+            if sys.platform == "win32": self.root.after(50, lambda path=str(p): _set_window_icons(self.root, path))
+            return
+
+
+def _set_window_icons(root, path):
+    """Give the window's top-level handle a 32x32 (taskbar, Alt+Tab) and a 16x16 (title bar) icon from the .ico file."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        u32 = ctypes.windll.user32
+        u32.LoadImageW.restype = wintypes.HANDLE
+        u32.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        u32.GetParent.restype = wintypes.HWND; u32.GetParent.argtypes = [wintypes.HWND]
+        u32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+        root.update_idletasks()
+        hwnd = u32.GetParent(root.winfo_id()) or root.winfo_id()
+        big_w, small_w = u32.GetSystemMetrics(11), u32.GetSystemMetrics(49)   # SM_CXICON, SM_CXSMICON
+        for kind, size in ((1, big_w), (0, small_w)):   # ICON_BIG, ICON_SMALL
+            h = u32.LoadImageW(None, path, 1, size, size, 0x10)   # IMAGE_ICON, LR_LOADFROMFILE
+            if h: u32.SendMessageW(hwnd, 0x80, kind, h)   # WM_SETICON
+    except Exception:
+        pass
+
+
+def _app_user_model_id():
+    """Own taskbar identity: without it Windows files the window under python.exe / the bootloader and shows its generic icon."""
+    if sys.platform != "win32": return
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MainWallet.RemotePCControl")
+    except Exception:
+        pass
 
     def t(self, key):
         return EXTRA["en"].get(key) or TEXT["en"].get(key) or key
@@ -576,6 +610,7 @@ def run(port, token, starting=False) -> bool:
         print("tkinter is not available:", e); return False
     if not _single_instance(): return True
     _dpi_aware()
+    _app_user_model_id()
     try: root = tk.Tk()
     except Exception as e:
         print("Could not open the app window:", e); return False
