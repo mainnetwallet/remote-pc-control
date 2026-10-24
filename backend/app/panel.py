@@ -40,12 +40,25 @@ def addresses():
     return [{"ip": ip, "kind": "tailscale" if ip.startswith("100.") else "lan"} for ip in sorted(found, key=lambda i: (not i.startswith("100."), i))]
 
 
-def read_tail(name: str, lines: int = 200) -> str:
+def log_file(name: str) -> Path:
     if name not in LOG_FILES: raise HTTPException(404, "Unknown log")
     base = data_dir() if name == "agent" else Path(os.getenv("LOCALAPPDATA") or data_dir()) / "RemotePCControl"
+    return base / LOG_FILES[name]
+
+
+def read_tail(name: str, lines: int = 200) -> str:
     try:
-        with open(base / LOG_FILES[name], encoding="utf-8", errors="replace") as fh: return "".join(deque(fh, maxlen=lines))
+        with open(log_file(name), encoding="utf-8", errors="replace") as fh: return "".join(deque(fh, maxlen=lines))
     except OSError: return ""
+
+
+def clear_log(name: str) -> None:
+    """Empty the file in place: the running program keeps its open handle (it appends), so it just continues writing."""
+    path = log_file(name)
+    if not path.exists(): return
+    try:
+        with open(path, "r+b") as fh: fh.truncate(0)
+    except OSError as e: raise HTTPException(400, f"Could not clear the log: {e.strerror or e}") from None
 
 
 def fail(e: Exception): raise HTTPException(400, str(e))
@@ -160,6 +173,12 @@ def tunnel_action(action: str):
 
 @api.get("/logs/{name}")
 def logs(name: str): return {"text": read_tail(name)}
+
+
+@api.post("/logs/{name}/clear")
+def logs_clear(name: str):
+    clear_log(name)
+    return {"ok": True}
 
 
 @api.post("/restart")

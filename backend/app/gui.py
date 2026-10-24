@@ -308,7 +308,7 @@ class App:
         self.log_sel = self.tk.StringVar(value="agent")
         cb = self.ttk.Combobox(r, textvariable=self.log_sel, values=["agent", "lock"], state="readonly", width=10)
         cb.pack(side="left", padx=(0, 8)); cb.bind("<<ComboboxSelected>>", lambda e: self.load_log())
-        self.button(r, "refresh", self.load_log)
+        self.button(r, "refresh", self.load_log); self.button(r, "clear_logs", self.clear_log)
         box = self.ttk.Frame(f); box.pack(fill="both", expand=True, pady=(4, 0))
         self.log_text = self.tk.Text(box, height=12, wrap="word", font=self.f_mono, state="disabled", relief="flat",
                                      highlightthickness=1, highlightbackground="#c9d1dc")
@@ -386,6 +386,11 @@ class App:
             if attempt < 3: self.root.after(4000, lambda: self.load_system(attempt + 1))
             else: self.toast(self._msg(e), True)
         self.bg(lambda: self.client.call("/system"), got, failed)
+
+    def clear_log(self):
+        name = self.log_sel.get()
+        def done(_): self.toast(self.t("logs_cleared")); self.load_log()
+        self.bg(lambda: self.client.call("/logs/" + name + "/clear", "POST"), done)
 
     def load_log(self):
         def got(d):

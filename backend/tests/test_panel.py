@@ -117,3 +117,18 @@ def test_login_lockout_applies_to_panel():
     with local() as c:
         for _ in range(security.MAX_FAILS): c.get("/panel/api/state", headers={"Authorization": "Bearer bad"})
         assert c.get("/panel/api/state", headers=auth()).status_code == 429
+
+
+def test_clear_log_empties_the_file_and_keeps_it_appendable(tmp_path, monkeypatch):
+    monkeypatch.setattr(panel, "data_dir", lambda: tmp_path)
+    log = tmp_path / "agent.log"
+    writer = open(log, "a", buffering=1, encoding="utf-8")   # the running agent keeps its handle open and appends
+    writer.write("old line 1\nold line 2\n")
+    with local() as c:
+        assert "old line 2" in c.get("/panel/api/logs/agent", headers=auth()).json()["text"]
+        assert c.post("/panel/api/logs/agent/clear", headers=auth()).json() == {"ok": True}
+        assert c.get("/panel/api/logs/agent", headers=auth()).json()["text"] == ""
+        writer.write("new line\n"); writer.close()
+        assert c.get("/panel/api/logs/agent", headers=auth()).json()["text"] == "new line\n"   # no gap of zero bytes
+        assert c.post("/panel/api/logs/nope/clear", headers=auth()).status_code == 404
+        assert c.post("/panel/api/logs/agent/clear", headers={}).status_code in (401, 403)
