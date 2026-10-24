@@ -45,7 +45,6 @@ For a **Windows 10/11 x64** PC. Pick **one** option.
 <li><b>Best for:</b> full features and the PIN lock screen</li>
 <li><b>Update:</b> <code>git pull</code>, then run again</li>
 </ul>
-<a href="#option-a--from-source"><b>Go to Option A ↓</b></a>
 </td>
 <td width="50%" valign="top">
 <h3>🅱️ Option B · Windows installer</h3>
