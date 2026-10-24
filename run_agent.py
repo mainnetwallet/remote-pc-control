@@ -50,17 +50,18 @@ def main():
         if not server.is_alive(): break
         try: socket.create_connection(("127.0.0.1", int(settings.port)), timeout=1).close(); break
         except OSError: time.sleep(0.5)
-    if server.is_alive(): show_panel(settings.port, settings.token, wait_for_server=False)
+    if server.is_alive():
+        from app import winadmin
+        winadmin.RESTART_WITH_WINDOW = True   # "Restart agent" in the window brings the window back after the restart
+        show_panel(settings.port, settings.token, hosted=True)
     server.join()
 
 
-def show_panel(port, token, wait_for_server=True):
-    """Open the control panel in its own app window; fall back to the browser if that is not possible."""
-    from app import firstrun, window
-    url = f"http://127.0.0.1:{int(port)}/panel#{token}"   # the token travels in the #hash: it never reaches the server
-    if wait_for_server and not firstrun.wait_for_port(port): return firstrun.open_panel(port, token, wait_for_server=False)
-    if window.open_window(url): return
-    firstrun.open_panel(port, token, wait_for_server=False)
+def show_panel(port, token, hosted=False):
+    """Show the app window (a real desktop UI). Only if it cannot be created, open the browser panel instead."""
+    from app import firstrun, gui
+    if gui.run(port, token, hosted=hosted): return
+    firstrun.open_panel(port, token)
     import time; time.sleep(1.5)   # the browser thread is a daemon: give it time to start
 
 

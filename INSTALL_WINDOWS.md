@@ -52,7 +52,7 @@ Set-ExecutionPolicy -Scope Process Bypass
    - registers the scheduled task `RemotePCControl` that starts the agent at sign-in with **administrator rights** (no prompt), so mouse and keyboard also work in Task Manager, Registry Editor and admin terminals
    - adds the firewall rule `RemotePCControl Tailscale only` (TCP 8888 from `100.64.0.0/10`)
    - starts the agent right away
-3. On the first start the **control panel** opens in your browser (English / বাংলা). It shows the **PC address and the access token** for the phone app. Open it again any time with the **Remote PC Control** shortcut (or `http://127.0.0.1:8888/panel` on the PC). From the panel you can, without any terminal:
+3. On the first start the **Remote PC Control app window** opens (a normal desktop window, English / বাংলা button at the top). It shows the **PC address and the access token** for the phone app. Open it again any time with the **Remote PC Control** shortcut. Closing the window keeps the agent running in the background. (The same panel is also available as a web page at `http://127.0.0.1:8888/panel` on the PC.) From the panel you can, without any terminal:
    - change the password, or make a random one
    - turn **Start with Windows (as administrator)** on or off
    - add or remove the Tailscale and same-Wi-Fi firewall rules
