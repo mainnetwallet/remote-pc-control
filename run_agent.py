@@ -1,4 +1,4 @@
-import os, sys, traceback
+import os, socket, sys, traceback
 
 
 def _report_crash(text):
@@ -34,12 +34,34 @@ def main():
     if state == "other":
         firstrun.message(f"Port {settings.port} is used by another program, so Remote PC Control cannot start.\nClose that program (or restart the PC) and open Remote PC Control again.")
         sys.exit(1)
-    if state == "current":
-        if not background: firstrun.open_panel(settings.port, settings.token, wait_for_server=False)
-        import time; time.sleep(1.5)   # the browser thread is a daemon: give it time to start
+    if state == "current":   # the server already runs (autostart): just show the app window, then leave the server alone
+        if not background: show_panel(settings.port, settings.token)
         sys.exit(0)
-    if firstrun.first_run() or (not background and firstrun.frozen()): firstrun.open_panel(settings.port, settings.token)
-    uvicorn.run(app, host=settings.host, port=settings.port, reload=False, ws_per_message_deflate=False)
+    if background or not (firstrun.first_run() or firstrun.frozen()):
+        uvicorn.run(app, host=settings.host, port=settings.port, reload=False, ws_per_message_deflate=False)
+        return
+    # Opened by the user (Start menu / desktop icon): run the server in a thread and show the app window on the main
+    # thread. Closing the window leaves the server running in the background, like the autostart one.
+    import threading, time
+    server = threading.Thread(target=uvicorn.run, args=(app,), daemon=False, name="server",
+                              kwargs=dict(host=settings.host, port=settings.port, reload=False, ws_per_message_deflate=False))
+    server.start()
+    for _ in range(120):   # wait (up to 60 s) until the server answers
+        if not server.is_alive(): break
+        try: socket.create_connection(("127.0.0.1", int(settings.port)), timeout=1).close(); break
+        except OSError: time.sleep(0.5)
+    if server.is_alive(): show_panel(settings.port, settings.token, wait_for_server=False)
+    server.join()
+
+
+def show_panel(port, token, wait_for_server=True):
+    """Open the control panel in its own app window; fall back to the browser if that is not possible."""
+    from app import firstrun, window
+    url = f"http://127.0.0.1:{int(port)}/panel#{token}"   # the token travels in the #hash: it never reaches the server
+    if wait_for_server and not firstrun.wait_for_port(port): return firstrun.open_panel(port, token, wait_for_server=False)
+    if window.open_window(url): return
+    firstrun.open_panel(port, token, wait_for_server=False)
+    import time; time.sleep(1.5)   # the browser thread is a daemon: give it time to start
 
 
 if __name__ == "__main__":

@@ -57,6 +57,14 @@ def _open_url(url):
     except Exception as e: print("Could not open the browser:", e)
 
 
+def wait_for_port(port, seconds=30) -> bool:
+    import time
+    for _ in range(int(seconds * 2)):
+        try: socket.create_connection(("127.0.0.1", int(port)), timeout=1).close(); return True
+        except OSError: time.sleep(0.5)
+    return False
+
+
 def open_panel(port, token, wait_for_server=True):
     """Open the control panel in the default browser (the token travels in the #hash: it never reaches the server)."""
     url = f"http://127.0.0.1:{int(port)}/panel#{token}"
