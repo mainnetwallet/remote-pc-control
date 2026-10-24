@@ -101,10 +101,7 @@ jobs:
             dist-installer/RemotePCControl-Setup.exe
       - name: Publish installer to GitHub Release
         if: github.event_name != 'workflow_dispatch' || github.ref_type == 'branch'
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "windows-build-${{ github.run_number }}"
-          Copy-Item dist-installer/RemotePCControl-Setup.exe "RemotePCControl-Setup-$tag.exe"
-          gh release create $tag "RemotePCControl-Setup-$tag.exe" --target "${{ github.sha }}" --title "Windows installer #${{ github.run_number }}" --notes "RemotePCControl-Setup.exe built from commit ${{ github.sha }}. Run it once: it sets up administrator rights, autostart and the firewall rule."
+        run: bash scripts/publish-release.sh pc dist-installer/RemotePCControl-Setup.exe

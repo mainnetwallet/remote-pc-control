@@ -193,6 +193,7 @@ npm run build
 | `.github/workflows/ci.yml` | Push, pull request or manual run (Windows runner): Python tests, a check that `install-lock-overlay.ps1` is idempotent (informational), and the frontend build |
 | `.github/workflows/android-build.yml` | Push to `main` or pull request touching `android/`, or manual run: builds a debug APK, uploads the artifact (14 days) and, outside pull requests, publishes a release `android-build-<run number>` |
 | `.github/workflows/windows-build.yml` | Manual run or `v*` tag: packages `RemotePCControl.exe` with PyInstaller and builds the Inno Setup installer |
+| `scripts/publish-release.sh` | Used by both build workflows: one GitHub release per commit (`build-<sha>`) that always holds the newest Windows installer and the newest Android APK (the file this build did not make is carried over from the last release that has it) |
 
 ## Known limitations
 

@@ -47,7 +47,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ### Option B · Windows installer (packaged `RemotePCControl.exe`), no terminal needed
 
-1. Get `RemotePCControl-Setup.exe`: it is built automatically on every push to `main` and published on the **Releases** page (`windows-build-N`). You can also run **GitHub → Actions → Windows installer** by hand, or push a tag such as `v1.0.0`.
+1. Get `RemotePCControl-Setup.exe`: it is built automatically on every push to `main` and published on the **Releases** page (one release per build, `build-<commit>`; it always holds both `RemotePCControl-Setup.exe` and `RemotePCControl-Android.apk`). You can also run **GitHub → Actions → Windows installer** by hand, or push a tag such as `v1.0.0`.
 2. Run the setup and accept the Windows (UAC) prompt. The installer does everything itself:
    - installs into `Program Files\RemotePCControl` and adds Start Menu and desktop shortcuts
    - registers the scheduled task `RemotePCControl` that starts the agent at sign-in with **administrator rights** (no prompt), so mouse and keyboard also work in Task Manager, Registry Editor and admin terminals
@@ -126,7 +126,7 @@ Verify the rules if setup warns; never replace them with a public inbound rule.
 | Artifact | Where | Trigger |
 |---|---|---|
 | **Android APK** | GitHub Actions → *Android APK*, or the Releases page | Push to `main` touching `android/`, or run manually. See the [Android guide](https://github.com/mainnetwallet/remote-pc-control/blob/main/android/README.md) |
-| **Windows installer** | Releases page (`windows-build-N`), or GitHub Actions → *Windows installer* | Every push to `main` (docs-only changes excluded), a tag matching `v*`, or run manually. Packages `RemotePCControl.exe` (runs as administrator) and builds the Inno Setup installer |
+| **Windows installer** | Releases page (`build-<commit>`, file `RemotePCControl-Setup.exe`), or GitHub Actions → *Windows installer* | Every push to `main` (docs-only changes excluded), a tag matching `v*`, or run manually. Packages `RemotePCControl.exe` (runs as administrator) and builds the Inno Setup installer |
 
 ## Security and limitations
 

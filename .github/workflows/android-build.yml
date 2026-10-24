@@ -5,6 +5,7 @@ on:
     paths:
       - "android/**"
       - ".github/workflows/android-build.yml"
+      - "scripts/publish-release.sh"
   pull_request:
     paths:
       - "android/**"
@@ -59,10 +60,4 @@ jobs:
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="android-build-${{ github.run_number }}"
-          cp android/app/build/outputs/apk/debug/app-debug.apk "RemotePCControl-Android-${TAG}.apk"
-          gh release create "$TAG" "RemotePCControl-Android-${TAG}.apk" \
-            --target "${{ github.sha }}" \
-            --title "Android APK #${{ github.run_number }}" \
-            --notes "Debug APK built from commit ${{ github.sha }}."
+        run: bash scripts/publish-release.sh apk android/app/build/outputs/apk/debug/app-debug.apk
