@@ -13,7 +13,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 if (-not (Test-Path $DllPath)) { throw "DLL not found: $DllPath" }
-$DllPath = (Resolve-Path $DllPath).Path
+$DllPath = (Resolve-Item $DllPath).FullName
 
 $clsidKey = "HKLM:\SOFTWARE\Classes\CLSID\$Clsid"
 New-Item -Path $clsidKey -Force | Out-Null
