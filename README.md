@@ -25,9 +25,6 @@ Live screen · touch-as-mouse · keyboard · system monitor · power controls ·
 
 ---
 
-> [!WARNING]
-> Only for a PC you own. Never expose port `8888` to the internet.
-
 Control your Windows PC from your phone over **Tailscale**, **Wi-Fi** or a **Cloudflare** tunnel, using the Android app or a mobile browser.
 
 | Feature | What you get |
@@ -268,12 +265,26 @@ With a PIN set, the app's **Lock** button uses this lock; without the lock scree
 
 ## 🔒 Security
 
-- Anyone with the token and a reachable URL controls the PC. Keep both private and revoke any token you pasted into a chat.
-- Prefer Tailscale or Cloudflare Access. Never expose port 8888 directly.
-- Built-in rate limits: wrong-token lockout (above) plus HTTP 429 with `Retry-After` for the same failing request repeated, and for clients with many failed requests. A garbled or silent WebSocket login counts as a failed login.
+> [!WARNING]
+> Use this only on a PC you own. Anyone with the token and a reachable URL controls the PC.
+
+**Keep access private**
+- Reach the PC only through **Tailscale**, a trusted Wi-Fi, or a **Cloudflare** tunnel (add Cloudflare Access for a permanent link). Never port-forward or expose port `8888` to the internet.
+- Use a long token (12+ characters), keep `.env` and the tunnel link private, and never commit `.env` or `lock_state.json`.
+- Revoke any token you ever pasted into a chat or issue. `GIST_TOKEN` must be a classic token with **only the `gist` scope**.
+
+**Built-in protection**
+- **Wrong-token lockout:** 8 wrong tokens lock a client for 5 minutes; 40 wrong tokens from anyone block all logins for 10 minutes.
+- **Repeated-failure limit:** the same request failing 10 times a minute, or 60 failed requests of any kind (scanners), gets HTTP 429 with `Retry-After`.
+- **WebSocket login:** a wrong, garbled or silent first message counts as a failed login.
+- **Control panel:** answers only on the PC itself, never from the phone, LAN or a tunnel, and also needs the token.
+- **PIN lock:** persistent full-screen lock with a 60-second cool-down after 5 wrong PINs.
+
+**Limits**
 - The agent cannot control the Windows sign-in screen or UAC prompts and does not bypass Windows authentication.
-- `GIST_TOKEN` must be a classic token with **only the `gist` scope**. Never commit `.env` or `lock_state.json`.
-- Report vulnerabilities privately via the GitHub Security tab, not a public issue.
+- The installer's agent runs as administrator; the PIN lock cannot block Ctrl+Alt+Delete.
+
+**Report a vulnerability** privately via the GitHub Security tab (not a public issue), with what you did, what happened and the commit hash.
 
 ## 🛠 Project layout
 
