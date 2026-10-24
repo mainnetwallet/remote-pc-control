@@ -187,6 +187,14 @@ def make(root, **kw):
 
 def type_keys(screen, *keysyms):
     for k in keysyms:
+        if k.startswith("KP_") and lock_overlay.IS_WINDOWS:
+            # Tk on Windows cannot synthesise the numpad's NumLock-dependent keysyms from
+            # event_generate, so call the bound handler directly. That the handlers are bound
+            # to the keypad keys is asserted in test_keypad_bindings_exist; real numpad typing
+            # is covered by docs/WINDOWS_LOCK_TESTING.md (not by these tests).
+            screen._on_enter() if k == "KP_Enter" else screen._on_keypad_digit(int(k[3:]))
+            screen.root.update()
+            continue
         # state=16 is Mod2 = NumLock on, which is what makes X11 report keypad keys as digits
         # (on Windows with NumLock on, Tk reports them as digits natively).
         screen.entry.event_generate(f"<{k}>", state=16 if k.startswith("KP_") else 0)
@@ -248,6 +256,13 @@ def test_numeric_keypad_backspace_and_filtering(tkroot):
     assert s.entry_var.get() == "123"
     type_keys(s, *["Key-9"] * 20)
     assert len(s.entry_var.get()) <= pinlock.MAX_PIN_LEN
+
+
+def test_keypad_bindings_exist(tkroot):
+    pinlock.set_pin("1234"); pinlock.lock()
+    s = make(tkroot); pump(tkroot, 300)
+    for seq in ["<Return>", "<KP_Enter>"] + [f"<KP_{d}>" for d in range(10)]:
+        assert s.entry.bind(seq), seq
 
 
 def test_enter_and_button_unlock_with_correct_pin(tkroot):
