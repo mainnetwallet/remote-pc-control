@@ -18,7 +18,7 @@ The client creates two data channels in its offer. Everything on them is JSON te
   "input"    unordered, maxRetransmits=0: pointer moves ("move", "rel"). The PC also sends {"type":"cursor",..}
              here after {"type":"watch_cursor","on":true}.
   "control"  reliable and ordered: clicks, down/up, scroll, key, hotkey, type, watch_cursor, and
-      {"type":"config","max_width":1280,"fps":30,"bitrate":3000,"cursor":true}   (all fields optional, applied
+      {"type":"config","max_width":1280,"fps":60,"bitrate":3000,"cursor":true}   (all fields optional, applied
       live; bitrate in kbit/s; "cursor":true = the client draws the pointer itself). The PC answers on the
       same channel with {"type":"screen","width":W,"height":H,"max_width":..,"fps":..,"bitrate":..,"encoder":".."}.
       {"type":"ping","t":..} is answered with {"type":"pong","t":..}.

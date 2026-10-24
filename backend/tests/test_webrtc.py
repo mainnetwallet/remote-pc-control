@@ -366,10 +366,10 @@ def test_connected_session_survives_signaling_loss_until_it_dies():
 # ---------------------------------------------------------------- live config
 
 def test_rtc_config_clamps_and_ignores_garbage(monkeypatch):
-    monkeypatch.setattr(settings, "rtc_fps", 30)
+    monkeypatch.setattr(settings, "rtc_fps", 60)
     base = webrtc.RtcConfig(1280, 30, 4000)
     c = base.updated({"max_width": 99999, "fps": 500, "bitrate": 10**9, "cursor": True})
-    assert (c.max_width, c.fps, c.bitrate, c.overlay) == (screen.WIDTH_MAX, 30, webrtc.BITRATE_MAX_KBPS, True)
+    assert (c.max_width, c.fps, c.bitrate, c.overlay) == (screen.WIDTH_MAX, 60, webrtc.BITRATE_MAX_KBPS, True)
     c = base.updated({"max_width": 0, "fps": 0, "bitrate": 1})
     assert (c.max_width, c.fps, c.bitrate) == (0, 1, webrtc.BITRATE_MIN_KBPS)
     c = base.updated({"max_width": 100})

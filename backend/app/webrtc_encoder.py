@@ -117,8 +117,8 @@ def make_encoder_class():
                     ctx.width, ctx.height = frame.width, frame.height
                     ctx.bit_rate = bitrate
                     ctx.pix_fmt = "nv12" if name == "qsv" else "yuv420p"
-                    ctx.framerate = fractions.Fraction(30, 1)
-                    ctx.time_base = fractions.Fraction(1, 30)
+                    ctx.framerate = fractions.Fraction(settings.rtc_fps, 1)
+                    ctx.time_base = fractions.Fraction(1, settings.rtc_fps)
                     ctx.gop_size = GOP_FRAMES
                     ctx.max_b_frames = 0
                     opts = codec_options(name)
@@ -200,7 +200,7 @@ def probe_backends(encoder_cls=None, width: int = 1280, height: int = 720) -> st
             ctx = av.CodecContext.create(FFMPEG_NAMES[name], "w")
             ctx.width, ctx.height, ctx.bit_rate = width, height, INITIAL_BITRATE
             ctx.pix_fmt = "nv12" if name == "qsv" else "yuv420p"
-            ctx.framerate = fractions.Fraction(30, 1); ctx.time_base = fractions.Fraction(1, 30)
+            ctx.framerate = fractions.Fraction(settings.rtc_fps, 1); ctx.time_base = fractions.Fraction(1, settings.rtc_fps)
             ctx.gop_size = GOP_FRAMES; ctx.max_b_frames = 0
             ctx.options = codec_options(name)
             ctx.open()

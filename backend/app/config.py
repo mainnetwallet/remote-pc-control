@@ -2,11 +2,14 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+# Highest frame rate the app accepts anywhere (settings, client requests, encoder). Raised from 30 to 60.
+FPS_CEILING = 60
+
 class Settings:
     token = os.getenv("REMOTE_PC_TOKEN", "")
     host = os.getenv("REMOTE_PC_HOST", "127.0.0.1")
     port = int(os.getenv("REMOTE_PC_PORT", "8888"))
-    fps = max(1, min(30, int(os.getenv("REMOTE_PC_FPS", "20"))))
+    fps = max(1, min(FPS_CEILING, int(os.getenv("REMOTE_PC_FPS", "20"))))
     jpeg_quality = max(25, min(85, int(os.getenv("REMOTE_PC_JPEG_QUALITY", "55"))))
     # Frames wider than this are downscaled before sending (0 = send full resolution).
     max_width = max(0, int(os.getenv("REMOTE_PC_MAX_WIDTH", "1280")))
@@ -26,8 +29,8 @@ class Settings:
     # --- WebRTC transport (/ws/rtc). The WebSocket JPEG stream stays available as the fallback. ---
     # 1 (default) = offer WebRTC; 0 = /ws/rtc answers "unavailable" and clients use the WebSocket stream.
     webrtc = os.getenv("REMOTE_PC_WEBRTC", "1").strip().lower() not in ("0", "false", "no", "off")
-    # Max frames per second of the WebRTC video (1-30).
-    rtc_fps = max(1, min(30, int(os.getenv("REMOTE_PC_RTC_FPS", "30") or "30")))
+    # Max frames per second of the WebRTC video (1-60). Run tools/pc_capability.py to see what this PC can do.
+    rtc_fps = max(1, min(FPS_CEILING, int(os.getenv("REMOTE_PC_RTC_FPS", "30") or "30")))
     # Upper limit of the video bitrate in kbit/s (the link's own estimate can only lower it). 300-30000.
     rtc_bitrate = max(300, min(30000, int(os.getenv("REMOTE_PC_RTC_BITRATE", "4000") or "4000")))
     # H.264 encoder: auto (try nvenc, qsv, amf, then libx264) or force one of nvenc / qsv / amf / x264.

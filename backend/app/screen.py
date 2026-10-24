@@ -6,7 +6,7 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
               "max_width":..,"fps":..,"quality":..}, then binary JPEG frames.
               client -> server (any time while streaming, all fields optional):
       {"type":"config","max_width":1920,"fps":15,"quality":70}
-          max_width 0 (native) or 320..3840, fps 1..30, quality 25..90; out-of-range values are
+          max_width 0 (native) or 320..3840, fps 1..60, quality 25..90; out-of-range values are
           clamped, unusable ones ignored. Applied live; the server answers with a fresh
           {"type":"screen",...} (carrying the values now in effect) followed by a new frame.
               {"type":"ack"}   send one after each frame you have shown. Once the server has seen an ack it
@@ -41,7 +41,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from fastapi import WebSocket, WebSocketDisconnect
 from PIL import Image, ImageDraw
-from .config import settings
+from .config import settings, FPS_CEILING
 from . import security
 
 # Timing of frames and acks uses this clock, not the event loop's: on Windows with Python 3.12 time.monotonic()
@@ -147,7 +147,7 @@ def _draw_cursor(img: Image.Image, x: float, y: float) -> None:
 
 
 WIDTH_MIN, WIDTH_MAX = 320, 3840
-FPS_MIN, FPS_MAX = 1, 30
+FPS_MIN, FPS_MAX = 1, FPS_CEILING
 QUALITY_MIN, QUALITY_MAX = 25, 90
 SHARP_QUALITY = 85   # from this JPEG quality up: Lanczos downscale and full-resolution (4:4:4) colour, at the cost of bigger frames
 
