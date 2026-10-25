@@ -109,6 +109,7 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
 /** Connection header with status, PC name, uptime, and logout */
 @Composable
 private fun ConnectionHeader(c: RemoteController) {
+    val status = c.status
     val colors = MaterialTheme.colorScheme
     val typo = MaterialTheme.typography
 
