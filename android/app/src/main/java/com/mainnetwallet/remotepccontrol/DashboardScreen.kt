@@ -1,9 +1,9 @@
 package com.mainnetwallet.remotepccontrol
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,13 +34,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
@@ -56,97 +56,123 @@ enum class PowerAction(
 @Composable
 fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
     val status = c.status
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).screenInsets().padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            // Header
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatusDot(if (c.reachable) Palette.Good else Palette.Bad)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            if (c.reachable) "Connected" else "Offline, retrying",
-                            style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(status?.hostname ?: "Windows PC", style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (status != null) Text(
-                        "Up ${formatUptime(status.uptimeSeconds)}",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                OutlinedButton(onClick = { c.disconnect() }, contentPadding = compactPadding) { Text("Log out") }
-            }
-
-            // CPU / RAM / disk
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GaugeCard("CPU", status?.cpu, "Processor load", Modifier.weight(1f))
-                GaugeCard("Memory", status?.memory, status?.let { "${gb(it.memUsed)} / ${gb(it.memTotal)}" } ?: "-", Modifier.weight(1f))
-                GaugeCard("Disk", status?.disk, status?.let { "${gb(it.diskUsed)} / ${gb(it.diskTotal)}" } ?: "-", Modifier.weight(1f))
-            }
-
-            // Network
-            AppCard(Modifier.fillMaxWidth()) {
-                Text("Network", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth()) {
-                    RateColumn("Download", status?.rxPerSec, Modifier.weight(1f))
-                    RateColumn("Upload", status?.txPerSec, Modifier.weight(1f))
-                }
-            }
-
-            // Power
-            AppCard(Modifier.fillMaxWidth()) {
-                Text("Power", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilledTonalButton(onClick = { onPower(PowerAction.LOCK) }, modifier = Modifier.weight(1f).height(48.dp)) { Text("Lock") }
-                    FilledTonalButton(onClick = { onPower(PowerAction.SLEEP) }, modifier = Modifier.weight(1f).height(48.dp)) { Text("Sleep") }
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilledTonalButton(onClick = { onPower(PowerAction.RESTART) }, modifier = Modifier.weight(1f).height(48.dp)) { Text("Restart") }
-                    Button(
-                        onClick = { onPower(PowerAction.SHUTDOWN) }, modifier = Modifier.weight(1f).height(48.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    ) { Text("Shutdown") }
-                }
-            }
-
-            // PIN lock
-            LockCard(c)
-
-            // Live screen
-            AppCard(Modifier.fillMaxWidth()) {
-                Text("Live screen", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Touch, trackpad and keyboard control of the logged-in desktop.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+    val cs = MaterialTheme.colorScheme
+    // Navy-to-black backdrop; the scroll column sits on top of it and keeps the system-bar insets.
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(DashColors.BgTop, DashColors.BgBottom)))) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).screenInsets().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+                // Header: PC name, connection badge, uptime, log out
+                DashHeader(
+                    hostname = status?.hostname ?: "Windows PC",
+                    reachable = c.reachable,
+                    uptime = status?.let { "Up ${formatUptime(it.uptimeSeconds)}" } ?: "Reading PC status…",
+                    onLogout = { c.disconnect() }
                 )
-                Spacer(Modifier.height(14.dp))
-                Text("Quality", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(6.dp))
-                QualityPicker(c.quality, { c.setQuality(it) })
-                Spacer(Modifier.height(6.dp))
-                Text(c.quality.hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(14.dp))
-                Button(onClick = { c.startScreen() }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Start screen session") }
-            }
 
-            if (c.notice.text.isNotBlank()) Text(
-                c.notice.text, style = MaterialTheme.typography.bodySmall,
-                color = if (c.notice.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(8.dp))
+                val liveNote = when {
+                    status == null -> "Waiting for data"
+                    !c.reachable -> "Last known values"
+                    else -> "Live"
+                }
+                // Values go stale while the PC is unreachable, so the monitoring blocks dim.
+                val dim = if (c.reachable) 1f else 0.55f
+
+                // CPU / memory / disk
+                DashSection("System", liveNote) {
+                    BoxWithConstraints(Modifier.fillMaxWidth().alpha(dim)) {
+                        val ring = ((maxWidth - 20.dp) / 3 - 24.dp).coerceIn(60.dp, 80.dp)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            DashGauge("CPU", status?.cpu, "Processor\nload", ring, Modifier.weight(1f))
+                            DashGauge(
+                                "Memory", status?.memory,
+                                status?.let { "${gb(it.memUsed)}\nof ${gb(it.memTotal)}" } ?: "–", ring, Modifier.weight(1f)
+                            )
+                            DashGauge(
+                                "Disk", status?.disk,
+                                status?.let { "${gb(it.diskUsed)}\nof ${gb(it.diskTotal)}" } ?: "–", ring, Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // Network
+                DashSection("Network", liveNote) {
+                    Row(Modifier.fillMaxWidth().alpha(dim), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DashRateTile("Download", status?.rxPerSec, Glyph.DOWN, DashColors.Blue, Modifier.weight(1f))
+                        DashRateTile("Upload", status?.txPerSec, Glyph.UP, DashColors.Violet, Modifier.weight(1f))
+                    }
+                }
+
+                // Power: Lock, Sleep / Restart, Shutdown. Same callback as before; the confirmation dialogs live in MainActivity.
+                DashSection("Power") {
+                    PowerAction.values().toList().chunked(2).forEach { pair ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            pair.forEach { action ->
+                                DashPowerTile(
+                                    label = action.label,
+                                    caption = if (action.needsConfirm) "Asks first" else "Instant",
+                                    glyph = action.glyph(),
+                                    tint = action.tint(),
+                                    destructive = action == PowerAction.SHUTDOWN,
+                                    onClick = { onPower(action) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // PIN lock
+                DashSection("Security") { LockCard(c) }
+
+                // Live screen
+                DashSection("Live screen") {
+                    DashPanel(Modifier.fillMaxWidth()) {
+                        Text(
+                            "Touch, trackpad and keyboard control of the logged-in desktop.",
+                            style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        Text("Quality", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        DashQualityGrid(c.quality, { c.setQuality(it) })
+                        Spacer(Modifier.height(10.dp))
+                        Text(c.quality.hint, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { c.startScreen() }, shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth().height(54.dp)
+                        ) {
+                            DashIcon(Glyph.PLAY, LocalContentColor.current, iconSize = 18.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Start screen session", style = MaterialTheme.typography.titleSmall)
+                        }
+                    }
+                }
+
+                if (c.notice.text.isNotBlank()) DashNotice(c.notice.text, c.notice.isError)
+                Spacer(Modifier.height(4.dp))
+            }
         }
     }
+}
+
+private fun PowerAction.glyph(): Glyph = when (this) {
+    PowerAction.LOCK -> Glyph.LOCK
+    PowerAction.SLEEP -> Glyph.MOON
+    PowerAction.RESTART -> Glyph.RESTART
+    PowerAction.SHUTDOWN -> Glyph.POWER
+}
+
+/** Blue for the everyday actions, amber for restart, red for the destructive shutdown. */
+private fun PowerAction.tint(): Color = when (this) {
+    PowerAction.LOCK -> DashColors.Blue
+    PowerAction.SLEEP -> DashColors.Violet
+    PowerAction.RESTART -> Palette.Warn
+    PowerAction.SHUTDOWN -> Palette.Bad
 }
 
 /**
@@ -158,10 +184,27 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
 private fun LockCard(c: RemoteController) {
     var showPinDialog by remember { mutableStateOf(false) }
     val state = c.lockState
+    val cs = MaterialTheme.colorScheme
+    val badgeText: String
+    val badgeColor: Color
+    when {
+        state == null -> { badgeText = "Checking…"; badgeColor = cs.onSurfaceVariant }
+        state.locked -> { badgeText = "Locked"; badgeColor = Palette.Warn }
+        state.pinSet -> { badgeText = "Unlocked"; badgeColor = Palette.Good }
+        else -> { badgeText = "No PIN set"; badgeColor = cs.onSurfaceVariant }
+    }
 
-    AppCard(Modifier.fillMaxWidth()) {
-        Text("PIN lock", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(4.dp))
+    DashPanel(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(badgeColor.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) { DashIcon(Glyph.LOCK, badgeColor, iconSize = 24.dp) }
+            Spacer(Modifier.width(12.dp))
+            Text("PIN lock", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            DashStatusPill(badgeText, badgeColor, pulsing = false)
+        }
+        Spacer(Modifier.height(12.dp))
         Text(
             when {
                 state == null -> "Loading…"
@@ -169,23 +212,26 @@ private fun LockCard(c: RemoteController) {
                 state.pinSet -> "Unlocked. Won't lock again until you lock it here."
                 else -> "Set a PIN first to turn this on."
             },
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant
         )
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (state?.locked == true) {
                 Button(
-                    onClick = { c.unlockPc() }, modifier = Modifier.weight(1f).height(48.dp)
-                ) { Text("Unlock") }
+                    onClick = { c.unlockPc() }, shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f).height(48.dp)
+                ) { Text("Unlock", maxLines = 1) }
             } else {
                 FilledTonalButton(
-                    onClick = { c.lockPc() }, modifier = Modifier.weight(1f).height(48.dp),
+                    onClick = { c.lockPc() }, shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f).height(48.dp),
                     enabled = state?.pinSet == true
-                ) { Text("Lock now") }
+                ) { Text("Lock now", maxLines = 1) }
             }
-            OutlinedButton(onClick = { showPinDialog = true }, modifier = Modifier.weight(1f).height(48.dp)) {
-                Text(if (state?.pinSet == true) "Change PIN" else "Set PIN")
-            }
+            OutlinedButton(
+                onClick = { showPinDialog = true }, shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f).height(48.dp)
+            ) { Text(if (state?.pinSet == true) "Change PIN" else "Set PIN", maxLines = 1) }
         }
     }
 
@@ -230,48 +276,3 @@ private fun SetPinDialog(onDismiss: () -> Unit, onSave: (String, (Boolean, Strin
 }
 
 private fun gb(bytes: Long): String = String.format(Locale.US, "%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))
-
-@Composable
-private fun RateColumn(label: String, bytesPerSec: Long?, modifier: Modifier) {
-    Column(modifier) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(if (bytesPerSec == null) "-" else formatBytes(bytesPerSec) + "/s", style = MaterialTheme.typography.titleLarge)
-    }
-}
-
-@Composable
-private fun GaugeCard(label: String, percent: Int?, detail: String, modifier: Modifier) {
-    val color = when {
-        percent == null -> MaterialTheme.colorScheme.primary
-        percent >= 90 -> Palette.Bad
-        percent >= 70 -> Palette.Warn
-        else -> MaterialTheme.colorScheme.primary
-    }
-    AppCard(modifier, padding = 12.dp) {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            RingGauge(percent, color)
-            Spacer(Modifier.height(8.dp))
-            Text(label, style = MaterialTheme.typography.titleSmall)
-            Text(
-                detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
-private fun RingGauge(percent: Int?, color: Color) {
-    val track = MaterialTheme.colorScheme.outlineVariant
-    val fraction by animateFloatAsState(targetValue = (percent ?: 0).coerceIn(0, 100) / 100f, label = "gauge")
-    Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val stroke = 7.dp.toPx()
-            val topLeft = Offset(stroke / 2, stroke / 2)
-            val arc = Size(size.width - stroke, size.height - stroke)
-            drawArc(track, 0f, 360f, false, topLeft = topLeft, size = arc, style = Stroke(width = stroke))
-            if (fraction > 0f) drawArc(color, -90f, 360f * fraction, false, topLeft = topLeft, size = arc, style = Stroke(width = stroke, cap = StrokeCap.Round))
-        }
-        Text(if (percent == null) "-" else "$percent%", style = MaterialTheme.typography.titleMedium)
-    }
-}
