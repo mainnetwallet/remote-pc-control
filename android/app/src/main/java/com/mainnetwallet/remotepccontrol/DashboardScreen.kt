@@ -337,8 +337,6 @@ private fun SettingsPage(c: RemoteController) {
     }
 }
 
-private fun Modifier: Modifier = this.then(Modifier.padding(0.dp))
-
 @Composable
 private fun SettingsRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
