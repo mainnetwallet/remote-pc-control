@@ -1,10 +1,7 @@
 package com.mainnetwallet.remotepccontrol
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,15 +16,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -45,6 +36,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,259 +56,135 @@ enum class PowerAction(
 @Composable
 fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
     val status = c.status
-    val colors = MaterialTheme.colorScheme
-    val typo = MaterialTheme.typography
-
     Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .screenInsets()
-            .padding(horizontal = DesignTokens.SpaceLG, vertical = DesignTokens.SpaceMD),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).screenInsets().padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            Modifier.widthIn(max = 560.dp).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(DesignTokens.SpaceLG)
-        ) {
-            // ===== CONNECTION HEADER =====
-            ConnectionHeader(c)
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        StatusDot(if (c.reachable) Palette.Good else Palette.Bad)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (c.reachable) "Connected" else "Offline, retrying",
+                            style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(status?.hostname ?: "Windows PC", style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (status != null) Text(
+                        "Up ${formatUptime(status.uptimeSeconds)}",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                OutlinedButton(onClick = { c.disconnect() }, contentPadding = compactPadding) { Text("Log out") }
+            }
 
-            // ===== SYSTEM RESOURCE CARDS =====
-            SystemResourcesSection(c)
+            // CPU / RAM / disk
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GaugeCard("CPU", status?.cpu, "Processor load", Modifier.weight(1f))
+                GaugeCard("Memory", status?.memory, status?.let { "${gb(it.memUsed)} / ${gb(it.memTotal)}" } ?: "-", Modifier.weight(1f))
+                GaugeCard("Disk", status?.disk, status?.let { "${gb(it.diskUsed)} / ${gb(it.diskTotal)}" } ?: "-", Modifier.weight(1f))
+            }
 
-            // ===== NETWORK STATISTICS =====
-            NetworkSection(c)
+            // Network
+            AppCard(Modifier.fillMaxWidth()) {
+                Text("Network", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth()) {
+                    RateColumn("Download", status?.rxPerSec, Modifier.weight(1f))
+                    RateColumn("Upload", status?.txPerSec, Modifier.weight(1f))
+                }
+            }
 
-            // ===== POWER CONTROLS =====
-            PowerControlsSection(c, onPower)
+            // Power
+            AppCard(Modifier.fillMaxWidth()) {
+                Text("Power", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FilledTonalButton(onClick = { onPower(PowerAction.LOCK) }, modifier = Modifier.weight(1f).height(48.dp)) { Text("Lock") }
+                    FilledTonalButton(onClick = { onPower(PowerAction.SLEEP) }, modifier = Modifier.weight(1f).height(48.dp)) { Text("Sleep") }
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FilledTonalButton(onClick = { onPower(PowerAction.RESTART) }, modifier = Modifier.weight(1f).height(48.dp)) { Text("Restart") }
+                    Button(
+                        onClick = { onPower(PowerAction.SHUTDOWN) }, modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    ) { Text("Shutdown") }
+                }
+            }
 
-            // ===== PIN LOCK =====
+            // PIN lock
             LockCard(c)
 
-            // ===== LIVE SCREEN CONTROLS =====
-            LiveScreenSection(c)
-
-            // ===== NOTICES =====
-            if (c.notice.text.isNotBlank()) {
-                NoticeBanner(c.notice)
-            }
-            Spacer(Modifier.height(DesignTokens.SpaceMD))
-        }
-    }
-}
-
-/** Connection header with status, PC name, uptime, and logout */
-@Composable
-private fun ConnectionHeader(c: RemoteController) {
-    val status = c.status
-    val colors = MaterialTheme.colorScheme
-    val typo = MaterialTheme.typography
-
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(DesignTokens.SpaceSM)
-            ) {
-                PulsingStatusDot(
-                    color = if (c.reachable) Palette.Success else Palette.Danger,
-                    size = 10.dp,
-                    enabled = c.reachable
-                )
+            // Live screen
+            AppCard(Modifier.fillMaxWidth()) {
+                Text("Live screen", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    if (c.reachable) "Connected" else "Offline, retrying…",
-                    style = typo.labelLarge,
-                    color = colors.onSurfaceVariant
+                    "Touch, trackpad and keyboard control of the logged-in desktop.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(14.dp))
+                Text("Quality", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(6.dp))
+                QualityPicker(c.quality, { c.setQuality(it) })
+                Spacer(Modifier.height(6.dp))
+                Text(c.quality.hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(14.dp))
+                Button(onClick = { c.startScreen() }, modifier = Modifier.fillMaxWidth().height(52.dp)) { Text("Start screen session") }
             }
-            Spacer(Modifier.height(DesignTokens.SpaceXS))
-            Text(
-                status?.hostname ?: "Windows PC",
-                style = typo.headlineSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = colors.onSurface
+
+            if (c.notice.text.isNotBlank()) Text(
+                c.notice.text, style = MaterialTheme.typography.bodySmall,
+                color = if (c.notice.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
             )
-            status?.let {
-                Text(
-                    "Up ${formatUptime(it.uptimeSeconds)}",
-                    style = typo.bodySmall,
-                    color = colors.onSurfaceVariant
-                )
-            }
-        }
-        OutlineActionButton(
-            text = "Log out",
-            onClick = { c.disconnect() },
-            modifier = Modifier.width(100.dp).height(DesignTokens.TouchTargetComfortable)
-        )
-    }
-}
-
-/** System resources: CPU, Memory, Disk with circular gauges */
-@Composable
-private fun SystemResourcesSection(c: RemoteController) {
-    val status = c.status
-
-    ElevatedCard(Modifier.fillMaxWidth(), padding = DesignTokens.SpaceLG) {
-        Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.SpaceLG)) {
-            SectionHeader("System Resources")
-            Spacer(Modifier.height(DesignTokens.SpaceXS))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(DesignTokens.SpaceSM)
-            ) {
-                GaugeCard("CPU", status?.cpu, "Processor load", Modifier.weight(1f))
-                GaugeCard(
-                    "Memory",
-                    status?.memory,
-                    status?.let { "${formatBytes(it.memUsed)} / ${formatBytes(it.memTotal)}" } ?: "–",
-                    Modifier.weight(1f)
-                )
-                GaugeCard(
-                    "Disk",
-                    status?.disk,
-                    status?.let { "${formatBytes(it.diskUsed)} / ${formatBytes(it.diskTotal)}" } ?: "–",
-                    Modifier.weight(1f)
-                )
-            }
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
 
-/** Network statistics: Download and Upload speeds */
-@Composable
-private fun NetworkSection(c: RemoteController) {
-    val status = c.status
-    val colors = MaterialTheme.colorScheme
-    val typo = MaterialTheme.typography
-
-    AppCard(Modifier.fillMaxWidth(), padding = DesignTokens.SpaceLG) {
-        Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.SpaceLG)) {
-            SectionHeader("Network")
-            Spacer(Modifier.height(DesignTokens.SpaceXS))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(DesignTokens.SpaceMD)
-            ) {
-                RateColumn(
-                    "Download",
-                    status?.rxPerSec,
-                    Modifier.weight(1f).fillMaxWidth()
-                )
-                SubtleDivider(Modifier.height(48.dp).padding(vertical = DesignTokens.SpaceSM))
-                RateColumn(
-                    "Upload",
-                    status?.txPerSec,
-                    Modifier.weight(1f).fillMaxWidth()
-                )
-            }
-        }
-    }
-}
-
-/** Power controls: Lock, Sleep, Restart, Shutdown */
-@Composable
-private fun PowerControlsSection(c: RemoteController, onPower: (PowerAction) -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    val typo = MaterialTheme.typography
-
-    AppCard(Modifier.fillMaxWidth(), padding = DesignTokens.SpaceLG) {
-        Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.SpaceLG)) {
-            SectionHeader("Power Controls")
-            Spacer(Modifier.height(DesignTokens.SpaceXS))
-
-            // Row 1: Lock, Sleep
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(DesignTokens.SpaceSM)
-            ) {
-                SecondaryActionButton(
-                    text = "Lock",
-                    onClick = { onPower(PowerAction.LOCK) },
-                    modifier = Modifier.weight(1f)
-                )
-                SecondaryActionButton(
-                    text = "Sleep",
-                    onClick = { onPower(PowerAction.SLEEP) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // Row 2: Restart, Shutdown
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(DesignTokens.SpaceSM)
-            ) {
-                SecondaryActionButton(
-                    text = "Restart",
-                    onClick = { onPower(PowerAction.RESTART) },
-                    modifier = Modifier.weight(1f)
-                )
-                DestructiveActionButton(
-                    text = "Shutdown",
-                    onClick = { onPower(PowerAction.SHUTDOWN) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-/** Lock card showing PIN lock state and controls */
+/**
+ * Locks or unlocks the PC's always-on PIN screen (separate from the Windows "Lock" button above:
+ * this one stays locked permanently -- through sleep, restart and shutdown -- until unlocked here
+ * or with the PIN at the PC itself).
+ */
 @Composable
 private fun LockCard(c: RemoteController) {
     var showPinDialog by remember { mutableStateOf(false) }
     val state = c.lockState
-    val colors = MaterialTheme.colorScheme
-    val typo = MaterialTheme.typography
 
-    AppCard(Modifier.fillMaxWidth(), padding = DesignTokens.SpaceLG) {
-        Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.SpaceLG)) {
-            SectionHeader("PIN Lock")
-            Spacer(Modifier.height(DesignTokens.SpaceXS))
-
-            Text(
-                when {
-                    state == null -> "Loading…"
-                    state.locked -> "Locked. Stays locked through sleep, restart and shutdown."
-                    state.pinSet -> "Unlocked. Won't lock again until you lock it here."
-                    else -> "Set a PIN first to turn this on."
-                },
-                style = typo.bodySmall,
-                color = colors.onSurfaceVariant
-            )
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(DesignTokens.SpaceSM)
-            ) {
-                if (state?.locked == true) {
-                    PrimaryActionButton(
-                        text = "Unlock",
-                        onClick = { c.unlockPc() },
-                        modifier = Modifier.weight(1f)
-                    )
-                } else {
-                    SecondaryActionButton(
-                        text = "Lock Now",
-                        onClick = { c.lockPc() },
-                        modifier = Modifier.weight(1f),
-                        enabled = state?.pinSet == true
-                    )
-                }
-                OutlineActionButton(
-                    text = if (state?.pinSet == true) "Change PIN" else "Set PIN",
-                    onClick = { showPinDialog = true },
-                    modifier = Modifier.weight(1f)
-                )
+    AppCard(Modifier.fillMaxWidth()) {
+        Text("PIN lock", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            when {
+                state == null -> "Loading…"
+                state.locked -> "Locked. Stays locked through sleep, restart and shutdown."
+                state.pinSet -> "Unlocked. Won't lock again until you lock it here."
+                else -> "Set a PIN first to turn this on."
+            },
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (state?.locked == true) {
+                Button(
+                    onClick = { c.unlockPc() }, modifier = Modifier.weight(1f).height(48.dp)
+                ) { Text("Unlock") }
+            } else {
+                FilledTonalButton(
+                    onClick = { c.lockPc() }, modifier = Modifier.weight(1f).height(48.dp),
+                    enabled = state?.pinSet == true
+                ) { Text("Lock now") }
+            }
+            OutlinedButton(onClick = { showPinDialog = true }, modifier = Modifier.weight(1f).height(48.dp)) {
+                Text(if (state?.pinSet == true) "Change PIN" else "Set PIN")
             }
         }
     }
@@ -330,38 +198,22 @@ private fun SetPinDialog(onDismiss: () -> Unit, onSave: (String, (Boolean, Strin
     var error by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     val valid = pin.length in 4..12 && pin.all { it.isDigit() }
-    val colors = MaterialTheme.colorScheme
-    val typo = MaterialTheme.typography
 
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
-        title = { Text("Set unlock PIN", style = typo.titleLarge, color = colors.onSurface) },
+        title = { Text("Set unlock PIN") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.SpaceMD)) {
+            Column {
                 Text(
                     "4-12 digits. Used to unlock at the PC itself.",
-                    style = typo.bodySmall, color = colors.onSurfaceVariant
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
-                    value = pin,
-                    onValueChange = {
-                        if (it.length <= 12) {
-                            pin = it.filter(Char::isDigit)
-                            error = ""
-                        }
-                    },
-                    label = { Text("PIN") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Done
-                    )
+                    value = pin, onValueChange = { if (it.length <= 12) { pin = it.filter(Char::isDigit); error = "" } },
+                    label = { Text("PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
-                if (error.isNotBlank()) {
-                    Text(error, color = colors.error, style = typo.bodySmall)
-                }
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = {
@@ -371,91 +223,55 @@ private fun SetPinDialog(onDismiss: () -> Unit, onSave: (String, (Boolean, Strin
                     saving = true
                     onSave(pin) { ok, message -> saving = false; if (ok) onDismiss() else error = message }
                 }
-            ) {
-                Text(if (saving) "Saving…" else "Save", style = typo.labelLarge, color = colors.primary)
-            }
+            ) { Text(if (saving) "Saving…" else "Save") }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !saving) {
-                Text("Cancel", style = typo.labelLarge, color = colors.onSurfaceVariant)
-            }
-        },
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") } }
     )
 }
 
-/** Live screen controls: quality picker and start session button */
+private fun gb(bytes: Long): String = String.format(Locale.US, "%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+
 @Composable
-private fun LiveScreenSection(c: RemoteController) {
-    val colors = MaterialTheme.colorScheme
-    val typo = MaterialTheme.typography
+private fun RateColumn(label: String, bytesPerSec: Long?, modifier: Modifier) {
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(if (bytesPerSec == null) "-" else formatBytes(bytesPerSec) + "/s", style = MaterialTheme.typography.titleLarge)
+    }
+}
 
-    AppCard(Modifier.fillMaxWidth(), padding = DesignTokens.SpaceLG) {
-        Column(verticalArrangement = Arrangement.spacedBy(DesignTokens.SpaceLG)) {
-            SectionHeader("Live Screen")
-            Spacer(Modifier.height(DesignTokens.SpaceXS))
-
+@Composable
+private fun GaugeCard(label: String, percent: Int?, detail: String, modifier: Modifier) {
+    val color = when {
+        percent == null -> MaterialTheme.colorScheme.primary
+        percent >= 90 -> Palette.Bad
+        percent >= 70 -> Palette.Warn
+        else -> MaterialTheme.colorScheme.primary
+    }
+    AppCard(modifier, padding = 12.dp) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            RingGauge(percent, color)
+            Spacer(Modifier.height(8.dp))
+            Text(label, style = MaterialTheme.typography.titleSmall)
             Text(
-                "Touch, trackpad and keyboard control of the logged-in desktop.",
-                style = typo.bodySmall, color = colors.onSurfaceVariant
-            )
-
-            // Quality selector
-            Column(
-                Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(DesignTokens.SpaceSM)
-            ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Quality", style = typo.labelLarge, color = colors.onSurfaceVariant)
-                    // Current quality badge
-                    StatusBadge(
-                        text = c.quality.label,
-                        color = colors.primary
-                    )
-                }
-                QualityPicker(c.quality, { c.setQuality(it) })
-                Text(c.quality.hint, style = typo.bodySmall, color = colors.onSurfaceVariant)
-            }
-
-            // Start screen session button
-            PrimaryActionButton(
-                text = "Start Screen Session",
-                onClick = { c.startScreen() },
-                modifier = Modifier.fillMaxWidth(),
-                icon = { Text("▶", style = typo.labelLarge) }
+                detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center
             )
         }
     }
 }
 
-/** Notice banner for errors and info */
 @Composable
-private fun NoticeBanner(notice: Notice) {
-    val colors = MaterialTheme.colorScheme
-    val typo = MaterialTheme.typography
-
-    val (bgColor, textColor) = if (notice.isError) {
-        colors.errorContainer to colors.onErrorContainer
-    } else {
-        colors.primaryContainer to colors.onPrimaryContainer
-    }
-
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(DesignTokens.SpaceMD)
-            .background(bgColor, MaterialTheme.shapes.medium)
-    ) {
-        Text(
-            notice.text,
-            style = typo.bodySmall,
-            color = textColor,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(DesignTokens.SpaceSM)
-        )
+private fun RingGauge(percent: Int?, color: Color) {
+    val track = MaterialTheme.colorScheme.outlineVariant
+    val fraction by animateFloatAsState(targetValue = (percent ?: 0).coerceIn(0, 100) / 100f, label = "gauge")
+    Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = 7.dp.toPx()
+            val topLeft = Offset(stroke / 2, stroke / 2)
+            val arc = Size(size.width - stroke, size.height - stroke)
+            drawArc(track, 0f, 360f, false, topLeft = topLeft, size = arc, style = Stroke(width = stroke))
+            if (fraction > 0f) drawArc(color, -90f, 360f * fraction, false, topLeft = topLeft, size = arc, style = Stroke(width = stroke, cap = StrokeCap.Round))
+        }
+        Text(if (percent == null) "-" else "$percent%", style = MaterialTheme.typography.titleMedium)
     }
 }
