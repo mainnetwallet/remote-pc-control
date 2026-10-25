@@ -481,14 +481,18 @@ private fun DashPresetCard(q: Quality, on: Boolean, onClick: () -> Unit, modifie
 @Composable
 internal fun DashPresetSelector(selected: Quality, onSelect: (Quality) -> Unit, modifier: Modifier = Modifier) {
     val fontScale = LocalDensity.current.fontScale
+    val presets = Quality.values().toList()
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        val columns = if (maxWidth >= 330.dp && fontScale <= 1.15f) 6 else 3
-        val gap = if (columns == 6) 5.dp else 8.dp
+        // Roomy screen: every preset in one row. Narrow screen or large font: balanced rows (for example 3 + 2),
+        // and the cards of a shorter row grow to fill it, so there is never an empty slot at the end.
+        val oneRow = maxWidth >= 330.dp && fontScale <= 1.15f && presets.size <= 6
+        val rowCount = if (oneRow) 1 else (presets.size + 2) / 3
+        val perRow = (presets.size + rowCount - 1) / rowCount
+        val gap = if (oneRow) 5.dp else 8.dp
         Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(gap)) {
-            Quality.values().toList().chunked(columns).forEach { rowItems ->
+            presets.chunked(perRow).forEach { rowItems ->
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(gap)) {
                     rowItems.forEach { q -> DashPresetCard(q, q == selected, { onSelect(q) }, Modifier.weight(1f).fillMaxHeight()) }
-                    repeat(columns - rowItems.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
