@@ -1,6 +1,10 @@
 package com.mainnetwallet.remotepccontrol
 
+import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,35 +16,38 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import java.util.Locale
 
 /** Power actions on the PC. Restart, shutdown and sleep ask for confirmation first; lock does not. */
 enum class PowerAction(
@@ -53,58 +60,72 @@ enum class PowerAction(
     SHUTDOWN("shutdown", "Shutdown", true, "{\"confirm\":true}", "Shut down the PC?", "The PC shuts down and stays unreachable until someone turns it on again. Unsaved work on it is lost.")
 }
 
+/**
+ * The signed-in shell: a page (Home dashboard or Settings) above a three-item bottom bar.
+ * "PC Live" is not a page of its own: it starts the existing screen session, which MainActivity then shows
+ * full screen (with its own toolbar and the Back-to-stop behaviour), so the session logic exists only once.
+ */
 @Composable
 fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
+    var tab by rememberSaveable { mutableStateOf(NavTab.HOME.name) }
+    val current = NavTab.valueOf(tab)
+    val history = remember { MetricHistory() }
+    // Every fresh status reading adds one point to the trend lines.
+    LaunchedEffect(c.status) { c.status?.let { history.add(it) } }
+    // Back from Settings returns to Home instead of leaving the app.
+    BackHandler(enabled = current == NavTab.SETTINGS) { tab = NavTab.HOME.name }
+
+    Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(DashColors.BgTop, DashColors.BgBottom)))) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when (current) {
+                NavTab.SETTINGS -> SettingsPage(c)
+                else -> HomePage(c, history, onPower)
+            }
+        }
+        DashBottomNav(selected = current) { picked ->
+            when (picked) {
+                NavTab.LIVE -> c.startScreen()      // the same call the Start Screen Session button makes
+                else -> tab = picked.name
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (PowerAction) -> Unit) {
     val status = c.status
-    val cs = MaterialTheme.colorScheme
-    // Navy-to-black backdrop. The column below is built to fit one phone screen; it only scrolls
-    // as a safety net on very short screens or with a large system font.
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(DashColors.BgTop, DashColors.BgBottom)))) {
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).screenInsets().padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // PC name, uptime, connection badge, log out
-                DashTopBar(
-                    hostname = status?.hostname ?: "Windows PC",
-                    reachable = c.reachable,
-                    uptime = status?.let { "Up ${formatUptime(it.uptimeSeconds)}" } ?: "Reading PC status…",
-                    onLogout = { c.disconnect() }
-                )
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().displayCutoutPadding().padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            DashConnectionHeader(
+                hostname = status?.hostname ?: "Windows PC",
+                reachable = c.reachable,
+                uptime = status?.let { "Up ${formatUptime(it.uptimeSeconds)}" },
+                address = connectionAddress(c.baseUrl)
+            )
 
-                // Live screen first: pick the quality, then start the session
-                DashPanel(Modifier.fillMaxWidth(), padding = 12.dp) {
-                    Text("Live screen", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    DashQualityGrid(c.quality, { c.setQuality(it) })
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        c.quality.hint, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Button(
-                        onClick = { c.startScreen() }, shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-                    ) {
-                        DashIcon(Glyph.PLAY, LocalContentColor.current, iconSize = 18.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Start screen session", style = MaterialTheme.typography.titleSmall)
-                    }
+            // Live screen directly under the header: pick the quality, then start the session.
+            DashPanel(Modifier.fillMaxWidth()) {
+                DashSectionHeader(Glyph.MONITOR, "Live Screen") {
+                    DashChip(Glyph.MONITOR, resolutionText(c.quality))
                 }
+                Spacer(Modifier.height(12.dp))
+                DashPresetSelector(c.quality, { c.setQuality(it) })
+                Spacer(Modifier.height(6.dp))
+                Text(c.quality.hint, style = MaterialTheme.typography.labelSmall, color = DashColors.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(10.dp))
+                DashPrimaryButton("Start Screen Session", Glyph.PLAY, { c.startScreen() }, Modifier.fillMaxWidth())
+            }
 
-                // CPU / memory / disk and the network rates. Dimmed while the PC is unreachable (values are stale).
-                DashSystemPanel(
-                    cpu = status?.cpu, memory = status?.memory, disk = status?.disk,
-                    memDetail = status?.let { "${gb(it.memUsed)} / ${gb(it.memTotal)}" } ?: "–",
-                    diskDetail = status?.let { "${gb(it.diskUsed)} / ${gb(it.diskTotal)}" } ?: "–",
-                    rx = status?.rxPerSec, tx = status?.txPerSec,
-                    modifier = Modifier.fillMaxWidth().alpha(if (c.reachable) 1f else 0.55f)
-                )
+            DashSystemPanel(status, c.reachable, history, Modifier.fillMaxWidth())
 
-                // Power: four tiles in one row (two rows on very narrow phones). Same callback as before;
-                // the confirmation dialogs live in MainActivity.
+            // Power: four tiles in one row (two rows on very narrow phones). Same callback as before;
+            // the confirmation dialogs live in MainActivity.
+            DashPanel(Modifier.fillMaxWidth()) {
+                DashSectionHeader(Glyph.BOLT, "Quick Actions", DashColors.Cyan)
+                Spacer(Modifier.height(12.dp))
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val perRow = if (maxWidth < 300.dp) 2 else 4
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -112,27 +133,32 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 group.forEach { action ->
                                     DashPowerTile(
-                                        label = action.label,
-                                        glyph = action.glyph(),
-                                        tint = action.tint(),
-                                        destructive = action == PowerAction.SHUTDOWN,
-                                        onClick = { onPower(action) },
-                                        modifier = Modifier.weight(1f)
+                                        label = action.label, subtitle = action.subtitle(), glyph = action.glyph(), tint = action.tint(),
+                                        onClick = { onPower(action) }, modifier = Modifier.weight(1f)
                                     )
                                 }
                             }
                         }
                     }
                 }
-
-                // PIN lock
-                LockCard(c)
-
-                if (c.notice.text.isNotBlank()) DashNotice(c.notice.text, c.notice.isError)
             }
+
+            PinSecurityCard(c)
+
+            if (c.notice.text.isNotBlank()) DashNotice(c.notice.text, c.notice.isError)
+            Spacer(Modifier.height(2.dp))
         }
     }
 }
+
+/** The address the app connects to, without scheme or port noise for Gist references. Real, from the saved setting. */
+private fun connectionAddress(baseUrl: String): String {
+    val t = baseUrl.trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
+    return if (t.startsWith("gist:") || t.contains("gist.github.com")) "" else t.substringBefore(':')
+}
+
+/** Resolution information straight from the selected preset: its maximum frame width (0 = the PC's own size). */
+private fun resolutionText(q: Quality): String = if (q.maxWidth == 0) "Native size" else "${q.maxWidth} px wide"
 
 private fun PowerAction.glyph(): Glyph = when (this) {
     PowerAction.LOCK -> Glyph.LOCK
@@ -141,61 +167,69 @@ private fun PowerAction.glyph(): Glyph = when (this) {
     PowerAction.SHUTDOWN -> Glyph.POWER
 }
 
-/** Blue for the everyday actions, amber for restart, red for the destructive shutdown. */
+private fun PowerAction.subtitle(): String = when (this) {
+    PowerAction.LOCK -> "Lock your PC"
+    PowerAction.SLEEP -> "Power save"
+    PowerAction.RESTART -> "Reboot PC"
+    PowerAction.SHUTDOWN -> "Turn off PC"
+}
+
+/** Blue lock, purple sleep, amber restart, red shutdown. */
 private fun PowerAction.tint(): Color = when (this) {
     PowerAction.LOCK -> DashColors.Blue
     PowerAction.SLEEP -> DashColors.Violet
-    PowerAction.RESTART -> Palette.Warn
-    PowerAction.SHUTDOWN -> Palette.Bad
+    PowerAction.RESTART -> DashColors.Amber
+    PowerAction.SHUTDOWN -> DashColors.Red
 }
 
 /**
- * Locks or unlocks the PC's always-on PIN screen (separate from the Windows "Lock" button above:
- * this one stays locked permanently -- through sleep, restart and shutdown -- until unlocked here
- * or with the PIN at the PC itself).
+ * The PC's always-on PIN screen (separate from the Windows "Lock" action above: this one stays locked
+ * permanently -- through sleep, restart and shutdown -- until unlocked here or with the PIN at the PC itself).
+ * The lock logic and callbacks are unchanged from the previous dashboard.
  */
 @Composable
-private fun LockCard(c: RemoteController) {
+private fun PinSecurityCard(c: RemoteController) {
     var showPinDialog by remember { mutableStateOf(false) }
     val state = c.lockState
-    val cs = MaterialTheme.colorScheme
     val badgeText: String
     val badgeColor: Color
+    val title: String
+    val subtitle: String
     when {
-        state == null -> { badgeText = "Checking…"; badgeColor = cs.onSurfaceVariant }
-        state.locked -> { badgeText = "Locked"; badgeColor = Palette.Warn }
-        state.pinSet -> { badgeText = "Unlocked"; badgeColor = Palette.Good }
-        else -> { badgeText = "No PIN set"; badgeColor = cs.onSurfaceVariant }
+        state == null -> { badgeText = "Checking…"; badgeColor = DashColors.Muted; title = "Checking PIN lock"; subtitle = "Reading the lock state from the PC" }
+        state.locked -> { badgeText = "Locked"; badgeColor = DashColors.Amber; title = "Your PC is PIN-locked"; subtitle = "Unlock it here or with the PIN at the PC" }
+        state.pinSet -> { badgeText = "Unlocked"; badgeColor = DashColors.Green; title = "Your PC is accessible"; subtitle = "No PIN lock is active" }
+        else -> { badgeText = "No PIN set"; badgeColor = DashColors.Muted; title = "No PIN set yet"; subtitle = "Set a PIN to enable locking" }
     }
 
-    DashPanel(Modifier.fillMaxWidth(), padding = 12.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(badgeColor.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center
-            ) { DashIcon(Glyph.LOCK, badgeColor, iconSize = 20.dp) }
-            Spacer(Modifier.width(10.dp))
-            Text("PIN lock", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            DashStatusPill(badgeText, badgeColor, pulsing = false)
+    DashPanel(Modifier.fillMaxWidth()) {
+        DashSectionHeader(Glyph.SHIELD, "PIN Security") {
+            DashStatusPill(badgeText, badgeColor, pulsing = false, glyph = Glyph.LOCK)
         }
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (state?.locked == true) {
-                Button(
-                    onClick = { c.unlockPc() }, shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f).height(44.dp)
-                ) { Text("Unlock", maxLines = 1) }
-            } else {
-                FilledTonalButton(
-                    onClick = { c.lockPc() }, shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f).height(44.dp),
-                    enabled = state?.pinSet == true
-                ) { Text("Lock now", maxLines = 1) }
+        Spacer(Modifier.height(12.dp))
+        val shape = RoundedCornerShape(16.dp)
+        Column(
+            Modifier.fillMaxWidth().clip(shape).background(DashColors.Inner).border(1.dp, DashColors.PanelBorder, shape).padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(44.dp).clip(CircleShape).background(badgeColor.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
+                    DashIcon(Glyph.LOCK, badgeColor, iconSize = 24.dp)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 2)
+                    Text(subtitle, style = MaterialTheme.typography.labelMedium, color = DashColors.Muted, maxLines = 2)
+                }
             }
-            OutlinedButton(
-                onClick = { showPinDialog = true }, shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f).height(44.dp)
-            ) { Text(if (state?.pinSet == true) "Change PIN" else "Set PIN", maxLines = 1) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state?.locked == true) {
+                    DashOutlineButton("Unlock", Glyph.LOCK, DashColors.Green, { c.unlockPc() }, Modifier.weight(1f))
+                } else {
+                    DashOutlineButton("Lock now", Glyph.LOCK, Color(0xFFD5DEEF), { c.lockPc() }, Modifier.weight(1f), enabled = state?.pinSet == true)
+                }
+                DashOutlineButton(if (state?.pinSet == true) "Change PIN" else "Set PIN", Glyph.KEY, DashColors.Cyan, { showPinDialog = true }, Modifier.weight(1f))
+            }
         }
     }
 
@@ -239,4 +273,80 @@ private fun SetPinDialog(onDismiss: () -> Unit, onSave: (String, (Boolean, Strin
     )
 }
 
-private fun gb(bytes: Long): String = String.format(Locale.US, "%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+// ---------------------------------------------------------------------------------------------
+// Settings: only things that really work in this app today
+// ---------------------------------------------------------------------------------------------
+
+@Composable
+private fun SettingsPage(c: RemoteController) {
+    val context = LocalContext.current
+    val version = remember { appVersion(context) }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().displayCutoutPadding().padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Settings", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+
+            DashPanel(Modifier.fillMaxWidth()) {
+                DashSectionHeader(Glyph.MONITOR, "Connected PC")
+                Spacer(Modifier.height(10.dp))
+                SettingsRow("Name", c.status?.hostname ?: "Windows PC")
+                SettingsRow("Address", c.baseUrl.trim().ifBlank { "–" })
+                SettingsRow("Status", if (c.reachable) "Connected" else "Offline")
+            }
+
+            // The same preset the Live Screen card uses: stored and applied through the same callback.
+            DashPanel(Modifier.fillMaxWidth()) {
+                DashSectionHeader(Glyph.PLAY, "Default stream quality")
+                Spacer(Modifier.height(6.dp))
+                Column(Modifier.selectableGroup()) {
+                    Quality.values().forEach { q ->
+                        val on = q == c.quality
+                        Row(
+                            Modifier.fillMaxWidth().selectable(selected = on, role = Role.RadioButton, onClick = { c.setQuality(q) }).padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier.size(20.dp).clip(CircleShape).border(2.dp, if (on) DashColors.Cyan else DashColors.PanelBorder, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) { if (on) Box(Modifier.size(10.dp).clip(CircleShape).background(DashColors.Cyan)) }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("${q.label} · ${q.fps} fps", style = MaterialTheme.typography.titleSmall)
+                                Text(q.hint, style = MaterialTheme.typography.labelSmall, color = DashColors.Muted)
+                            }
+                        }
+                    }
+                }
+            }
+
+            DashPanel(Modifier.fillMaxWidth()) {
+                DashSectionHeader(Glyph.GEAR, "Account")
+                Spacer(Modifier.height(10.dp))
+                DashOutlineButton("Log out", Glyph.LOGOUT, DashColors.Red, { c.disconnect() }, Modifier.fillMaxWidth())
+                Spacer(Modifier.height(10.dp))
+                Text("Logging out forgets the saved password on this phone.", style = MaterialTheme.typography.labelSmall, color = DashColors.Muted)
+                if (version.isNotBlank()) {
+                    Spacer(Modifier.height(10.dp))
+                    SettingsRow("App version", version)
+                }
+            }
+            Spacer(Modifier.height(2.dp))
+        }
+    }
+}
+
+private fun Modifier: Modifier = this.then(Modifier.padding(0.dp))
+
+@Composable
+private fun SettingsRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = DashColors.Muted, modifier = Modifier.width(96.dp))
+        Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), textAlign = TextAlign.End, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+private fun appVersion(context: Context): String = try {
+    context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+} catch (_: Exception) { "" }
