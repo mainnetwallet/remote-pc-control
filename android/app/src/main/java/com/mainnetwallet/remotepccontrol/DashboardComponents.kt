@@ -59,6 +59,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.cos
@@ -202,25 +203,6 @@ internal fun DashPanel(modifier: Modifier = Modifier, padding: Dp = 16.dp, conte
     )
 }
 
-/** A titled group of content, with an optional short note on the right ("Live", "Waiting for data"). */
-@Composable
-internal fun DashSection(title: String, trailing: String? = null, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (trailing != null) Text(
-                trailing, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-        }
-        content()
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Header and status
-// ---------------------------------------------------------------------------------------------
-
 @Composable
 private fun DashPulseDot(color: Color) {
     val transition = rememberInfiniteTransition(label = "pulse")
@@ -260,56 +242,42 @@ internal fun DashStatusPill(text: String, color: Color, pulsing: Boolean) {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Top bar
+// ---------------------------------------------------------------------------------------------
+
+/** One slim row: PC icon, name and uptime, connection badge, log out. */
 @Composable
-internal fun DashHeader(hostname: String, reachable: Boolean, uptime: String, onLogout: () -> Unit) {
+internal fun DashTopBar(hostname: String, reachable: Boolean, uptime: String, onLogout: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(28.dp)
-    val tileShape = RoundedCornerShape(16.dp)
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(Brush.linearGradient(listOf(DashColors.HeroTop, DashColors.HeroBottom)))
-            .border(1.dp, DashColors.HeroBorder, shape)
-            .padding(16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(52.dp).clip(tileShape)
-                    .background(cs.primary.copy(alpha = 0.16f))
-                    .border(1.dp, cs.primary.copy(alpha = 0.35f), tileShape),
-                contentAlignment = Alignment.Center
-            ) { DashIcon(Glyph.MONITOR, cs.primary, iconSize = 28.dp) }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(hostname, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(6.dp))
-                DashStatusPill(if (reachable) "Connected" else "Offline, retrying", if (reachable) Palette.Good else Palette.Bad, reachable)
-            }
-            Spacer(Modifier.width(8.dp))
-            Box(
-                Modifier.size(48.dp).clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.06f))
-                    .clickable(onClickLabel = "Log out", role = Role.Button, onClick = onLogout)
-                    .semantics { contentDescription = "Log out" },
-                contentAlignment = Alignment.Center
-            ) { DashIcon(Glyph.LOGOUT, cs.onSurfaceVariant, iconSize = 22.dp) }
+    val tileShape = RoundedCornerShape(12.dp)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(40.dp).clip(tileShape)
+                .background(cs.primary.copy(alpha = 0.16f))
+                .border(1.dp, cs.primary.copy(alpha = 0.35f), tileShape),
+            contentAlignment = Alignment.Center
+        ) { DashIcon(Glyph.MONITOR, cs.primary, iconSize = 22.dp) }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(hostname, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(uptime, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Spacer(Modifier.height(14.dp))
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.22f))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            DashIcon(Glyph.CLOCK, cs.onSurfaceVariant, iconSize = 16.dp)
-            Spacer(Modifier.width(8.dp))
-            Text(uptime, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+        Spacer(Modifier.width(8.dp))
+        DashStatusPill(if (reachable) "Connected" else "Offline", if (reachable) Palette.Good else Palette.Bad, reachable)
+        Spacer(Modifier.width(6.dp))
+        Box(
+            Modifier.size(44.dp).clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.06f))
+                .clickable(onClickLabel = "Log out", role = Role.Button, onClick = onLogout)
+                .semantics { contentDescription = "Log out" },
+            contentAlignment = Alignment.Center
+        ) { DashIcon(Glyph.LOGOUT, cs.onSurfaceVariant, iconSize = 20.dp) }
     }
 }
 
 // ---------------------------------------------------------------------------------------------
-// System gauges
+// System: CPU / memory / disk rings and the two network rates, in one panel
 // ---------------------------------------------------------------------------------------------
 
 @Composable
@@ -320,11 +288,11 @@ private fun DashRing(percent: Int?, color: Color, ringSize: Dp) {
         animationSpec = tween(durationMillis = 700),
         label = "gauge"
     )
-    val numberStyle = (if (ringSize >= 76.dp) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium)
+    val numberStyle = (if (ringSize >= 56.dp) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall)
         .copy(fontFeatureSettings = "tnum")
     Box(Modifier.size(ringSize), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            val stroke = 8.dp.toPx()
+            val stroke = 6.dp.toPx()
             val topLeft = Offset(stroke / 2, stroke / 2)
             val arc = Size(size.width - stroke, size.height - stroke)
             drawArc(Color.White.copy(alpha = 0.07f), 0f, 360f, false, topLeft = topLeft, size = arc, style = Stroke(width = stroke))
@@ -337,15 +305,14 @@ private fun DashRing(percent: Int?, color: Color, ringSize: Dp) {
             Text(if (percent == null) "–" else "$percent", style = numberStyle, maxLines = 1)
             if (percent != null) Text(
                 "%", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 3.dp)
+                modifier = Modifier.padding(bottom = 2.dp)
             )
         }
     }
 }
 
-/** One resource card: ring with the percentage, the name, used / total, and a word for the load level. */
 @Composable
-internal fun DashGauge(label: String, percent: Int?, detail: String, ringSize: Dp, modifier: Modifier = Modifier) {
+private fun DashGaugeCell(label: String, percent: Int?, detail: String, ringSize: Dp, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
     val color = when {
         percent == null -> cs.onSurfaceVariant
@@ -353,61 +320,77 @@ internal fun DashGauge(label: String, percent: Int?, detail: String, ringSize: D
         percent >= 70 -> Palette.Warn
         else -> cs.primary
     }
+    // A word next to the name when the load is not normal, so colour is never the only signal.
     val level = when {
-        percent == null -> "No data"
+        percent == null -> null
         percent >= 90 -> "Critical"
         percent >= 70 -> "High"
-        else -> "Normal"
+        else -> null
     }
-    DashPanel(modifier, padding = 12.dp) {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            DashRing(percent, color, ringSize)
-            Spacer(Modifier.height(10.dp))
-            Text(label, style = MaterialTheme.typography.titleSmall, maxLines = 1)
-            Spacer(Modifier.height(2.dp))
-            Text(
-                detail, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
-                textAlign = TextAlign.Center, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(level, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        DashRing(percent, color, ringSize)
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            if (level != null) Text(" " + level, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)
         }
+        Text(
+            detail, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
+            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Network
-// ---------------------------------------------------------------------------------------------
-
 @Composable
-internal fun DashRateTile(label: String, bytesPerSec: Long?, glyph: Glyph, tint: Color, modifier: Modifier = Modifier) {
+private fun DashRateCell(label: String, bytesPerSec: Long?, glyph: Glyph, tint: Color, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(14.dp)
     val text = bytesPerSec?.let { formatBytes(it) }
     val number = text?.substringBefore(' ') ?: "–"
     val unit = if (text == null) "" else text.substringAfter(' ') + "/s"
-    Column(
+    Row(
         modifier
             .clip(shape)
             .background(tint.copy(alpha = 0.10f))
             .border(1.dp, tint.copy(alpha = 0.28f), shape)
-            .padding(12.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(28.dp).clip(CircleShape).background(tint.copy(alpha = 0.20f)), contentAlignment = Alignment.Center) {
-                DashIcon(glyph, tint, iconSize = 16.dp)
+        Box(Modifier.size(28.dp).clip(CircleShape).background(tint.copy(alpha = 0.20f)), contentAlignment = Alignment.Center) {
+            DashIcon(glyph, tint, iconSize = 16.dp)
+        }
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(number, style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"), maxLines = 1)
+                Spacer(Modifier.width(3.dp))
+                Text(unit, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
             }
-            Spacer(Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+internal fun DashSystemPanel(
+    cpu: Int?, memory: Int?, disk: Int?, memDetail: String, diskDetail: String,
+    rx: Long?, tx: Long?, modifier: Modifier = Modifier
+) {
+    DashPanel(modifier, padding = 12.dp) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val ring = (maxWidth / 3 - 28.dp).coerceIn(48.dp, 60.dp)
+            Row(Modifier.fillMaxWidth()) {
+                DashGaugeCell("CPU", cpu, "Processor", ring, Modifier.weight(1f))
+                DashGaugeCell("Memory", memory, memDetail, ring, Modifier.weight(1f))
+                DashGaugeCell("Disk", disk, diskDetail, ring, Modifier.weight(1f))
+            }
         }
         Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(number, style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"), maxLines = 1)
-            Spacer(Modifier.width(4.dp))
-            Text(
-                unit, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1,
-                modifier = Modifier.padding(bottom = 3.dp)
-            )
+        Box(Modifier.fillMaxWidth().height(1.dp).background(DashColors.PanelBorder))
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DashRateCell("Download", rx, Glyph.DOWN, DashColors.Blue, Modifier.weight(1f))
+            DashRateCell("Upload", tx, Glyph.UP, DashColors.Violet, Modifier.weight(1f))
         }
     }
 }
@@ -416,14 +399,14 @@ internal fun DashRateTile(label: String, bytesPerSec: Long?, glyph: Glyph, tint:
 // Power
 // ---------------------------------------------------------------------------------------------
 
-/** Touch tile for one power action. Destructive actions get a stronger tint and a heavier border. */
+/** Compact touch tile for one power action. Destructive actions get a stronger tint and a heavier border. */
 @Composable
 internal fun DashPowerTile(
-    label: String, caption: String, glyph: Glyph, tint: Color, destructive: Boolean,
+    label: String, glyph: Glyph, tint: Color, destructive: Boolean,
     onClick: () -> Unit, modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(18.dp)
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(targetValue = if (pressed) 0.96f else 1f, animationSpec = tween(durationMillis = 120), label = "press")
@@ -435,16 +418,17 @@ internal fun DashPowerTile(
             .background(tint.copy(alpha = if (destructive) 0.16f else 0.10f))
             .border(if (destructive) 1.5.dp else 1.dp, tint.copy(alpha = if (destructive) 0.60f else 0.28f), shape)
             .clickable(interactionSource = interaction, indication = LocalIndication.current, role = Role.Button, onClick = onClick)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(horizontal = 6.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(tint.copy(alpha = 0.20f)), contentAlignment = Alignment.Center) {
-            DashIcon(glyph, tint, iconSize = 22.dp)
+        Box(Modifier.size(32.dp).clip(CircleShape).background(tint.copy(alpha = 0.20f)), contentAlignment = Alignment.Center) {
+            DashIcon(glyph, tint, iconSize = 18.dp)
         }
-        Column {
-            Text(label, style = MaterialTheme.typography.titleMedium, color = if (destructive) tint else cs.onSurface, maxLines = 1)
-            Text(caption, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
-        }
+        Text(
+            label, style = MaterialTheme.typography.labelMedium, color = if (destructive) tint else cs.onSurface,
+            maxLines = 1, textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -458,12 +442,12 @@ private fun DashQualityChip(q: Quality, on: Boolean, onClick: () -> Unit, modifi
     val shape = RoundedCornerShape(14.dp)
     Column(
         modifier
-            .heightIn(min = 56.dp)
+            .heightIn(min = 44.dp)
             .clip(shape)
             .background(if (on) cs.primary.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.04f))
             .border(if (on) 1.5.dp else 1.dp, if (on) cs.primary else DashColors.PanelBorder, shape)
             .selectable(selected = on, role = Role.RadioButton, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
