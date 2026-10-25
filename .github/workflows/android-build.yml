@@ -45,7 +45,7 @@ jobs:
       - name: Show build errors
         if: failure()
         run: |
-          ERR=$(grep -E '^e: |What went wrong|^> |error:' "$RUNNER_TEMP/gradle.log" | sed 's#file://[^ ]*/android/##' | head -40 || true)
+          ERR=$(grep -E '^e: |What went wrong|^> Task .* FAILED|^> (Compilation|Execution|Could not|Failed)|error:' "$RUNNER_TEMP/gradle.log" | sed 's#file://[^ ]*/android/##' | head -80 || true)
           echo "$ERR" >> "$GITHUB_STEP_SUMMARY"
           ERR="${ERR//'%'/'%25'}"; ERR="${ERR//$'\r'/'%0D'}"; ERR="${ERR//$'\n'/'%0A'}"
           echo "::error title=Gradle build errors::${ERR:0:3500}"
