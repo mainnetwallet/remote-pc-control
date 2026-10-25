@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -75,17 +77,26 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
     // Back from Settings returns to Home instead of leaving the app.
     BackHandler(enabled = current == NavTab.SETTINGS) { tab = NavTab.HOME.name }
 
-    Column(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(DashColors.BgTop, DashColors.BgBottom)))) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+    // A real Scaffold bottomBar: the bar is measured first and the page gets its height as content padding, so the
+    // page (and its scroll area) always ends exactly where the bar starts and can never run underneath it.
+    // The bar applies the navigation-bar inset itself; each page applies the status-bar/cutout inset at its top.
+    Scaffold(
+        modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(DashColors.BgTop, DashColors.BgBottom))),
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            DashBottomNav(selected = current) { picked ->
+                when (picked) {
+                    NavTab.LIVE -> c.startScreen()      // the same call the Start Screen Session button makes
+                    else -> tab = picked.name
+                }
+            }
+        }
+    ) { inner ->
+        Box(Modifier.padding(inner).fillMaxSize()) {
             when (current) {
                 NavTab.SETTINGS -> SettingsPage(c)
                 else -> HomePage(c, history, onPower)
-            }
-        }
-        DashBottomNav(selected = current) { picked ->
-            when (picked) {
-                NavTab.LIVE -> c.startScreen()      // the same call the Start Screen Session button makes
-                else -> tab = picked.name
             }
         }
     }
@@ -95,10 +106,10 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
 private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (PowerAction) -> Unit) {
     val status = c.status
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().displayCutoutPadding().padding(horizontal = 14.dp, vertical = 10.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().displayCutoutPadding().padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             DashConnectionHeader(
                 hostname = status?.hostname ?: "Windows PC",
                 reachable = c.reachable,
@@ -111,11 +122,11 @@ private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (Powe
                 DashSectionHeader(Glyph.MONITOR, "Live Screen") {
                     DashChip(Glyph.MONITOR, resolutionText(c.quality))
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
                 DashPresetSelector(c.quality, { c.setQuality(it) })
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(c.quality.hint, style = MaterialTheme.typography.labelSmall, color = DashColors.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 DashPrimaryButton("Start Screen Session", Glyph.PLAY, { c.startScreen() }, Modifier.fillMaxWidth())
             }
 
@@ -125,7 +136,7 @@ private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (Powe
             // the confirmation dialogs live in MainActivity.
             DashPanel(Modifier.fillMaxWidth()) {
                 DashSectionHeader(Glyph.BOLT, "Quick Actions", DashColors.Cyan)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val perRow = if (maxWidth < 300.dp) 2 else 4
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -146,7 +157,7 @@ private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (Powe
             PinSecurityCard(c)
 
             if (c.notice.text.isNotBlank()) DashNotice(c.notice.text, c.notice.isError)
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(8.dp))   // the last card can scroll fully clear of the bar's top edge
         }
     }
 }
@@ -206,15 +217,15 @@ private fun PinSecurityCard(c: RemoteController) {
         DashSectionHeader(Glyph.SHIELD, "PIN Security") {
             DashStatusPill(badgeText, badgeColor, pulsing = false, glyph = Glyph.LOCK)
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         val shape = RoundedCornerShape(16.dp)
         Column(
-            Modifier.fillMaxWidth().clip(shape).background(DashColors.Inner).border(1.dp, DashColors.PanelBorder, shape).padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            Modifier.fillMaxWidth().clip(shape).background(DashColors.Inner).border(1.dp, DashColors.PanelBorder, shape).padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clip(CircleShape).background(badgeColor.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
-                    DashIcon(Glyph.LOCK, badgeColor, iconSize = 24.dp)
+                Box(Modifier.size(38.dp).clip(CircleShape).background(badgeColor.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
+                    DashIcon(Glyph.LOCK, badgeColor, iconSize = 21.dp)
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
@@ -282,10 +293,10 @@ private fun SettingsPage(c: RemoteController) {
     val context = LocalContext.current
     val version = remember { appVersion(context) }
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().displayCutoutPadding().padding(horizontal = 14.dp, vertical = 10.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().displayCutoutPadding().padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Settings", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
 
             DashPanel(Modifier.fillMaxWidth()) {

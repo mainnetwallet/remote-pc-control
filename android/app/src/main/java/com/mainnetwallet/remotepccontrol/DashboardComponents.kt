@@ -223,7 +223,7 @@ internal fun DashIcon(glyph: Glyph, tint: Color, modifier: Modifier = Modifier, 
 
 /** Dark-blue card with a faint vertical gradient and a subtle blue hairline border. */
 @Composable
-internal fun DashPanel(modifier: Modifier = Modifier, padding: Dp = 14.dp, content: @Composable ColumnScope.() -> Unit) {
+internal fun DashPanel(modifier: Modifier = Modifier, padding: Dp = 10.dp, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(22.dp)
     Column(
         modifier
@@ -239,9 +239,9 @@ internal fun DashPanel(modifier: Modifier = Modifier, padding: Dp = 14.dp, conte
 @Composable
 internal fun DashSectionHeader(glyph: Glyph, title: String, tint: Color = DashColors.Blue, trailing: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        DashIcon(glyph, tint, iconSize = 26.dp)
-        Spacer(Modifier.width(10.dp))
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontSize = 19.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        DashIcon(glyph, tint, iconSize = 22.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.width(8.dp))
         trailing()
     }
@@ -286,7 +286,7 @@ internal fun DashChip(glyph: Glyph, text: String, modifier: Modifier = Modifier)
     val shape = RoundedCornerShape(12.dp)
     Row(
         modifier.clip(shape).background(Color.White.copy(alpha = 0.05f)).border(1.dp, DashColors.PanelBorder, shape)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         DashIcon(glyph, DashColors.Muted, iconSize = 15.dp)
@@ -329,10 +329,10 @@ private fun DashMonitorIllustration(modifier: Modifier = Modifier) {
 @Composable
 internal fun DashConnectionHeader(hostname: String, reachable: Boolean, uptime: String?, address: String) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        DashMonitorIllustration(Modifier.width(104.dp))
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(hostname, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 26.sp, fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        DashMonitorIllustration(Modifier.width(84.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(hostname, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
             DashStatusPillPlain(if (reachable) "Connected" else "Offline", if (reachable) DashColors.Green else DashColors.Red, reachable)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (uptime != null) DashChip(Glyph.CLOCK, uptime)
@@ -388,20 +388,20 @@ private fun DashPresetCard(q: Quality, on: Boolean, onClick: () -> Unit, modifie
             .padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1.15f).clip(RoundedCornerShape(10.dp))) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1.5f).clip(RoundedCornerShape(10.dp))) {
             DashPresetThumb(q, Modifier.fillMaxSize())
             if (on) Box(
                 Modifier.align(Alignment.TopEnd).padding(3.dp).size(18.dp).clip(CircleShape).background(DashColors.Blue),
                 contentAlignment = Alignment.Center
             ) { DashIcon(Glyph.CHECK, Color.White, iconSize = 12.dp) }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(3.dp))
         Text(q.label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp), maxLines = 1, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
         Text(
             "${q.fps} fps", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
             color = DashColors.Muted, maxLines = 1, textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(1.dp))
     }
 }
 
@@ -431,7 +431,7 @@ internal fun DashPresetSelector(selected: Quality, onSelect: (Quality) -> Unit, 
 internal fun DashPrimaryButton(text: String, glyph: Glyph, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(16.dp)
     Row(
-        modifier.heightIn(min = 52.dp).clip(shape)
+        modifier.heightIn(min = 46.dp).clip(shape)
             .background(Brush.horizontalGradient(listOf(Color(0xFF1E6BFF), Color(0xFF2FA4FF))))
             .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
@@ -517,46 +517,51 @@ private fun DashMetricPanel(
         else -> null
     }
     Column(
-        modifier.clip(shape).background(DashColors.Inner).border(1.dp, DashColors.PanelBorder, shape).padding(top = 8.dp, start = 6.dp, end = 6.dp),
+        modifier.clip(shape).background(DashColors.Inner).border(1.dp, DashColors.PanelBorder, shape).padding(top = 6.dp, start = 4.dp, end = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { DashIcon(glyph, color, iconSize = 18.dp) }
-        DashRing(percent, color, 58.dp)
-        Spacer(Modifier.height(4.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { DashIcon(glyph, color, iconSize = 16.dp) }
+        DashRing(percent, color, 52.dp)
+        Spacer(Modifier.height(2.dp))
         Text(label + (level?.let { " · $it" } ?: ""), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(detail, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = DashColors.Muted, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.height(6.dp))
-        DashSparkline(history, color, Modifier.fillMaxWidth().height(26.dp), fixedMax = 100f)
+        Spacer(Modifier.height(4.dp))
+        DashSparkline(history, color, Modifier.fillMaxWidth().height(18.dp), fixedMax = 100f)
     }
 }
 
 @Composable
 private fun DashRateRow(bytesPerSec: Long?, glyph: Glyph, tint: Color) {
     val text = bytesPerSec?.let { formatBytes(it) }
-    val value = if (text == null) "–" else text + "/s"
+    val number = text?.substringBefore(' ') ?: "–"
+    val unit = if (text == null) "" else text.substringAfter(' ') + "/s"
+    // Number above unit: the pair needs far less width than "5.1 MB/s" on one line, so it is never cut off.
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(24.dp).clip(CircleShape).background(tint), contentAlignment = Alignment.Center) { DashIcon(glyph, Color.White, iconSize = 15.dp) }
-        Spacer(Modifier.width(6.dp))
-        Text(value, style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.size(22.dp).clip(CircleShape).background(tint), contentAlignment = Alignment.Center) { DashIcon(glyph, Color.White, iconSize = 14.dp) }
+        Spacer(Modifier.width(5.dp))
+        Column {
+            Text(number, style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"), maxLines = 1)
+            Text(unit, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = DashColors.Muted, maxLines = 1, softWrap = false)
+        }
     }
 }
 
 @Composable
 private fun DashNetworkPanel(rx: Long?, tx: Long?, history: List<Float>, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(16.dp)
-    Column(modifier.clip(shape).background(DashColors.Inner).border(1.dp, DashColors.PanelBorder, shape).padding(top = 8.dp, start = 6.dp, end = 6.dp)) {
+    Column(modifier.clip(shape).background(DashColors.Inner).border(1.dp, DashColors.PanelBorder, shape).padding(top = 6.dp, start = 4.dp, end = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            DashIcon(Glyph.WIFI, DashColors.Cyan, iconSize = 18.dp)
-            Spacer(Modifier.width(6.dp))
-            Text("Network", style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            DashIcon(Glyph.WIFI, DashColors.Cyan, iconSize = 16.dp)
+            Spacer(Modifier.width(4.dp))
+            Text("Network", style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp), maxLines = 1, softWrap = false)
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
         DashRateRow(rx, Glyph.DOWN, DashColors.Blue)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         DashRateRow(tx, Glyph.UP, DashColors.Violet)
         Spacer(Modifier.weight(1f, fill = true))
-        Spacer(Modifier.height(6.dp))
-        DashSparkline(history, DashColors.Amber, Modifier.fillMaxWidth().height(26.dp))
+        Spacer(Modifier.height(4.dp))
+        DashSparkline(history, DashColors.Amber, Modifier.fillMaxWidth().height(18.dp))
     }
 }
 
@@ -570,10 +575,10 @@ internal fun DashSystemPanel(
         DashSectionHeader(Glyph.BARS, "System Performance") {
             if (reachable) DashStatusPill("Live", DashColors.Green, pulsing = true) else DashStatusPill("Offline", DashColors.Red, pulsing = false)
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         // Values are stale while the PC is unreachable, so dim them.
         BoxWithConstraints(Modifier.fillMaxWidth().alpha(if (reachable) 1f else 0.55f)) {
-            val perRow = if (maxWidth >= 330.dp && fontScale <= 1.15f) 4 else 2
+            val perRow = if (maxWidth >= 340.dp && fontScale <= 1.15f) 4 else 2
             val gap = 8.dp
             val panels: List<@Composable (Modifier) -> Unit> = listOf(
                 { m -> DashMetricPanel(Glyph.CPU, "CPU", status?.cpu, "Processor load", DashColors.Blue, history.cpu, m, warn = true) },
@@ -612,17 +617,17 @@ internal fun DashPowerTile(
     Column(
         modifier
             .scale(scale)
-            .heightIn(min = 92.dp)
+            .heightIn(min = 74.dp)
             .clip(shape)
             .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.30f), tint.copy(alpha = 0.10f))))
             .border(1.dp, tint.copy(alpha = 0.55f), shape)
             .clickable(interactionSource = interaction, indication = LocalIndication.current, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 10.dp),
+            .padding(horizontal = 2.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        DashIcon(glyph, tint, iconSize = 28.dp)
-        Spacer(Modifier.height(6.dp))
+        DashIcon(glyph, tint, iconSize = 24.dp)
+        Spacer(Modifier.height(4.dp))
         Text(label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, textAlign = TextAlign.Center)
         Text(subtitle, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = DashColors.Muted, maxLines = 2, textAlign = TextAlign.Center)
     }
@@ -639,7 +644,7 @@ internal fun DashOutlineButton(
     val shape = RoundedCornerShape(14.dp)
     val c = if (enabled) tint else DashColors.Muted.copy(alpha = 0.5f)
     Row(
-        modifier.heightIn(min = 46.dp).clip(shape).background(c.copy(alpha = 0.08f)).border(1.5.dp, c.copy(alpha = 0.7f), shape)
+        modifier.heightIn(min = 44.dp).clip(shape).background(c.copy(alpha = 0.08f)).border(1.5.dp, c.copy(alpha = 0.7f), shape)
             .then(if (enabled) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
@@ -667,22 +672,22 @@ internal fun DashBottomNav(selected: NavTab, onSelect: (NavTab) -> Unit) {
             .border(1.dp, DashColors.PanelBorder, RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
             .navigationBarsPadding()
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             NavTab.values().forEach { tab ->
                 val on = tab == selected
                 val tint = if (on) DashColors.Blue else DashColors.Muted
                 val shape = RoundedCornerShape(16.dp)
                 Column(
-                    Modifier.weight(1f).heightIn(min = 56.dp).clip(shape)
+                    Modifier.weight(1f).heightIn(min = 52.dp).clip(shape)
                         .background(if (on) DashColors.Blue.copy(alpha = 0.14f) else Color.Transparent)
                         .selectable(selected = on, role = Role.Tab, onClick = { onSelect(tab) })
-                        .padding(vertical = 6.dp),
+                        .padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
                 ) {
-                    DashIcon(tab.glyph, tint, iconSize = 26.dp)
-                    Spacer(Modifier.height(2.dp))
+                    DashIcon(tab.glyph, tint, iconSize = 22.dp)
+                    Spacer(Modifier.height(1.dp))
                     Text(tab.label, style = MaterialTheme.typography.labelMedium, color = tint, maxLines = 1)
-                    Box(Modifier.padding(top = 3.dp).width(if (on) 36.dp else 0.dp).height(3.dp).clip(CircleShape).background(DashColors.Blue))
+                    Box(Modifier.padding(top = 2.dp).width(if (on) 32.dp else 0.dp).height(3.dp).clip(CircleShape).background(DashColors.Blue))
                 }
             }
         }
