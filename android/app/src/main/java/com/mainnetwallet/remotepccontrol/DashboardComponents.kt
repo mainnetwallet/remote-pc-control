@@ -412,20 +412,31 @@ private fun DashStatusPillPlain(text: String, color: Color, pulsing: Boolean) {
 // Live screen: quality presets
 // ---------------------------------------------------------------------------------------------
 
-/** Decorative preview tile for a preset (an illustration, never a capture of the PC). */
+/** Preset tile: six ascending bars, one more filled for each step up in quality (Low = 1 ... Ultra 120 = 6). */
 @Composable
 private fun DashPresetThumb(q: Quality, modifier: Modifier = Modifier) {
-    // Same muted tile for every preset: the label and fps already tell them apart, colour would only add noise.
-    val (skyTop, skyBottom) = Color(0xFF2B3446) to Color(0xFF465470)
     Canvas(modifier) {
         val w = size.width; val h = size.height
-        drawRect(Brush.verticalGradient(listOf(skyTop, skyBottom)))
-        val far = Path().apply { moveTo(0f, h * 0.75f); lineTo(w * 0.30f, h * 0.30f); lineTo(w * 0.55f, h * 0.62f); lineTo(w * 0.75f, h * 0.38f); lineTo(w, h * 0.75f); close() }
-        drawPath(far, Color(0xFF1F2736))
-        val near = Path().apply { moveTo(0f, h); lineTo(w * 0.22f, h * 0.60f); lineTo(w * 0.50f, h * 0.88f); lineTo(w * 0.80f, h * 0.55f); lineTo(w, h); close() }
-        drawPath(near, Color(0xFF151B27))
+        drawRect(Brush.verticalGradient(listOf(Color(0xFF232A38), Color(0xFF181D28))))
+        val n = 6
+        val filled = q.ordinal + 1
+        val barW = w * 0.075f
+        val gap = w * 0.035f
+        val total = n * barW + (n - 1) * gap
+        val x0 = (w - total) / 2f
+        val baseY = h * 0.88f
+        for (i in 0 until n) {
+            val bh = h * (0.22f + 0.11f * i)
+            drawRoundRect(
+                if (i < filled) DashColors.Blue else Color.White.copy(alpha = 0.12f),
+                Offset(x0 + i * (barW + gap), baseY - bh), Size(barW, bh), CornerRadius(1.5.dp.toPx())
+            )
+        }
     }
 }
+
+/** Short width tag shown on the tile: the real maximum frame width of the preset ("FULL" = the PC's own size). */
+private fun presetTag(q: Quality): String = if (q.maxWidth == 0) "FULL" else q.maxWidth.toString()
 
 @Composable
 private fun DashPresetCard(q: Quality, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -442,6 +453,11 @@ private fun DashPresetCard(q: Quality, on: Boolean, onClick: () -> Unit, modifie
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(2.1f).clip(RoundedCornerShape(10.dp))) {
             DashPresetThumb(q, Modifier.fillMaxSize())
+            Text(
+                presetTag(q), Modifier.align(Alignment.TopStart).padding(start = 4.dp, top = 2.dp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.SemiBold),
+                color = DashColors.Muted, maxLines = 1
+            )
             if (on) Box(
                 Modifier.align(Alignment.TopEnd).padding(3.dp).size(18.dp).clip(CircleShape).background(DashColors.Blue),
                 contentAlignment = Alignment.Center
