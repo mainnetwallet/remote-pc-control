@@ -297,7 +297,7 @@ flowchart TB
 | File | Role | Key functions, classes or routes |
 |---|---|---|
 | `main.py` | FastAPI app. Routes, HTTP failure-limit middleware, startup and shutdown, static dashboard. | `lifespan` validates settings, warns when not elevated, starts `webrtc.warm_up` and `tailnet.autostart` in threads, and closes WebRTC sessions and the built-in Tailscale on exit. `repeated_failure_limit` is the middleware. |
-| `config.py` | Reads `.env` into `settings`. Frame-rate helpers. | `Settings`, `fps_setting`, `monitor_hz`, `validate_settings`. `FPS_CEILING=120`, `WS_FPS_CEILING=60`, `MIN_TOKEN_LEN=4`. |
+| `config.py` | Reads `.env` into `settings`. Frame-rate helpers. | `Settings`, `fps_setting`, `monitor_hz`, `validate_settings`. `FPS_CEILING=120`, `WS_FPS_CEILING=120` (same as `FPS_CEILING`), `MIN_TOKEN_LEN=4`. |
 | `paths.py` | Where data lives. | `frozen()` (inside the PyInstaller exe), `data_dir()` (current folder from source; `%LOCALAPPDATA%\RemotePCControl` for the exe, or the exe folder if it already holds a `.env`). |
 | `security.py` | Token check, wrong-token lockout, repeated-failure limiter. | `require_auth`, `verify_token`, `token_ok`, `client_key`, `is_blocked`, `record_fail`, `record_success`, `request_blocked`, `record_request_result`, `reset_all`. |
 | `monitor.py` | System status. | `snapshot()` (CPU, memory, disk, network rate, uptime, hostname, elevated flag), `is_elevated()`. |

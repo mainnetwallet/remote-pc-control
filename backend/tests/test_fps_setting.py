@@ -17,11 +17,11 @@ def test_auto_follows_the_monitor(hz, monkeypatch):
     assert fps_setting("auto", "20") == min(FPS_CEILING, hz or FPS_CEILING)
 
 
-def test_websocket_ceiling_is_lower_than_webrtc(monkeypatch):
+def test_websocket_ceiling_is_the_same_as_webrtc(monkeypatch):
     monkeypatch.setattr(config, "monitor_hz", lambda: 144)
-    assert fps_setting("auto", "20", WS_FPS_CEILING) == WS_FPS_CEILING == 60
+    assert fps_setting("auto", "20", WS_FPS_CEILING) == WS_FPS_CEILING == FPS_CEILING == 120
     assert fps_setting("auto", "20") == FPS_CEILING == 120
-    assert fps_setting("500", "20", WS_FPS_CEILING) == 60
+    assert fps_setting("500", "20", WS_FPS_CEILING) == 120
 
 
 def test_empty_and_garbage_use_the_default(monkeypatch):

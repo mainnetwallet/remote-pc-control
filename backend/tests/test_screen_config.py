@@ -42,8 +42,8 @@ def test_defaults_come_from_settings():
     ({"max_width": -5}, (0, 10, 55)),                      # negative -> native
     ({"fps": 0}, (1280, 1, 55)),
     ({"fps": -3}, (1280, 1, 55)),
-    ({"fps": 61}, (1280, 60, 55)),
-    ({"fps": 1000}, (1280, 60, 55)),
+    ({"fps": 121}, (1280, 120, 55)),
+    ({"fps": 1000}, (1280, 120, 55)),
     ({"quality": 1}, (1280, 10, 25)),
     ({"quality": 24}, (1280, 10, 25)),
     ({"quality": 91}, (1280, 10, 90)),
@@ -136,8 +136,8 @@ def test_config_is_applied_live_and_answered_with_fresh_screen_message(stream):
 
 def test_out_of_range_config_is_clamped_in_the_reply(stream):
     stream.receive_json(); stream.receive_bytes()
-    stream.send_json({"type": "config", "max_width": 10, "fps": 99, "quality": 5})
-    assert stream.receive_json() == {"type": "screen", "width": 320, "height": 180, "max_width": 320, "fps": 60, "quality": 25}
+    stream.send_json({"type": "config", "max_width": 10, "fps": 999, "quality": 5})
+    assert stream.receive_json() == {"type": "screen", "width": 320, "height": 180, "max_width": 320, "fps": 120, "quality": 25}
     stream.receive_bytes()
     stream.send_json({"type": "config", "max_width": 99999, "fps": 0, "quality": 500})
     reply = stream.receive_json()

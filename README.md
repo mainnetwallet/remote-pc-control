@@ -213,7 +213,7 @@ It is a personal-use debug build, not a Play Store release. Screens: **Dashboard
 | QHD 120 | 2560 px | 120 | 25 Mbit/s |
 | 4K | 3840 px | 120 | 30 Mbit/s |
 
-Native is the default: full PC resolution at the highest fps the PC can deliver. Use it on the same Wi-Fi or Tailscale for the sharpest picture. Ultra 90, QHD 120 and 4K need a PC, link and phone that all keep up. The WebSocket JPEG fallback is limited to 60 fps.
+Native is the default: full PC resolution at the highest fps the PC can deliver. Use it on the same Wi-Fi or Tailscale for the sharpest picture. Ultra 90, QHD 120 and 4K need a PC, link and phone that all keep up. The WebSocket JPEG fallback offers the same presets and the same 120 fps ceiling (JPEG encoding on the CPU is the limit there, so expect fewer fps at QHD and 4K).
 
 Build it yourself: open `android/` in Android Studio (JDK 17, SDK 35) → **Build APK(s)**, or run `gradle assembleDebug` in `android/`.
 

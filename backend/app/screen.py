@@ -6,7 +6,7 @@ Protocol (JSON text frames, after the client sends {"token": "..."} first):
               "max_width":..,"fps":..,"quality":..}, then binary JPEG frames.
               client -> server (any time while streaming, all fields optional):
       {"type":"config","max_width":1920,"fps":15,"quality":70}
-          max_width 0 (native) or 320..3840, fps 1..60, quality 25..90; out-of-range values are
+          max_width 0 (native) or 320..3840, fps 1..120, quality 25..90; out-of-range values are
           clamped, unusable ones ignored. Applied live; the server answers with a fresh
           {"type":"screen",...} (carrying the values now in effect) followed by a new frame.
               {"type":"ack"}   send one after each frame you have shown. Once the server has seen an ack it

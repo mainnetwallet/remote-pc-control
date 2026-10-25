@@ -26,7 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CODE_FPS_CAP = 120         # FPS_CEILING (WebRTC) in backend/app/config.py
-WS_FPS_CAP = 60            # WS_FPS_CEILING (JPEG over WebSocket)
+WS_FPS_CAP = 120           # WS_FPS_CEILING (JPEG over WebSocket), same as the WebRTC ceiling
 TEST_SECONDS = 2.0
 WIDTHS = (960, 1280, 1920, 2560, 3840)
 
@@ -229,7 +229,7 @@ def main() -> int:
     rec_rtc = clamp(min(limits_rtc) * 0.8)
 
     print("\n=== Recommendation ===")
-    print(f"REMOTE_PC_FPS={rec_ws}          (WebSocket JPEG mode, 1280 wide, max 60)")
+    print(f"REMOTE_PC_FPS={rec_ws}          (WebSocket JPEG mode, 1280 wide, max 120)")
     print(f"REMOTE_PC_RTC_FPS={rec_rtc}      (WebRTC mode)")
     if best: print(f"REMOTE_PC_RTC_ENCODER={best}   (hardware encoder preferred; 'auto' picks the same)")
     if min(limits_rtc) * 0.8 > CODE_FPS_CAP:

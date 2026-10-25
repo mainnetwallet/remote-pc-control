@@ -3,10 +3,10 @@ from dotenv import load_dotenv
 from .paths import data_dir, frozen
 load_dotenv(data_dir() / ".env" if frozen() else None)   # exe: the .env in its data folder; source: found from the current folder as before
 
-# Highest frame rate the app accepts: WebRTC video (H.264, hardware encoder) up to 120, the WebSocket JPEG stream up to 60
-# (JPEG encoding on the CPU cannot keep up with more).
+# Highest frame rate the app accepts: 120 for both the WebRTC video (H.264) and the WebSocket JPEG stream, so the two
+# transports offer the same presets. The stream still cannot go faster than this PC captures and encodes.
 FPS_CEILING = 120
-WS_FPS_CEILING = 60
+WS_FPS_CEILING = FPS_CEILING
 
 def monitor_hz():
     """Refresh rate of the primary monitor (Windows), or None when it cannot be read."""
