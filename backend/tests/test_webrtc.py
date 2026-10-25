@@ -808,3 +808,55 @@ def test_probe_marks_a_broken_hardware_encoder_as_failed(monkeypatch):
     monkeypatch.setattr(av.CodecContext, "create", staticmethod(create), raising=False)
     assert webrtc_encoder.probe_backends(Cls) == "x264"
     assert Cls.failed == {"nvenc"}
+
+
+# ---------------------------------------------------------------- steady frame rate: overlap and encoder re-opening
+
+def test_track_captures_next_frame_early_only_when_the_pc_cannot_keep_up():
+    """When encode + capture take longer than the frame interval, the next capture starts while the last frame is
+    encoded; a loop that keeps up does not (the newest picture is captured right when it is needed)."""
+    async def slow(t):
+        await t.recv()
+        await asyncio.sleep(0.03)            # the "encoder" needs 30 ms, a 120 fps interval is 8 ms
+        await t.recv()
+        return t._pre
+    pre = run_track(FakeCapture((64, 48)), webrtc.RtcConfig(0, 120, 2000), slow)
+    assert pre is not None and pre[1].fps == 120
+
+    async def keeps_up(t):
+        await t.recv()
+        await asyncio.sleep(0.005)           # 5 ms of work in a 100 ms interval: the PC keeps up
+        await t.recv()
+        return t._pre
+    assert run_track(FakeCapture((64, 48)), webrtc.RtcConfig(0, 10, 2000), keeps_up) is None
+
+
+def test_prefetched_frame_is_dropped_when_the_config_changes():
+    async def body(t):
+        await t.recv()
+        await asyncio.sleep(0.03)
+        await t.recv()
+        assert t._pre is not None
+        t.config = webrtc.RtcConfig(0, 120, 3000)      # new config object: the old prefetch no longer matches
+        frame = await t.recv()
+        return frame
+    frame = run_track(FakeCapture((64, 48)), webrtc.RtcConfig(0, 120, 2000), body)
+    assert frame.width == 64
+
+
+def test_encoder_reopens_rarely_for_a_wandering_bitrate():
+    import time
+    from app import webrtc_encoder as enc
+    Enc = enc.make_encoder_class()
+    e = Enc()
+    class Codec: width = 64; height = 48; bit_rate = 10_000_000
+    class Frame: width = 64; height = 48
+    e.codec = Codec()
+    e._opened_at = time.monotonic() - 100                       # long open: only the ratios matter
+    assert not e._needs_reopen(Frame(), 12_000_000)             # +20 %: ignored
+    assert not e._needs_reopen(Frame(), 14_000_000)             # +40 %: ignored (the old limit was 25 %)
+    assert e._needs_reopen(Frame(), 16_000_000)                 # +60 %: applied
+    assert not e._needs_reopen(Frame(), 8_000_000)              # -20 %: ignored
+    assert e._needs_reopen(Frame(), 6_000_000)                  # -40 %: applied (congestion reacts sooner)
+    e._opened_at = time.monotonic() - 1                         # just opened: never again within a second
+    assert not e._needs_reopen(Frame(), 20_000_000) and not e._needs_reopen(Frame(), 3_000_000)

@@ -21,8 +21,12 @@ FLOOR_BITRATE = 1_000_000      # the receiver's estimate never lowers the bitrat
                                # on a mostly still screen the estimate sinks, and the next scroll would arrive blocky
 FLOOR_SHARE = 6                # ...and never below 1/FLOOR_SHARE of the cap when that is higher, so a High/Native preset
                                # (cap 8-20 Mbit/s) does not sink to the picture of a Low one between two scrolls
-REOPEN_RATIO = 0.25            # the encoder is re-opened only when the target moved by more than this fraction...
-REOPEN_MIN_SECONDS = 2.0       # ...and not more often than this (re-opening a hardware encoder takes a moment)
+REOPEN_UP_RATIO = 0.5          # the encoder is re-opened for a higher bitrate only when the target grew by more than this...
+REOPEN_UP_SECONDS = 8.0        # ...and not more often than this. Re-opening an encoder (a hardware one most of all) stalls
+                               # the video for a moment, so a wandering bandwidth estimate must not do it every 2 s: that
+                               # showed as the frame rate dropping again and again.
+REOPEN_DOWN_RATIO = 0.35       # a lower bitrate (the link is struggling) is applied sooner...
+REOPEN_DOWN_SECONDS = 3.0      # ...but still not in a loop
 GOP_FRAMES = 120               # a key frame at least this often; receivers also ask for one (PLI) after packet loss
 ORDER = ("nvenc", "qsv", "amf", "x264")
 FFMPEG_NAMES = {"nvenc": "h264_nvenc", "qsv": "h264_qsv", "amf": "h264_amf", "x264": "libx264"}
@@ -140,7 +144,9 @@ def make_encoder_class():
             if self.codec is None: return True
             if frame.width != self.codec.width or frame.height != self.codec.height: return True
             cur = max(1, self.codec.bit_rate)
-            return abs(bitrate - cur) / cur > REOPEN_RATIO and time.monotonic() - self._opened_at >= REOPEN_MIN_SECONDS
+            age = time.monotonic() - self._opened_at
+            if bitrate > cur: return (bitrate - cur) / cur > REOPEN_UP_RATIO and age >= REOPEN_UP_SECONDS
+            return (cur - bitrate) / cur > REOPEN_DOWN_RATIO and age >= REOPEN_DOWN_SECONDS
 
         def _encode_frame(self, frame, force_keyframe: bool):
             bitrate = self.target_bitrate

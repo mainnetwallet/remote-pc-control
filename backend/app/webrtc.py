@@ -213,6 +213,8 @@ def _screen_track_class():
             self._pool = None
             self._frame = None; self._key = None
             self._t0 = None; self._next = None; self._last_emit = 0.0
+            self._pre = None          # (future, config) of the next frame, captured while the last one is being encoded
+            self._prev_return = None  # when recv() returned the previous frame
             self.frames = 0
 
         def _start_capture(self):   # runs on the capture thread: mss keeps GDI handles per thread
@@ -245,6 +247,7 @@ def _screen_track_class():
             loop = asyncio.get_running_loop()
             if self._pool is None: self._pool = ThreadPoolExecutor(1, thread_name_prefix="rpc-rtc-capture")
             pool = self._pool
+            called = _now()   # the time between the last frame's return and now is the encoder's (and sender's) work
             while True:
                 cfg = self.config
                 interval = 1.0 / max(1, cfg.fps)
@@ -253,16 +256,34 @@ def _screen_track_class():
                 wait = self._next - now
                 if wait > 0: await asyncio.sleep(wait)
                 self._next += interval
+                slot = _now()   # the wait for the frame slot is over: what follows is capture + convert work
                 if self.readyState != "live": raise MediaStreamError
                 keepalive = _now() - self._last_emit >= KEEPALIVE
-                try: frame = await loop.run_in_executor(pool, self._capture, cfg, keepalive)
+                pre, self._pre = self._pre, None
+                try:
+                    if pre is not None and pre[1] is cfg: fut = pre[0]   # already captured during the last encode
+                    else: fut = loop.run_in_executor(pool, self._capture, cfg, keepalive)
+                    frame = await fut
                 except RuntimeError:   # the pool was shut down by stop()
                     raise MediaStreamError
                 if frame is None: continue   # unchanged screen: poll again next slot
                 break
             if self._t0 is None: self._t0 = _now()
             frame.pts = int((_now() - self._t0) * CLOCK); frame.time_base = fractions.Fraction(1, CLOCK)
-            self._last_emit = _now(); self.frames += 1
+            now = _now()
+            # Work per frame, without the idle wait for the next slot: encode + send of the previous frame, then this capture.
+            cycle = 0.0 if self._prev_return is None else (called - self._prev_return) + (now - slot)
+            self._last_emit = now; self._prev_return = now; self.frames += 1
+            if self.readyState == "live" and cycle >= 0.9 / max(1, cfg.fps):
+                # The PC cannot keep up with the frame rate (capture and encode ran one after the other, so the fps
+                # rose and fell with the picture's content). Capture the next frame now, while the encoder works
+                # on this one: the two overlap and the frame rate stays higher and steadier.
+                try:
+                    fut = loop.run_in_executor(pool, self._capture, cfg, False)
+                    fut.add_done_callback(lambda f: f.cancelled() or f.exception())   # never leave an unretrieved error
+                    self._pre = (fut, cfg)
+                except RuntimeError:
+                    self._pre = None
             return frame
 
         def stop(self):
