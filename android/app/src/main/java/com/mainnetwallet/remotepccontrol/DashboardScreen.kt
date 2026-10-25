@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,18 +15,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.PasswordVisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DialogProperties
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -350,10 +352,10 @@ private fun SetPinDialog(onDismiss: () -> Unit, onSave: (String, (Boolean, Strin
                     label = { Text("PIN") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = androidx.compose.foundation.text.PasswordVisualTransformation(),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                        imeAction = androidx.compose.foundation.text.ImeAction.Done
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
                     )
                 )
                 if (error.isNotBlank()) {
@@ -377,7 +379,7 @@ private fun SetPinDialog(onDismiss: () -> Unit, onSave: (String, (Boolean, Strin
                 Text("Cancel", style = typo.labelLarge, color = colors.onSurfaceVariant)
             }
         },
-        properties = androidx.compose.material3.DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     )
 }
 

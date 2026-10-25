@@ -25,7 +25,8 @@ object Palette {
     val AccentGreen = Color(0xFF22C55E)
     val AccentRed = Color(0xFFEF4444)
 
-    // Subtle border
+    // Subtle border (Trackpad.kt draws its border with Palette.Outline)
+    val Outline = Color(0xFF2A3342)
     val Hairline = Color(0xFF2A3342)
     val BorderSubtle = Color(0xFF334155)
     val BorderFocus = Color(0xFF475569)
@@ -129,8 +130,7 @@ private val DarkColors = darkColorScheme(
     inverseSurface = Color(0xFFF1F5F9),
     inverseOnSurface = Color(0xFF080C12),
 
-    // Shadow
-    shadow = Color(0xFF000000),
+    // Scrim
     scrim = Color(0xFF000000)
 )
 

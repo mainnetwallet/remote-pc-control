@@ -1,6 +1,7 @@
 package com.mainnetwallet.remotepccontrol
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
@@ -35,7 +36,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.Divider
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -163,7 +164,7 @@ fun PulsingStatusDot(
     size: Dp = 10.dp,
     enabled: Boolean = true
 ) {
-    val alpha by animateFloatAsState(
+    val pulseAlpha by animateFloatAsState(
         targetValue = if (enabled) 1f else 0.5f,
         animationSpec = tween(1500, delayMillis = 0, easing = { it })
     )
@@ -176,7 +177,7 @@ fun PulsingStatusDot(
         modifier
             .size(size)
             .graphicsLayer {
-                alpha = alpha
+                alpha = pulseAlpha
                 scaleX = scale
                 scaleY = scale
             }
@@ -394,7 +395,7 @@ fun RingGauge(
     val fraction by animateFloatAsState(
         targetValue = targetFraction,
         label = "gauge",
-        animationSpec = if (animate) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else null
+        animationSpec = if (animate) spring<Float>(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium) else snap<Float>()
     )
 
     Box(
@@ -605,23 +606,23 @@ fun OutlineActionButton(
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = colors.surface,
             contentColor = colors.primary,
-            disabledContentColor = colors.onSurfaceVariant,
-            outlineColor = colors.outlineVariant
+            disabledContentColor = colors.onSurfaceVariant
         ),
+        border = BorderStroke(1.dp, colors.outlineVariant),
         shape = MaterialTheme.shapes.medium
     ) {
         Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
     }
 }
 
-/** Divider with subtle styling */
+/** Subtle vertical divider (used between the Download and Upload columns). */
 @Composable
 fun SubtleDivider(modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
-    androidx.compose.foundation.Divider(
-        modifier = modifier.fillMaxWidth(),
-        color = colors.outlineVariant,
-        thickness = 1.dp
+    VerticalDivider(
+        modifier = modifier,
+        thickness = 1.dp,
+        color = colors.outlineVariant
     )
 }
 
