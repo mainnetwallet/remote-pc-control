@@ -110,10 +110,10 @@ private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (Powe
     val scroll = rememberScrollState()
     Box(Modifier.fillMaxSize()) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(scroll).statusBarsPadding().displayCutoutPadding().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
+        Modifier.fillMaxSize().verticalScroll(scroll).statusBarsPadding().displayCutoutPadding().padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             DashConnectionHeader(
                 hostname = status?.hostname ?: "Windows PC",
                 reachable = c.reachable,
@@ -126,11 +126,11 @@ private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (Powe
                 DashSectionHeader(Glyph.MONITOR, "Live Screen") {
                     DashChip(Glyph.MONITOR, resolutionText(c.quality))
                 }
-                Spacer(Modifier.height(8.dp))
-                DashPresetSelector(c.quality, { c.setQuality(it) })
-                Spacer(Modifier.height(4.dp))
-                Text(c.quality.hint, style = MaterialTheme.typography.labelSmall, color = DashColors.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(6.dp))
+                DashPresetSelector(c.quality, { c.setQuality(it) })
+                Spacer(Modifier.height(3.dp))
+                Text(c.quality.hint, style = MaterialTheme.typography.labelSmall, color = DashColors.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(5.dp))
                 DashPrimaryButton("Start Screen Session", Glyph.PLAY, { c.startScreen() }, Modifier.fillMaxWidth())
             }
 
@@ -140,7 +140,7 @@ private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (Powe
             // the confirmation dialogs live in MainActivity.
             DashPanel(Modifier.fillMaxWidth()) {
                 DashSectionHeader(Glyph.BOLT, "Quick Actions", DashColors.Cyan)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val perRow = if (maxWidth < 300.dp) 2 else 4
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -227,8 +227,8 @@ private fun PinSecurityCard(c: RemoteController) {
         DashSectionHeader(Glyph.SHIELD, "PIN Security") {
             DashStatusPill(badgeText, badgeColor, pulsing = false, glyph = Glyph.LOCK)
         }
-        Spacer(Modifier.height(8.dp))
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(6.dp))
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(38.dp).clip(CircleShape).background(badgeColor.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
                     DashIcon(Glyph.LOCK, badgeColor, iconSize = 21.dp)
