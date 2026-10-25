@@ -301,25 +301,74 @@ internal fun DashChip(glyph: Glyph, text: String, modifier: Modifier = Modifier)
 // Connection header
 // ---------------------------------------------------------------------------------------------
 
-/** A stylised desktop monitor (device illustration, not a screenshot of the PC). */
+/** A realistic desktop monitor: bezel, desktop wallpaper with a taskbar, glass reflection, neck and base (an illustration, not a capture of the PC). */
 @Composable
 private fun DashMonitorIllustration(modifier: Modifier = Modifier) {
-    Canvas(modifier.aspectRatio(1.35f)) {
+    Canvas(modifier.aspectRatio(1.3f)) {
         val w = size.width; val h = size.height
-        val screenH = h * 0.74f
-        drawRoundRect(Color(0xFF1A1F29), Offset(w * 0.04f, 0f), Size(w * 0.92f, screenH), CornerRadius(8.dp.toPx()))
+        val dp = 1.dp.toPx()
+        val panelH = h * 0.76f
+        val r = 5.dp.toPx()
+
+        // Soft contact shadow under the base.
+        drawOval(Color.Black.copy(alpha = 0.45f), Offset(w * 0.20f, h * 0.93f), Size(w * 0.60f, h * 0.06f))
+
+        // Base: flat oval foot, then the tapered neck.
         drawRoundRect(
-            Brush.linearGradient(listOf(Color(0xFF1B2A44), Color(0xFF3A6FD8)), start = Offset(0f, 0f), end = Offset(w, screenH)),
-            Offset(w * 0.08f, h * 0.05f), Size(w * 0.84f, screenH - h * 0.1f), CornerRadius(4.dp.toPx())
+            Brush.verticalGradient(listOf(Color(0xFF3A404D), Color(0xFF1B1F27)), startY = h * 0.89f, endY = h * 0.95f),
+            Offset(w * 0.28f, h * 0.89f), Size(w * 0.44f, h * 0.055f), CornerRadius(h * 0.03f)
         )
-        val swirl = Path().apply {
-            moveTo(w * 0.30f, h * 0.50f)
-            cubicTo(w * 0.35f, h * 0.10f, w * 0.75f, h * 0.15f, w * 0.68f, h * 0.45f)
-            cubicTo(w * 0.62f, h * 0.30f, w * 0.45f, h * 0.30f, w * 0.30f, h * 0.50f)
+        val neck = Path().apply {
+            moveTo(w * 0.44f, panelH - dp); lineTo(w * 0.56f, panelH - dp)
+            lineTo(w * 0.58f, h * 0.90f); lineTo(w * 0.42f, h * 0.90f); close()
         }
-        drawPath(swirl, Color.White.copy(alpha = 0.22f))
-        drawRect(Color(0xFF232833), Offset(w * 0.46f, screenH), Size(w * 0.08f, h * 0.12f))
-        drawRoundRect(Color(0xFF232833), Offset(w * 0.30f, h * 0.86f), Size(w * 0.40f, h * 0.05f), CornerRadius(3.dp.toPx()))
+        drawPath(neck, Brush.horizontalGradient(listOf(Color(0xFF1E232C), Color(0xFF4A5160), Color(0xFF1E232C)), startX = w * 0.42f, endX = w * 0.58f))
+
+        // Outer frame (thin metallic edge) and black bezel.
+        drawRoundRect(Color(0xFF4A5160), Offset(0f, 0f), Size(w, panelH), CornerRadius(r))
+        drawRoundRect(Color(0xFF07090D), Offset(dp, dp), Size(w - 2 * dp, panelH - 2 * dp), CornerRadius(r - dp))
+
+        // The display itself.
+        val sx = w * 0.045f; val sy = w * 0.045f
+        val sw = w - 2 * sx; val sh = panelH - sy - w * 0.07f   // slightly thicker chin at the bottom
+        val screenTL = Offset(sx, sy)
+        val screenR = CornerRadius(2.dp.toPx())
+        drawRoundRect(
+            Brush.linearGradient(listOf(Color(0xFF0B1B3F), Color(0xFF1B2F7A), Color(0xFF3A1F6E)), start = screenTL, end = Offset(sx + sw, sy + sh)),
+            screenTL, Size(sw, sh), screenR
+        )
+        // Wallpaper bloom (a glowing swoosh like a modern desktop background).
+        drawCircle(
+            Brush.radialGradient(listOf(Color(0xFF5B7CFF).copy(alpha = 0.75f), Color(0xFF8A3FD1).copy(alpha = 0.35f), Color.Transparent), center = Offset(sx + sw * 0.55f, sy + sh * 0.62f), radius = sw * 0.42f),
+            radius = sw * 0.42f, center = Offset(sx + sw * 0.55f, sy + sh * 0.62f)
+        )
+        val swoosh = Path().apply {
+            moveTo(sx + sw * 0.22f, sy + sh * 0.78f)
+            cubicTo(sx + sw * 0.30f, sy + sh * 0.18f, sx + sw * 0.80f, sy + sh * 0.12f, sx + sw * 0.78f, sy + sh * 0.62f)
+            cubicTo(sx + sw * 0.68f, sy + sh * 0.34f, sx + sw * 0.40f, sy + sh * 0.38f, sx + sw * 0.22f, sy + sh * 0.78f)
+        }
+        drawPath(swoosh, Color.White.copy(alpha = 0.16f))
+
+        // Desktop icons (tiny squares, top-left) and a taskbar along the bottom edge.
+        val ic = sw * 0.045f
+        for (i in 0 until 3) drawRoundRect(Color.White.copy(alpha = 0.55f), Offset(sx + sw * 0.06f, sy + sh * 0.10f + i * ic * 1.9f), Size(ic, ic), CornerRadius(1.dp.toPx()))
+        val barH = sh * 0.11f
+        drawRect(Color(0xFF0A0D14).copy(alpha = 0.88f), Offset(sx, sy + sh - barH), Size(sw, barH))
+        val dot = barH * 0.46f
+        val startX = sx + sw / 2 - dot * 2.6f
+        for (i in 0 until 4) drawRoundRect(
+            if (i == 0) Color(0xFF4C8DFF) else Color.White.copy(alpha = 0.7f),
+            Offset(startX + i * dot * 1.4f, sy + sh - barH / 2 - dot / 2), Size(dot, dot), CornerRadius(1.dp.toPx())
+        )
+
+        // Glass reflection across the upper-left of the screen.
+        val glare = Path().apply {
+            moveTo(sx, sy); lineTo(sx + sw * 0.52f, sy); lineTo(sx, sy + sh * 0.62f); close()
+        }
+        drawPath(glare, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.13f), Color.Transparent), start = screenTL, end = Offset(sx + sw * 0.4f, sy + sh * 0.5f)))
+
+        // Power LED on the chin.
+        drawCircle(Color(0xFF3DD68C), radius = 1.2.dp.toPx(), center = Offset(w * 0.5f, panelH - w * 0.035f))
     }
 }
 
