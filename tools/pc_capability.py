@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CODE_FPS_CAP = 120         # FPS_CEILING (WebRTC) in backend/app/config.py
 WS_FPS_CAP = 60            # WS_FPS_CEILING (JPEG over WebSocket)
 TEST_SECONDS = 2.0
-WIDTHS = (960, 1280, 1920)
+WIDTHS = (960, 1280, 1920, 2560, 3840)
 
 
 def monitor_refresh_hz() -> int | None:

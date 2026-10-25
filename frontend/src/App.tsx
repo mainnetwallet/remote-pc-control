@@ -2,14 +2,14 @@ import {useEffect,useRef,useState} from 'react';
 import RemoteScreen from './RemoteScreen';
 type M={hostname:string;uptime_seconds:number;cpu_percent:number;memory:{total:number;used:number;percent:number};disk:{total:number;used:number;percent:number};network:{sent_bytes_per_sec:number;recv_bytes_per_sec:number}};
 const fmt=(n:number)=>n>=1073741824?(n/1073741824).toFixed(1)+' GB':n>=1048576?(n/1048576).toFixed(1)+' MB':n+' B';
-const QUALITY:Record<string,{label:string;w:number;fps:number;jpeg:number}>={low:{label:'Low',w:960,fps:20,jpeg:45},medium:{label:'Medium',w:1280,fps:30,jpeg:65},high:{label:'High',w:1920,fps:30,jpeg:80},native:{label:'Native',w:0,fps:30,jpeg:90},ultra:{label:'Ultra 60',w:1920,fps:60,jpeg:80}};
-const qcfg=(k:string)=>{const p=QUALITY[k]||QUALITY.high;return JSON.stringify({type:'config',max_width:p.w,fps:p.fps,quality:p.jpeg})};
+const QUALITY:Record<string,{label:string;w:number;fps:number;jpeg:number}>={native:{label:'Native',w:0,fps:120,jpeg:90},high:{label:'High',w:1920,fps:60,jpeg:80},ultra90:{label:'Ultra 90',w:1920,fps:90,jpeg:80},qhd120:{label:'QHD 120',w:2560,fps:120,jpeg:80},uhd4k:{label:'4K',w:3840,fps:120,jpeg:85}};
+const qcfg=(k:string)=>{const p=QUALITY[k]||QUALITY.native;return JSON.stringify({type:'config',max_width:p.w,fps:p.fps,quality:p.jpeg})};
 function Metric({label,value,pct,detail=''}:{label:string;value:string;pct:number;detail?:string}){return <article className="metric"><small>{label}</small><strong>{value}</strong><div className="bar"><span style={{width:Math.min(100,Math.max(0,pct))+'%'}}/></div><small>{detail}</small></article>}
 export default function App(){
  const [token,setToken]=useState(localStorage.getItem('rpc-token')||''),[draft,setDraft]=useState(''),[m,setM]=useState<M|null>(null),[error,setError]=useState(''),[stream,setStream]=useState(false),[confirm,setConfirm]=useState(''),[showPw,setShowPw]=useState(false);
  const [lock,setLock]=useState<{locked:boolean;pin_set:boolean}|null>(null),[pinDraft,setPinDraft]=useState(''),[pinMsg,setPinMsg]=useState('');
  const sock=useRef<WebSocket|null>(null),inp=useRef<WebSocket|null>(null),[frame,setFrame]=useState('');
- const [q,setQ]=useState<string>(()=>{let v='';try{v=localStorage.getItem('rpc-quality')||''}catch{}return v in QUALITY?v:'high'}),qRef=useRef(q);
+ const [q,setQ]=useState<string>(()=>{let v='';try{v=localStorage.getItem('rpc-quality')||''}catch{}return v in QUALITY?v:'native'}),qRef=useRef(q);
  const pickQ=(k:string)=>{setQ(k);qRef.current=k;try{localStorage.setItem('rpc-quality',k)}catch{}if(sock.current?.readyState===WebSocket.OPEN)sock.current.send(qcfg(k))};
  const api=async(path:string,init:RequestInit={})=>{const r=await fetch(path,{...init,headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,...init.headers}});const d=await r.json();if(!r.ok)throw Error(d.detail||'Request failed');return d};
  useEffect(()=>{if(!token)return;let live=true;const load=()=>{api('/api/v1/status').then(d=>{if(live){setM(d);setError('')}}).catch(e=>{if(!live)return;if(e.message==='Invalid token'){localStorage.removeItem('rpc-token');setToken('');setError('Wrong password. Please log in again.')}else setError(e.message)});api('/api/v1/lock/status').then(d=>{if(live)setLock(d)}).catch(()=>{})};void load();const id=setInterval(load,2500);return()=>{live=false;clearInterval(id)}},[token]);

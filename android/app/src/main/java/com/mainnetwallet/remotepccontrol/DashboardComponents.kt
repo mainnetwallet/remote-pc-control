@@ -412,14 +412,15 @@ private fun DashStatusPillPlain(text: String, color: Color, pulsing: Boolean) {
 // Live screen: quality presets
 // ---------------------------------------------------------------------------------------------
 
-/** Preset tile: six ascending bars, one more filled for each step up in quality (Low = 1 ... Ultra 120 = 6). */
+/** Preset tile: six ascending bars, filled in proportion to the preset's place in the list (Low = 1 ... Ultra 120 = 6). */
 @Composable
 private fun DashPresetThumb(q: Quality, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val w = size.width; val h = size.height
         drawRect(Brush.verticalGradient(listOf(Color(0xFF232A38), Color(0xFF181D28))))
         val n = 6
-        val filled = q.ordinal + 1
+        val count = Quality.values().size
+        val filled = ((q.ordinal + 1) * n + count - 1) / count   // spread the presets over the six bars
         val barW = w * 0.075f
         val gap = w * 0.035f
         val total = n * barW + (n - 1) * gap
@@ -466,7 +467,7 @@ private fun DashPresetCard(q: Quality, on: Boolean, onClick: () -> Unit, modifie
         Spacer(Modifier.height(3.dp))
         Text(q.label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp), maxLines = 1, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
         Text(
-            "${q.fps} fps", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+            q.fpsText, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
             color = DashColors.Muted, maxLines = 1, textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(1.dp))

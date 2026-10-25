@@ -207,13 +207,13 @@ It is a personal-use debug build, not a Play Store release. Screens: **Dashboard
 
 | Quality | Width | Max FPS | WebRTC bitrate limit |
 |---|---|---|---|
-| Low | 960 px | 20 | 1.5 Mbit/s |
-| Medium (default) | 1280 px | 30 | 3 Mbit/s |
-| High | 1920 px | 30 | 8 Mbit/s |
-| Native | PC resolution | 30 | 20 Mbit/s |
-| Ultra 60 / 120 | 1920 px | 60 / 120 | 12 / 16 Mbit/s |
+| Native (default) | PC resolution | no limit (the PC's max, up to 120) | 20 Mbit/s |
+| High | 1920 px | 60 | 15 Mbit/s |
+| Ultra 90 | 1920 px | 90 | 20 Mbit/s |
+| QHD 120 | 2560 px | 120 | 25 Mbit/s |
+| 4K | 3840 px | 120 | 30 Mbit/s |
 
-Use **Native** on the same Wi-Fi or Tailscale for the sharpest picture. Ultra needs a PC, link and phone that all keep up.
+Native is the default: full PC resolution at the highest fps the PC can deliver. Use it on the same Wi-Fi or Tailscale for the sharpest picture. Ultra 90, QHD 120 and 4K need a PC, link and phone that all keep up. The WebSocket JPEG fallback is limited to 60 fps.
 
 Build it yourself: open `android/` in Android Studio (JDK 17, SDK 35) → **Build APK(s)**, or run `gradle assembleDebug` in `android/`.
 

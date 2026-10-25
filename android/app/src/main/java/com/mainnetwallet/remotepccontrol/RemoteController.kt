@@ -46,12 +46,14 @@ private const val LOCAL_CURSOR_NS = 250_000_000L   // after the finger moved the
 
 /** Live-screen quality presets. Each one is sent to the PC as {"type":"config","max_width","fps","quality"}. */
 enum class Quality(val label: String, val maxWidth: Int, val fps: Int, val jpeg: Int, val kbps: Int, val hint: String) {
-    LOW("Low", 960, 20, 45, 1500, "960 px wide, up to 20 fps. Saves data."),
-    MEDIUM("Medium", 1280, 30, 65, 3000, "1280 px wide, up to 30 fps."),
-    HIGH("High", 1920, 30, 80, 8000, "1920 px wide, up to 30 fps. Sharp text."),
-    NATIVE("Native", 0, 30, 90, 20000, "The PC's full resolution, up to 30 fps, best picture. Needs a fast link (same Wi-Fi or Tailscale)."),
-    ULTRA("Ultra 60", 1920, 60, 80, 12000, "1920 px wide, up to 60 fps. Smoothest. Needs a fast link and a PC that can keep up (see tools/pc_capability.py)."),
-    ULTRA120("Ultra 120", 1920, 120, 80, 16000, "1920 px wide, up to 120 fps. For 120 Hz phones; needs a fast link, a strong PC and a phone that decodes 1080p120.");
+    NATIVE("Native", 0, 120, 90, 20000, "The PC's full resolution, no fps limit: uses the highest fps your PC can deliver (up to 120). Needs a fast link (same Wi-Fi or Tailscale)."),
+    HIGH("High", 1920, 60, 80, 15000, "1920 px wide, up to 60 fps. Sharp text and smooth."),
+    ULTRA90("Ultra 90", 1920, 90, 80, 20000, "1920 px wide, up to 90 fps. Needs a fast link and a PC that can keep up (see tools/pc_capability.py)."),
+    QHD120("QHD 120", 2560, 120, 80, 25000, "2560 px wide (1440p), up to 120 fps. Needs a fast link, a strong PC and a phone that decodes 1440p120."),
+    UHD4K("4K", 3840, 120, 85, 30000, "3840 px wide (4K), up to 120 fps. Needs a very fast link, a strong PC and a phone that decodes 4K120.");
+
+    /** Shown on the preset cards: Native has no fps limit of its own, the PC decides. */
+    val fpsText: String get() = if (this == NATIVE) "max fps" else "$fps fps"
 
     /** The same preset for the WebRTC video: bitrate (kbit/s) instead of JPEG quality. */
     fun rtcConfigMessage(): String = JSONObject()
@@ -153,7 +155,7 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     /** Why WebRTC was given up for the WebSocket stream (shown in the corner label so it can be read at a glance). */
     var rtcFallbackReason by mutableStateOf("")
         private set
-    var quality by mutableStateOf(Quality.values().firstOrNull { it.name == prefs.getString(PREF_QUALITY, null) } ?: Quality.MEDIUM)
+    var quality by mutableStateOf(Quality.values().firstOrNull { it.name == prefs.getString(PREF_QUALITY, null) } ?: Quality.NATIVE)
         private set
 
     /** Pointer speed of the trackpad. Only the Settings page changes it; default 3.0x. */

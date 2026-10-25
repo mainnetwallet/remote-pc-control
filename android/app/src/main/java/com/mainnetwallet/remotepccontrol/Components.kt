@@ -62,7 +62,7 @@ fun StatusDot(color: Color, modifier: Modifier = Modifier) {
     Box(modifier.size(8.dp).background(color, CircleShape))
 }
 
-/** Row of four selectable pills: Low / Medium / High / Native. */
+/** Row of selectable pills, one per quality preset. */
 @Composable
 fun QualityPicker(selected: Quality, onSelect: (Quality) -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
@@ -88,7 +88,7 @@ fun QualityPicker(selected: Quality, onSelect: (Quality) -> Unit, modifier: Modi
     }
 }
 
-/** Compact "Quality: Medium" button with a drop-down, used in the session toolbars. */
+/** Compact "Quality: Native" button with a drop-down, used in the session toolbars. */
 @Composable
 fun QualityMenuButton(quality: Quality, onSelect: (Quality) -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }

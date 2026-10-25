@@ -330,7 +330,7 @@ private fun SettingsPage(c: RemoteController) {
                             ) { if (on) Box(Modifier.size(10.dp).clip(CircleShape).background(DashColors.Cyan)) }
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text("${q.label} · ${q.fps} fps", style = MaterialTheme.typography.titleSmall)
+                                Text("${q.label} · ${q.fpsText}", style = MaterialTheme.typography.titleSmall)
                                 Text(q.hint, style = MaterialTheme.typography.labelSmall, color = DashColors.Muted)
                             }
                         }

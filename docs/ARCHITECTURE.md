@@ -571,7 +571,7 @@ Kotlin 2.1, Jetpack Compose, OkHttp, and `stream-webrtc-android`. Min SDK 26, ta
 | File | Role |
 |---|---|
 | `MainActivity.kt` | Edge-to-edge window. Picks the page: loading, connect, dashboard or session. Keeps the screen on during a session. |
-| `RemoteController.kt` | All state and networking. REST calls, `gist:<id>` link lookup (file `pc-url.txt`), auto sign-in, quality presets (Low, Medium, High, Native, Ultra 60, Ultra 120), the JPEG-first then WebRTC logic, fallback and cursor prediction. |
+| `RemoteController.kt` | All state and networking. REST calls, `gist:<id>` link lookup (file `pc-url.txt`), auto sign-in, quality presets (Native, High, Ultra 90, QHD 120, 4K), the JPEG-first then WebRTC logic, fallback and cursor prediction. |
 | `Rtc.kt` | `RtcClient`: `/ws/rtc` signaling, peer connection, data channels `input` and `control`, ping and stats. |
 | `ConnectScreen.kt` | URL and password form. |
 | `DashboardScreen.kt` | Status gauges, power actions, PIN-lock card and PIN dialog. |
