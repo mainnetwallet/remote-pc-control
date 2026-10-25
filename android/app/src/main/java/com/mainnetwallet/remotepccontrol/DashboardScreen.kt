@@ -195,11 +195,9 @@ private fun PowerAction.subtitle(): String = when (this) {
     PowerAction.SHUTDOWN -> "Turn off PC"
 }
 
-/** Blue lock, purple sleep, amber restart, red shutdown. */
+/** Neutral icons; only the destructive shutdown action is tinted (red). */
 private fun PowerAction.tint(): Color = when (this) {
-    PowerAction.LOCK -> DashColors.Blue
-    PowerAction.SLEEP -> DashColors.Violet
-    PowerAction.RESTART -> DashColors.Amber
+    PowerAction.LOCK, PowerAction.SLEEP, PowerAction.RESTART -> DashColors.Neutral
     PowerAction.SHUTDOWN -> DashColors.Red
 }
 
@@ -243,9 +241,9 @@ private fun PinSecurityCard(c: RemoteController) {
                 if (state?.locked == true) {
                     DashOutlineButton("Unlock", Glyph.LOCK, DashColors.Green, { c.unlockPc() }, Modifier.weight(1f))
                 } else {
-                    DashOutlineButton("Lock now", Glyph.LOCK, Color(0xFFD5DEEF), { c.lockPc() }, Modifier.weight(1f), enabled = state?.pinSet == true)
+                    DashOutlineButton("Lock now", Glyph.LOCK, DashColors.Neutral, { c.lockPc() }, Modifier.weight(1f), enabled = state?.pinSet == true)
                 }
-                DashOutlineButton(if (state?.pinSet == true) "Change PIN" else "Set PIN", Glyph.KEY, DashColors.Cyan, { showPinDialog = true }, Modifier.weight(1f))
+                DashOutlineButton(if (state?.pinSet == true) "Change PIN" else "Set PIN", Glyph.KEY, DashColors.Neutral, { showPinDialog = true }, Modifier.weight(1f))
             }
         }
     }

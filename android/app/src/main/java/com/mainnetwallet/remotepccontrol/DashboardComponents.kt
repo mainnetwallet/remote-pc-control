@@ -72,21 +72,23 @@ import androidx.compose.ui.unit.sp
  * Theme.kt / Components.kt (used by the connect and session screens) stay exactly as they were.
  */
 
-/** Colours that only the dashboard needs: deep navy surfaces, restrained blue accents, semantic status colours. */
+/** Colours that only the dashboard needs: neutral charcoal surfaces, one blue accent, status-only green/amber/red. */
 internal object DashColors {
-    val BgTop = Color(0xFF0A1630)
-    val BgBottom = Color(0xFF050810)
-    val PanelTop = Color(0xFF0F1B36)
-    val PanelBottom = Color(0xFF0A1226)
-    val PanelBorder = Color(0xFF1E3358)
-    val Inner = Color(0xFF0B1429)
-    val Blue = Color(0xFF3B9BFF)
-    val Cyan = Color(0xFF38BDF8)
-    val Violet = Color(0xFF9B6BFF)
-    val Green = Color(0xFF1FD99A)
+    // Neutral charcoal surfaces, flat (no gradients), one blue accent. Green / amber / red are status-only.
+    val BgTop = Color(0xFF0B0D12)
+    val BgBottom = Color(0xFF0B0D12)
+    val PanelTop = Color(0xFF12151C)
+    val PanelBottom = Color(0xFF12151C)
+    val PanelBorder = Color(0xFF232833)
+    val Inner = Color(0xFF0E1117)
+    val Blue = Color(0xFF4C8DFF)
+    val Cyan = Blue            // kept as an alias: there is a single accent colour
+    val Violet = Color(0xFF8A94A8) // neutral slate, no longer a second accent
+    val Neutral = Color(0xFFC9D1E0)
+    val Green = Color(0xFF3DD68C)
     val Amber = Color(0xFFF5A524)
-    val Red = Color(0xFFF0455A)
-    val Muted = Color(0xFF93A3C0)
+    val Red = Color(0xFFEF5B6B)
+    val Muted = Color(0xFF8B95A7)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -228,7 +230,7 @@ internal fun DashPanel(modifier: Modifier = Modifier, padding: Dp = 8.dp, conten
     Column(
         modifier
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(DashColors.PanelTop, DashColors.PanelBottom)))
+            .background(DashColors.PanelTop)
             .border(1.dp, DashColors.PanelBorder, shape)
             .padding(horizontal = padding + 2.dp, vertical = padding),
         content = content
@@ -304,11 +306,10 @@ internal fun DashChip(glyph: Glyph, text: String, modifier: Modifier = Modifier)
 private fun DashMonitorIllustration(modifier: Modifier = Modifier) {
     Canvas(modifier.aspectRatio(1.35f)) {
         val w = size.width; val h = size.height
-        drawCircle(Brush.radialGradient(listOf(DashColors.Blue.copy(alpha = 0.35f), Color.Transparent), center = Offset(w / 2, h * 0.45f), radius = w * 0.65f), radius = w * 0.65f, center = Offset(w / 2, h * 0.45f))
         val screenH = h * 0.74f
-        drawRoundRect(Color(0xFF0B1226), Offset(w * 0.04f, 0f), Size(w * 0.92f, screenH), CornerRadius(8.dp.toPx()))
+        drawRoundRect(Color(0xFF1A1F29), Offset(w * 0.04f, 0f), Size(w * 0.92f, screenH), CornerRadius(8.dp.toPx()))
         drawRoundRect(
-            Brush.linearGradient(listOf(Color(0xFF0B3C9E), Color(0xFF2D8CFF), Color(0xFF123A8C)), start = Offset(0f, 0f), end = Offset(w, screenH)),
+            Brush.linearGradient(listOf(Color(0xFF1B2A44), Color(0xFF3A6FD8)), start = Offset(0f, 0f), end = Offset(w, screenH)),
             Offset(w * 0.08f, h * 0.05f), Size(w * 0.84f, screenH - h * 0.1f), CornerRadius(4.dp.toPx())
         )
         val swirl = Path().apply {
@@ -317,8 +318,8 @@ private fun DashMonitorIllustration(modifier: Modifier = Modifier) {
             cubicTo(w * 0.62f, h * 0.30f, w * 0.45f, h * 0.30f, w * 0.30f, h * 0.50f)
         }
         drawPath(swirl, Color.White.copy(alpha = 0.22f))
-        drawRect(Color(0xFF16233F), Offset(w * 0.46f, screenH), Size(w * 0.08f, h * 0.12f))
-        drawRoundRect(Color(0xFF16233F), Offset(w * 0.30f, h * 0.86f), Size(w * 0.40f, h * 0.05f), CornerRadius(3.dp.toPx()))
+        drawRect(Color(0xFF232833), Offset(w * 0.46f, screenH), Size(w * 0.08f, h * 0.12f))
+        drawRoundRect(Color(0xFF232833), Offset(w * 0.30f, h * 0.86f), Size(w * 0.40f, h * 0.05f), CornerRadius(3.dp.toPx()))
     }
 }
 
@@ -365,19 +366,15 @@ private fun DashStatusPillPlain(text: String, color: Color, pulsing: Boolean) {
 /** Decorative preview tile for a preset (an illustration, never a capture of the PC). */
 @Composable
 private fun DashPresetThumb(q: Quality, modifier: Modifier = Modifier) {
-    val (skyTop, skyBottom) = when (q) {
-        Quality.LOW, Quality.MEDIUM -> Color(0xFF2B6FD6) to Color(0xFFCFE6FF)
-        Quality.HIGH, Quality.NATIVE -> Color(0xFF3A63D8) to Color(0xFFBFE0FF)
-        Quality.ULTRA -> Color(0xFF8B5CF6) to Color(0xFFFFB3D9)
-        Quality.ULTRA120 -> Color(0xFFE5622B) to Color(0xFFFFD08A)
-    }
+    // Same muted tile for every preset: the label and fps already tell them apart, colour would only add noise.
+    val (skyTop, skyBottom) = Color(0xFF2B3446) to Color(0xFF465470)
     Canvas(modifier) {
         val w = size.width; val h = size.height
         drawRect(Brush.verticalGradient(listOf(skyTop, skyBottom)))
         val far = Path().apply { moveTo(0f, h * 0.75f); lineTo(w * 0.30f, h * 0.30f); lineTo(w * 0.55f, h * 0.62f); lineTo(w * 0.75f, h * 0.38f); lineTo(w, h * 0.75f); close() }
-        drawPath(far, Color(0xFF28365E))
+        drawPath(far, Color(0xFF1F2736))
         val near = Path().apply { moveTo(0f, h); lineTo(w * 0.22f, h * 0.60f); lineTo(w * 0.50f, h * 0.88f); lineTo(w * 0.80f, h * 0.55f); lineTo(w, h); close() }
-        drawPath(near, Color(0xFF16213F))
+        drawPath(near, Color(0xFF151B27))
     }
 }
 
@@ -438,7 +435,7 @@ internal fun DashPrimaryButton(text: String, glyph: Glyph, onClick: () -> Unit, 
     val shape = RoundedCornerShape(16.dp)
     Row(
         modifier.heightIn(min = 44.dp).clip(shape)
-            .background(Brush.horizontalGradient(listOf(Color(0xFF1E6BFF), Color(0xFF2FA4FF))))
+            .background(DashColors.Blue)
             .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
     ) {
@@ -543,7 +540,7 @@ private fun DashRateRow(bytesPerSec: Long?, glyph: Glyph, tint: Color) {
     val unit = if (text == null) "" else text.substringAfter(' ') + "/s"
     // Number above unit: the pair needs far less width than "5.1 MB/s" on one line, so it is never cut off.
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(22.dp).clip(CircleShape).background(tint), contentAlignment = Alignment.Center) { DashIcon(glyph, Color.White, iconSize = 14.dp) }
+        Box(Modifier.size(22.dp).clip(CircleShape).background(tint.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) { DashIcon(glyph, tint, iconSize = 14.dp) }
         Spacer(Modifier.width(5.dp))
         Column {
             Text(number, style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"), maxLines = 1)
@@ -557,17 +554,17 @@ private fun DashNetworkPanel(rx: Long?, tx: Long?, history: List<Float>, modifie
     val shape = RoundedCornerShape(16.dp)
     Column(modifier.clip(shape).background(DashColors.Inner).border(1.dp, DashColors.PanelBorder, shape).padding(top = 6.dp, start = 4.dp, end = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            DashIcon(Glyph.WIFI, DashColors.Cyan, iconSize = 16.dp)
+            DashIcon(Glyph.WIFI, DashColors.Blue, iconSize = 16.dp)
             Spacer(Modifier.width(4.dp))
             Text("Network", style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp), maxLines = 1, softWrap = false)
         }
         Spacer(Modifier.height(6.dp))
         DashRateRow(rx, Glyph.DOWN, DashColors.Blue)
         Spacer(Modifier.height(6.dp))
-        DashRateRow(tx, Glyph.UP, DashColors.Violet)
+        DashRateRow(tx, Glyph.UP, DashColors.Neutral)
         Spacer(Modifier.weight(1f, fill = true))
         Spacer(Modifier.height(4.dp))
-        DashSparkline(history, DashColors.Amber, Modifier.fillMaxWidth().height(14.dp))
+        DashSparkline(history, DashColors.Blue, Modifier.fillMaxWidth().height(14.dp))
     }
 }
 
@@ -588,8 +585,8 @@ internal fun DashSystemPanel(
             val gap = 8.dp
             val panels: List<@Composable (Modifier) -> Unit> = listOf(
                 { m -> DashMetricPanel(Glyph.CPU, "CPU", status?.cpu, "Processor load", DashColors.Blue, history.cpu, m, warn = true) },
-                { m -> DashMetricPanel(Glyph.MEMORY, "Memory", status?.memory, status?.let { "${gbShort(it.memUsed)} / ${gbShort(it.memTotal)} GB" } ?: "–", DashColors.Violet, history.mem, m, warn = true) },
-                { m -> DashMetricPanel(Glyph.DISK, "Disk", status?.disk, status?.let { "${gbShort(it.diskUsed, 0)} / ${gbShort(it.diskTotal, 0)} GB" } ?: "–", DashColors.Green, history.disk, m, warn = true) },
+                { m -> DashMetricPanel(Glyph.MEMORY, "Memory", status?.memory, status?.let { "${gbShort(it.memUsed)} / ${gbShort(it.memTotal)} GB" } ?: "–", DashColors.Blue, history.mem, m, warn = true) },
+                { m -> DashMetricPanel(Glyph.DISK, "Disk", status?.disk, status?.let { "${gbShort(it.diskUsed, 0)} / ${gbShort(it.diskTotal, 0)} GB" } ?: "–", DashColors.Blue, history.disk, m, warn = true) },
                 { m -> DashNetworkPanel(status?.rxPerSec, status?.txPerSec, history.net, m) }
             )
             Column(verticalArrangement = Arrangement.spacedBy(gap)) {
@@ -625,8 +622,8 @@ internal fun DashPowerTile(
             .scale(scale)
             .heightIn(min = 62.dp)
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.30f), tint.copy(alpha = 0.10f))))
-            .border(1.dp, tint.copy(alpha = 0.55f), shape)
+            .background(DashColors.Inner)
+            .border(1.dp, if (tint == DashColors.Red) tint.copy(alpha = 0.40f) else DashColors.PanelBorder, shape)
             .clickable(interactionSource = interaction, indication = LocalIndication.current, role = Role.Button, onClick = onClick)
             .padding(horizontal = 2.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -650,7 +647,7 @@ internal fun DashOutlineButton(
     val shape = RoundedCornerShape(14.dp)
     val c = if (enabled) tint else DashColors.Muted.copy(alpha = 0.5f)
     Row(
-        modifier.heightIn(min = 40.dp).clip(shape).background(c.copy(alpha = 0.08f)).border(1.5.dp, c.copy(alpha = 0.7f), shape)
+        modifier.heightIn(min = 40.dp).clip(shape).background(c.copy(alpha = 0.06f)).border(1.dp, c.copy(alpha = 0.45f), shape)
             .then(if (enabled) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
@@ -678,8 +675,7 @@ internal fun DashBottomNav(selected: NavTab, onSelect: (NavTab) -> Unit) {
     Box(
         Modifier.fillMaxWidth()
             .clip(barShape)
-            .background(DashColors.BgBottom)
-            .background(Brush.verticalGradient(listOf(DashColors.PanelTop, DashColors.BgBottom)))
+            .background(DashColors.PanelTop)
             .border(1.dp, DashColors.PanelBorder, barShape)
             .navigationBarsPadding()
     ) {
