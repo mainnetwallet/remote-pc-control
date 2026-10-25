@@ -23,7 +23,8 @@ EXTRA = {
            "ts_title": "Built-in Tailscale (no Tailscale install on this PC)", "ts_help": "Lets the phone reach this PC through your Tailscale account without installing Tailscale here. The phone still needs the Tailscale app, signed in to the same account. Screen video then uses the slower WebSocket mode.",
            "ts_on": "Turn on", "ts_off": "Turn off", "ts_signin": "Open sign-in page", "ts_copy": "Copy link",
            "ts_state_off": "Off", "ts_state_starting": "Starting...", "ts_state_login": "Sign in to Tailscale once with the link below", "ts_state_running": "Connected",
-           "ts_missing": "The built-in Tailscale part is missing: install the newest setup.", "ts_addr": "Phone address"}
+           "ts_missing": "The built-in Tailscale part is missing: install the newest setup.", "ts_addr": "Phone address",
+           "streaming_on": "Streaming {time}", "streaming_off": "Not streaming"}
 }
 OK, BAD, MUTED = "#12805c", "#b42318", "#5d6b7e"
 
@@ -103,6 +104,7 @@ class App:
         self.stop_until = 0.0   # right after "turn off" the server may still answer once or twice: ignore that
         self.deadline = time.time() + 45 if starting else 0.0   # until then "not answering" means "starting"
         self.token_shown = False
+        self.stream_anchor = None   # time.monotonic() at which the current stream began (None = nobody is streaming)
         self.q = queue.Queue(); self.pending = {}; self._job = 0
         self._tunnel_job = self._toast_job = None
         self.wrap = []
@@ -124,6 +126,7 @@ class App:
         root.after(80, self._pump)
         root.after(300, self.refresh_all)
         root.after(1500, self.poll)
+        root.after(1000, self._tick_stream)
 
     # ---- helpers -------------------------------------------------------------------------------------------
     def _ui_font(self):
@@ -321,6 +324,8 @@ class App:
         cb = self.ttk.Combobox(r, textvariable=self.log_sel, values=["agent", "lock"], state="readonly", width=10)
         cb.pack(side="left", padx=(0, 8)); cb.bind("<<ComboboxSelected>>", lambda e: self.load_log())
         self.button(r, "refresh", self.load_log); self.button(r, "clear_logs", self.clear_log)
+        self.stream_tag = self.ttk.Label(r, font=self.f_head); self.stream_tag.pack(side="right")   # how long the stream has run
+        self.render_stream()
         box = self.ttk.Frame(f); box.pack(fill="both", expand=True, pady=(4, 0))
         self.log_text = self.tk.Text(box, height=12, wrap="word", font=self.f_mono, state="disabled", relief="flat",
                                      highlightthickness=1, highlightbackground="#c9d1dc")
@@ -343,6 +348,7 @@ class App:
     def _got_state(self, s):
         self.S = s
         self.set_online(True)
+        self.set_streaming(s.get("streaming"))
         self.render_pills(); self.render_addrs(); self.render_fields(); self.render_lock(); self.render_tunnel(s.get("tunnel")); self.render_tailnet(s.get("tailnet"))
         self.source_note.configure(text="" if s.get("installed") else self.t("source_note"))
 
@@ -352,6 +358,7 @@ class App:
             old_addr = self.S.get("addresses")
             self.S.update({k: s[k] for k in ("lock", "tunnel", "tailnet", "elevated", "hostname", "addresses") if k in s})
             if self.set_online(True) is False: return
+            self.set_streaming(s.get("streaming"))
             self.render_pills(); self.render_lock(); self.render_tunnel(s.get("tunnel"))
             if s.get("tailnet"): self.render_tailnet(s["tailnet"])
             if s.get("addresses") != old_addr: self.render_addrs()   # e.g. the built-in Tailscale just got its address
@@ -369,8 +376,32 @@ class App:
         else:
             self.stop_until = 0.0
             self.admin_pill.configure(text=""); self.host_pill.configure(text="")
+            self.set_streaming(None)   # no answer from the agent: nobody can be streaming from it
         self.render_server()
         return True
+
+    # ---- stream timer (the tag on the Logs row) -----------------------------------------------------------
+    def set_streaming(self, d):
+        """Take the agent's {"active", "seconds"} and remember when the stream began; the 1 s ticker draws the clock.
+        The agent's own seconds are used (not a wall-clock time) so a drifting or changed PC clock cannot skew it."""
+        self.stream_anchor = time.monotonic() - max(0, float((d or {}).get("seconds") or 0)) if (d or {}).get("active") else None
+        self.render_stream()
+
+    @staticmethod
+    def format_duration(seconds):
+        s = max(0, int(seconds)); h, rem = divmod(s, 3600); m, sec = divmod(rem, 60)
+        return f"{h}:{m:02d}:{sec:02d}" if h else f"{m:02d}:{sec:02d}"
+
+    def render_stream(self):
+        if self.stream_anchor is None:
+            self.stream_tag.configure(text="○ " + self.t("streaming_off"), foreground=MUTED)
+        else:
+            clock = self.format_duration(time.monotonic() - self.stream_anchor)
+            self.stream_tag.configure(text="● " + self.t("streaming_on").format(time=clock), foreground=OK)
+
+    def _tick_stream(self):
+        if self.stream_anchor is not None: self.render_stream()
+        self.root.after(1000, self._tick_stream)
 
     def render_server(self):
         starting = self.online is not True and time.time() < self.deadline

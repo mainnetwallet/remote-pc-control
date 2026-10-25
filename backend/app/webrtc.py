@@ -437,6 +437,8 @@ class RtcSession:
         log.info("WebRTC connection %s", state)
         if self.send_signal is not None and not self.closed:
             asyncio.ensure_future(self._signal({"type": "state", "state": state}))
+        if state == "connected": screen.stream_begin(self)
+        elif state in ("failed", "closed"): screen.stream_end(self)
         if state in ("failed", "closed"): self.dead.set()
 
     async def _signal(self, msg: dict) -> None:
@@ -526,6 +528,7 @@ class RtcSession:
             await self.track.released()
         self.channels.clear()
         self.dead.set()
+        screen.stream_end(self)
         _sessions.discard(self)
         if not _sessions:   # last session gone: release the shared DXGI capture too (it is re-created on demand)
             with contextlib.suppress(BaseException): screen._Dx.reset()

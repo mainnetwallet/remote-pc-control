@@ -6,7 +6,7 @@ from collections import deque
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from . import envfile, monitor, pinlock, tailnet, tunnel, winadmin
+from . import envfile, monitor, pinlock, screen, tailnet, tunnel, winadmin
 from .config import settings
 from .paths import data_dir, frozen
 from .security import LOOPBACK, require_auth
@@ -71,7 +71,8 @@ def state():
     try: lock = pinlock.status()
     except Exception as e: lock = {"error": str(e)}
     return {"hostname": socket.gethostname(), "port": settings.port, "elevated": monitor.is_elevated(), "installed": frozen(),
-            "addresses": addresses(), "tailnet": tailnet.status(), "fields": fields, "lock": lock, "tunnel": tunnel.status(), "env_file": str(env_path())}
+            "addresses": addresses(), "tailnet": tailnet.status(), "fields": fields, "lock": lock, "tunnel": tunnel.status(), "env_file": str(env_path()),
+            "streaming": screen.streaming_status()}
 
 
 @api.get("/system")

@@ -132,3 +132,22 @@ def test_clear_log_empties_the_file_and_keeps_it_appendable(tmp_path, monkeypatc
         assert c.get("/panel/api/logs/agent", headers=auth()).json()["text"] == "new line\n"   # no gap of zero bytes
         assert c.post("/panel/api/logs/nope/clear", headers=auth()).status_code == 404
         assert c.post("/panel/api/logs/agent/clear", headers={}).status_code in (401, 403)
+
+
+def test_state_reports_how_long_the_stream_has_run(monkeypatch):
+    """The app window's Logs card shows a "Streaming mm:ss" tag from this."""
+    from app import screen
+    monkeypatch.setattr(screen, "_streams", {})
+    with local() as c:
+        assert c.get("/panel/api/state", headers=auth()).json()["streaming"] == {"active": False, "count": 0, "seconds": 0}
+        clock = [1000.0]
+        monkeypatch.setattr(screen.time, "monotonic", lambda: clock[0])
+        screen.stream_begin("phone"); clock[0] += 75
+        assert c.get("/panel/api/state", headers=auth()).json()["streaming"] == {"active": True, "count": 1, "seconds": 75}
+        screen.stream_begin("phone")   # asking again must not restart the clock
+        clock[0] += 5; screen.stream_begin("tablet"); clock[0] += 10
+        assert c.get("/panel/api/state", headers=auth()).json()["streaming"] == {"active": True, "count": 2, "seconds": 90}   # the oldest stream counts
+        screen.stream_end("phone"); screen.stream_end("nobody")   # ending an unknown key is harmless
+        assert c.get("/panel/api/state", headers=auth()).json()["streaming"] == {"active": True, "count": 1, "seconds": 10}
+        screen.stream_end("tablet")
+        assert c.get("/panel/api/state", headers=auth()).json()["streaming"]["active"] is False

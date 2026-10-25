@@ -184,3 +184,20 @@ def test_clear_logs_button_calls_the_api_and_reloads(window, tmp_path, monkeypat
     app.log_sel.set("lock"); app.clear_log(); _settle(window, 0.6)
     assert calls == [("POST", "/logs/lock/clear")]
     assert "cleared" in app.status.cget("text").lower()
+
+
+def test_logs_row_shows_how_long_streaming_has_run(window, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    class Streaming(FakeClient):
+        streaming = {"active": True, "count": 1, "seconds": 3725}
+        def call(self, path, method="GET", body=None, timeout=60):
+            r = super().call(path, method, body, timeout)
+            return {**r, "streaming": self.streaming} if path == "/state" else r
+    client = Streaming()
+    app = gui.App(window, client)
+    _settle(window)
+    assert app.stream_tag.cget("text").startswith("● Streaming 1:02:0")   # 3725 s = 1:02:05 (+ a second or two of settling)
+    assert gui.App.format_duration(59) == "00:59" and gui.App.format_duration(754) == "12:34" and gui.App.format_duration(3600) == "1:00:00"
+    client.streaming = {"active": False, "count": 0, "seconds": 0}
+    app.poll(); _settle(window, 0.8)
+    assert app.stream_tag.cget("text") == "○ Not streaming"

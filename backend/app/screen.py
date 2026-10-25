@@ -49,7 +49,27 @@ from . import security
 # turned the upload-speed measurement into a wildly low number that stalled the stream and shrank every frame.
 _now = time.perf_counter
 
-MAX_IN_FLIGHT = 2         # minimum number of frames sent but not yet acknowledged (only once the client sends acks)
+# Who is watching right now, for the app window's Logs card: one entry per live stream (a WebSocket stream or a
+# WebRTC session), holding the moment it began. Durations use time.monotonic(): a coarse tick is fine at second level.
+_streams: dict[object, float] = {}
+
+
+def stream_begin(key: object) -> None:
+    """Note that a stream has started. Calling it again for the same key keeps the original start time."""
+    _streams.setdefault(key, time.monotonic())
+
+
+def stream_end(key: object) -> None:
+    _streams.pop(key, None)
+
+
+def streaming_status() -> dict:
+    """{"active": bool, "count": live streams, "seconds": how long the longest-running one has been going}."""
+    if not _streams: return {"active": False, "count": 0, "seconds": 0}
+    return {"active": True, "count": len(_streams), "seconds": int(time.monotonic() - min(_streams.values()))}
+
+
+MAX_IN_FLIGHT = 2        # minimum number of frames sent but not yet acknowledged (only once the client sends acks)
 MAX_WINDOW = 6            # the window grows up to this many frames on high-latency links (see flight_window)
 QUEUE_BUDGET = 0.10       # seconds of queueing (beyond the link's own latency) we accept before shrinking the stream
 MIN_WIDTH_FACTOR = 0.4    # congestion never scales the picture below this fraction of the configured width
@@ -472,6 +492,7 @@ async def stream_frames(ws: WebSocket, grab) -> None:
     enc_pool = ThreadPoolExecutor(1, thread_name_prefix="rpc-encode")
     reader = asyncio.create_task(_read_client(ws, state))
     prefetch = None; prefetch_done = [None]   # the capture started during the last encode, and when it finished
+    stream_begin(state)
     try:
         last_digest, last_jpeg, last_sent, size_sent = None, None, 0.0, None
         cycle = 0.0   # seconds the last capture+encode took
@@ -558,6 +579,7 @@ async def stream_frames(ws: WebSocket, grab) -> None:
             try: await asyncio.wait_for(state.wake.wait(), max(0.0, interval - (_now() - started)))
             except asyncio.TimeoutError: pass
     finally:
+        stream_end(state)
         reader.cancel()
         if prefetch is not None:
             with contextlib.suppress(BaseException): await prefetch
