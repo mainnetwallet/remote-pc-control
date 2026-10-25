@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -93,7 +94,8 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
             }
         }
     ) { inner ->
-        Box(Modifier.padding(inner).fillMaxSize()) {
+        // Everything inside is clipped to the area above the bar: nothing from a page can be drawn under it.
+        Box(Modifier.padding(inner).fillMaxSize().clipToBounds()) {
             when (current) {
                 NavTab.SETTINGS -> SettingsPage(c)
                 else -> HomePage(c, history, onPower)
@@ -105,11 +107,13 @@ fun DashboardScreen(c: RemoteController, onPower: (PowerAction) -> Unit) {
 @Composable
 private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (PowerAction) -> Unit) {
     val status = c.status
+    val scroll = rememberScrollState()
+    Box(Modifier.fillMaxSize()) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().displayCutoutPadding().padding(horizontal = 12.dp, vertical = 6.dp),
+        Modifier.fillMaxSize().verticalScroll(scroll).statusBarsPadding().displayCutoutPadding().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.widthIn(max = 560.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             DashConnectionHeader(
                 hostname = status?.hostname ?: "Windows PC",
                 reachable = c.reachable,
@@ -125,8 +129,8 @@ private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (Powe
                 Spacer(Modifier.height(8.dp))
                 DashPresetSelector(c.quality, { c.setQuality(it) })
                 Spacer(Modifier.height(4.dp))
-                Text(c.quality.hint, style = MaterialTheme.typography.labelSmall, color = DashColors.Muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(8.dp))
+                Text(c.quality.hint, style = MaterialTheme.typography.labelSmall, color = DashColors.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(6.dp))
                 DashPrimaryButton("Start Screen Session", Glyph.PLAY, { c.startScreen() }, Modifier.fillMaxWidth())
             }
 
@@ -157,8 +161,14 @@ private fun HomePage(c: RemoteController, history: MetricHistory, onPower: (Powe
             PinSecurityCard(c)
 
             if (c.notice.text.isNotBlank()) DashNotice(c.notice.text, c.notice.isError)
-            Spacer(Modifier.height(8.dp))   // the last card can scroll fully clear of the bar's top edge
         }
+    }
+    // A soft fade at the bottom edge while there is more to scroll to, so a card cut off at the fold reads as
+    // "scroll for more" and not as hidden behind the bar. It does not take touches.
+    if (scroll.canScrollForward) Box(
+        Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(28.dp)
+            .background(Brush.verticalGradient(listOf(Color.Transparent, DashColors.BgBottom)))
+    )
     }
 }
 
@@ -218,11 +228,7 @@ private fun PinSecurityCard(c: RemoteController) {
             DashStatusPill(badgeText, badgeColor, pulsing = false, glyph = Glyph.LOCK)
         }
         Spacer(Modifier.height(8.dp))
-        val shape = RoundedCornerShape(16.dp)
-        Column(
-            Modifier.fillMaxWidth().clip(shape).background(DashColors.Inner).border(1.dp, DashColors.PanelBorder, shape).padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(38.dp).clip(CircleShape).background(badgeColor.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
                     DashIcon(Glyph.LOCK, badgeColor, iconSize = 21.dp)

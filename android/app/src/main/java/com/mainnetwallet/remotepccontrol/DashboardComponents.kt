@@ -329,9 +329,9 @@ private fun DashMonitorIllustration(modifier: Modifier = Modifier) {
 @Composable
 internal fun DashConnectionHeader(hostname: String, reachable: Boolean, uptime: String?, address: String) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        DashMonitorIllustration(Modifier.width(84.dp))
+        DashMonitorIllustration(Modifier.width(76.dp))
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(hostname, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
             DashStatusPillPlain(if (reachable) "Connected" else "Offline", if (reachable) DashColors.Green else DashColors.Red, reachable)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -388,7 +388,7 @@ private fun DashPresetCard(q: Quality, on: Boolean, onClick: () -> Unit, modifie
             .padding(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1.5f).clip(RoundedCornerShape(10.dp))) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1.8f).clip(RoundedCornerShape(10.dp))) {
             DashPresetThumb(q, Modifier.fillMaxSize())
             if (on) Box(
                 Modifier.align(Alignment.TopEnd).padding(3.dp).size(18.dp).clip(CircleShape).background(DashColors.Blue),
@@ -521,12 +521,12 @@ private fun DashMetricPanel(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { DashIcon(glyph, color, iconSize = 16.dp) }
-        DashRing(percent, color, 52.dp)
+        DashRing(percent, color, 46.dp)
         Spacer(Modifier.height(2.dp))
         Text(label + (level?.let { " · $it" } ?: ""), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(detail, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = DashColors.Muted, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(4.dp))
-        DashSparkline(history, color, Modifier.fillMaxWidth().height(18.dp), fixedMax = 100f)
+        DashSparkline(history, color, Modifier.fillMaxWidth().height(14.dp), fixedMax = 100f)
     }
 }
 
@@ -561,7 +561,7 @@ private fun DashNetworkPanel(rx: Long?, tx: Long?, history: List<Float>, modifie
         DashRateRow(tx, Glyph.UP, DashColors.Violet)
         Spacer(Modifier.weight(1f, fill = true))
         Spacer(Modifier.height(4.dp))
-        DashSparkline(history, DashColors.Amber, Modifier.fillMaxWidth().height(18.dp))
+        DashSparkline(history, DashColors.Amber, Modifier.fillMaxWidth().height(14.dp))
     }
 }
 
@@ -617,7 +617,7 @@ internal fun DashPowerTile(
     Column(
         modifier
             .scale(scale)
-            .heightIn(min = 74.dp)
+            .heightIn(min = 68.dp)
             .clip(shape)
             .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.30f), tint.copy(alpha = 0.10f))))
             .border(1.dp, tint.copy(alpha = 0.55f), shape)
@@ -666,19 +666,24 @@ internal enum class NavTab(val label: String, val glyph: Glyph) {
 /** Exactly three destinations. Home and Settings switch the page; PC Live starts the existing screen session. */
 @Composable
 internal fun DashBottomNav(selected: NavTab, onSelect: (NavTab) -> Unit) {
+    val barShape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+    // Fully opaque (solid base, then the gradient) and clipped to its own shape, so nothing shows through or past it.
+    // The navigation-bar inset is added inside the bar's own background, so the bar grows to cover that area.
     Box(
         Modifier.fillMaxWidth()
+            .clip(barShape)
+            .background(DashColors.BgBottom)
             .background(Brush.verticalGradient(listOf(DashColors.PanelTop, DashColors.BgBottom)))
-            .border(1.dp, DashColors.PanelBorder, RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
+            .border(1.dp, DashColors.PanelBorder, barShape)
             .navigationBarsPadding()
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 3.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             NavTab.values().forEach { tab ->
                 val on = tab == selected
                 val tint = if (on) DashColors.Blue else DashColors.Muted
                 val shape = RoundedCornerShape(16.dp)
                 Column(
-                    Modifier.weight(1f).heightIn(min = 52.dp).clip(shape)
+                    Modifier.weight(1f).heightIn(min = 48.dp).clip(shape)
                         .background(if (on) DashColors.Blue.copy(alpha = 0.14f) else Color.Transparent)
                         .selectable(selected = on, role = Role.Tab, onClick = { onSelect(tab) })
                         .padding(vertical = 4.dp),
