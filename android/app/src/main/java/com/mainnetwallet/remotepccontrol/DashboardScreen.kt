@@ -31,6 +31,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -333,6 +335,28 @@ private fun SettingsPage(c: RemoteController) {
                             }
                         }
                     }
+                }
+            }
+
+            // Trackpad pointer speed: the only place it can be changed. Saved when the finger lifts.
+            DashPanel(Modifier.fillMaxWidth()) {
+                DashSectionHeader(Glyph.BOLT, "Mouse speed") {
+                    DashChip(Glyph.BOLT, String.format(java.util.Locale.US, "%.1fx", c.mouseSpeed))
+                }
+                Spacer(Modifier.height(6.dp))
+                Slider(
+                    value = c.mouseSpeed,
+                    onValueChange = { c.setMouseSpeed(Math.round(it * 10f) / 10f, save = false) },
+                    onValueChangeFinished = { c.setMouseSpeed(c.mouseSpeed) },
+                    valueRange = 0.5f..4f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = DashColors.Blue, activeTrackColor = DashColors.Blue,
+                        inactiveTrackColor = DashColors.PanelBorder
+                    )
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("How far the pointer moves per finger swipe on the trackpad.", style = MaterialTheme.typography.labelSmall, color = DashColors.Muted, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { c.setMouseSpeed(DEFAULT_MOUSE_SPEED) }) { Text("Reset 3.0x") }
                 }
             }
 

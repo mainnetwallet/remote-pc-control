@@ -40,6 +40,8 @@ private const val DEFAULT_URL = "http://100.124.106.76:8888"
 private const val PREF_TOKEN = "pc_token_enc"   // password, encrypted with an Android Keystore key (see SecureStore)
 private const val PREF_URL = "pc_url"        // the token is never stored, only the address
 private const val PREF_QUALITY = "quality"
+private const val PREF_MOUSE_SPEED = "mouse_speed"
+const val DEFAULT_MOUSE_SPEED = 3.0f
 private const val LOCAL_CURSOR_NS = 250_000_000L   // after the finger moved the pointer, trust our own prediction this long
 
 /** Live-screen quality presets. Each one is sent to the PC as {"type":"config","max_width","fps","quality"}. */
@@ -152,6 +154,10 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
     var rtcFallbackReason by mutableStateOf("")
         private set
     var quality by mutableStateOf(Quality.values().firstOrNull { it.name == prefs.getString(PREF_QUALITY, null) } ?: Quality.MEDIUM)
+        private set
+
+    /** Pointer speed of the trackpad. Only the Settings page changes it; default 3.0x. */
+    var mouseSpeed by mutableStateOf(prefs.getFloat(PREF_MOUSE_SPEED, DEFAULT_MOUSE_SPEED).coerceIn(0.5f, 4f))
         private set
 
     /**
@@ -317,6 +323,13 @@ class RemoteController(private val scope: CoroutineScope, private val prefs: Sha
             onResult(ok, if (ok) "PIN saved." else "Could not save PIN: $text")
             refreshLockState()
         }
+    }
+
+    // Same JVM name clash as setQuality below, so this one is renamed there too.
+    @JvmName("applyMouseSpeed")
+    fun setMouseSpeed(v: Float, save: Boolean = true) {
+        mouseSpeed = v.coerceIn(0.5f, 4f)
+        if (save) prefs.edit().putFloat(PREF_MOUSE_SPEED, mouseSpeed).apply()
     }
 
     // The `quality` property's private setter is also named setQuality(Quality) on the JVM; rename this one there.

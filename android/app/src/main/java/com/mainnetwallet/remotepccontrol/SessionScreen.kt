@@ -39,7 +39,6 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -120,15 +119,6 @@ fun PadButtons(
             if (showKeys) Button(onClick = { onShowKeys(false) }, modifier = Modifier.height(48.dp)) { Text("Keys") }
             else OutlinedButton(onClick = { onShowKeys(true) }, modifier = Modifier.height(48.dp)) { Text("Keys") }
         }
-    }
-}
-
-@Composable
-fun SpeedRow(sensitivity: Float, onSensitivity: (Float) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("Speed", style = MaterialTheme.typography.bodySmall)
-        Slider(value = sensitivity, onValueChange = onSensitivity, valueRange = 0.5f..4f, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
-        Text(String.format(java.util.Locale.US, "%.1fx", sensitivity), style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -503,11 +493,11 @@ private fun ScreenArea(c: RemoteController, mode: TouchMode, modifier: Modifier,
 @Composable
 fun SessionScreen(c: RemoteController) {
     var touchMode by remember { mutableStateOf(TouchMode.OFF) }
-    var sensitivity by rememberSaveable { mutableStateOf(2.5f) }
+    val sensitivity = c.mouseSpeed   // set on the Settings page only
     var showPad by rememberSaveable { mutableStateOf(true) }
     var showKeys by rememberSaveable { mutableStateOf(false) }
     var showKeyboard by rememberSaveable { mutableStateOf(false) }   // landscape: PC-style on-screen keyboard (button under R-click)
-    var showControls by rememberSaveable { mutableStateOf(false) }   // landscape: Touch/Speed/Fullscreen/Rotate shown in the panel under the Controls button (hidden until tapped)
+    var showControls by rememberSaveable { mutableStateOf(false) }   // landscape: Touch/Fullscreen/Rotate shown in the panel under the Controls button (hidden until tapped)
     var typeText by rememberSaveable { mutableStateOf("") }
     val send: (JSONObject) -> Unit = { c.sendInput(it) }
     val onSendText: () -> Unit = {
@@ -527,7 +517,7 @@ fun SessionScreen(c: RemoteController) {
         }
         if (maxWidth > maxHeight) {
             // Landscape: PC screen on the left, a separate trackpad panel on the right.
-            // The Controls button sits at the top-right of the panel; tapping it shows Touch, Speed, Fullscreen and Rotate inside the panel (never over the PC picture).
+            // The Controls button sits at the top-right of the panel; tapping it shows Touch, Fullscreen and Rotate inside the panel (never over the PC picture).
             // Quality and Stop are only in the portrait toolbar.
             val panelWidth = (windowWidth * 0.28f).coerceIn(230.dp, 340.dp)
             Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
@@ -562,7 +552,6 @@ fun SessionScreen(c: RemoteController) {
                             MenuButton(if (showControls) "Controls \u25B4" else "Controls \u25BE", { showControls = !showControls }, Modifier.fillMaxWidth())
                             if (showControls) {
                                 MenuButton("Touch: ${touchMode.label}", { touchMode = touchMode.next() }, Modifier.fillMaxWidth())
-                                SpeedRow(sensitivity) { sensitivity = it }   // moved here from the bottom of the panel
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     MenuButton("Fullscreen", { showPad = false }, Modifier.weight(1f))
                                     RotateButton(rotate, tonal = true, small = true, modifier = Modifier.weight(1f))
@@ -597,7 +586,6 @@ fun SessionScreen(c: RemoteController) {
                 // Trackpad stays compact (about a quarter of the window) so the PC screen gets the rest.
                 Trackpad(sensitivity, send, Modifier.fillMaxWidth().height(maxOf(110.dp, minOf(200.dp, windowHeight * 0.26f))))
                 PadButtons(send, showKeys = showKeys, onShowKeys = { showKeys = it })
-                SpeedRow(sensitivity) { sensitivity = it }
                 if (showKeys) KeysPanel(send, typeText, { typeText = it }, onSendText)
             }
         }
