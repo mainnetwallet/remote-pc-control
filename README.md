@@ -271,13 +271,35 @@ With a PIN set, the app's **Lock** button uses this lock; without the lock scree
 | Port 8888 in use | Run `start.ps1` again; it stops an older copy of this server but never another program |
 | Autostart gone after a manual `start.ps1` | It stops the task on purpose: `Start-ScheduledTask -TaskName RemotePCControl` |
 | Tunnel 502 | `start.ps1` is not running |
-| Black screen | PC is locked or a UAC prompt is open |
+| Black screen / UAC prompt not showing on phone | Windows switches to Secure Desktop by default. See [Showing UAC Prompts on Phone](#-showing-uac-prompts-on-phone) |
 | No input in Task Manager / admin windows | `.\scripts\install-autostart.ps1 -Admin` (Administrator PowerShell) |
 | 429 "Too many failed attempts" | 8 wrong tokens lock a client for 5 min; 40 wrong tokens from anyone block logins for 10 min. Wait, then use the right token |
 | 429 "Too many failed requests" | The same request failed 10 times in a minute (or 60 failed requests of any kind). Fix the cause, wait for `Retry-After` |
 | App always shows "WebSocket" | No direct UDP path: use Tailscale or Wi-Fi, or set up TURN |
 | `aiortc is not installed` | `.\scripts\setup.ps1 -Force`, restart the server |
 | Lock button shows nothing | Run `.\scripts\install-lock-overlay.ps1` or set `REMOTE_PC_LOCK_BUTTON=windows` |
+
+### 🛡️ Showing UAC Prompts on Phone
+
+When a Windows **User Account Control (UAC)** prompt appears (e.g. *"Do you want to allow this app to make changes to your device?"*), Windows by default switches to the isolated **Secure Desktop** (dimming the background). Because the Secure Desktop is isolated, screen capture pauses and the phone screen turns black or freezes.
+
+To make UAC prompts show up and be clickable on your phone:
+
+#### Method 1: Run the helper script (Recommended)
+Open PowerShell as Administrator and run:
+```powershell
+.\scripts\fix-uac-prompt.ps1
+```
+*(To restore Windows default behavior at any time, run `.\scripts\fix-uac-prompt.ps1 -Revert`)*
+
+#### Method 2: Via Windows Settings
+1. Press `Win + R`, type `UserAccountControlSettings`, and press **Enter** (or search **UAC** in Start).
+2. Move the slider one notch down to:  
+   **"Notify me only when apps try to make changes to my computer (do not dim my desktop)"**
+3. Click **OK** and confirm.
+
+> [!TIP]
+> Ensure the agent is running with administrator privileges (`.\scripts\install-autostart.ps1 -Admin` or installed via the desktop installer) so you can also click **Yes / No** on elevated prompts from your phone.
 
 ## 🔒 Security
 
@@ -297,7 +319,7 @@ With a PIN set, the app's **Lock** button uses this lock; without the lock scree
 - **PIN lock:** persistent full-screen lock with a 60-second cool-down after 5 wrong PINs.
 
 **Limits**
-- The agent cannot control the Windows sign-in screen or UAC prompts and does not bypass Windows authentication.
+- The agent cannot control the Windows sign-in screen. UAC prompts require disabling the Secure Desktop (see [Showing UAC Prompts on Phone](#-showing-uac-prompts-on-phone)) and running the agent elevated.
 - The installer's agent runs as administrator; the PIN lock cannot block Ctrl+Alt+Delete.
 
 **Report a vulnerability** privately via the GitHub Security tab (not a public issue), with what you did, what happened and the commit hash.
