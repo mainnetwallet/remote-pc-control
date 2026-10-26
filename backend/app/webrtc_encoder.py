@@ -102,6 +102,7 @@ def make_encoder_class():
         @property
         def target_bitrate(self) -> int:
             cap = max(MIN_BITRATE, Limits.cap())
+            if settings.rtc_stable: return cap   # steady quality: always the configured bitrate, never the link's estimate
             asked = self._requested if self._requested is not None else INITIAL_BITRATE
             return max(floor_for(cap), min(cap, asked))
 
@@ -143,6 +144,8 @@ def make_encoder_class():
         def _needs_reopen(self, frame, bitrate: int) -> bool:
             if self.codec is None: return True
             if frame.width != self.codec.width or frame.height != self.codec.height: return True
+            if settings.rtc_stable:   # re-open only when the cap itself was changed (a new quality preset), not for the estimate
+                return bitrate != self.codec.bit_rate and time.monotonic() - self._opened_at >= REOPEN_DOWN_SECONDS
             cur = max(1, self.codec.bit_rate)
             age = time.monotonic() - self._opened_at
             if bitrate > cur: return (bitrate - cur) / cur > REOPEN_UP_RATIO and age >= REOPEN_UP_SECONDS

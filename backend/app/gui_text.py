@@ -71,6 +71,7 @@ TEXT = {
   "f_REMOTE_PC_RTC_FPS": "Max frame rate (fast video)",
   "f_REMOTE_PC_RTC_STEADY": "Always send full frame rate (even when the screen is still)",
   "f_REMOTE_PC_FPS": "Frame rate (fallback stream)",
+  "f_REMOTE_PC_RTC_STABLE": "Steady quality (fixed bitrate, no ups and downs)",
   "f_REMOTE_PC_RTC_BITRATE": "Video bitrate (kbit/s)",
   "f_REMOTE_PC_JPEG_QUALITY": "Picture quality (25-85)",
   "f_REMOTE_PC_MAX_WIDTH": "Max picture width (0 = full)",

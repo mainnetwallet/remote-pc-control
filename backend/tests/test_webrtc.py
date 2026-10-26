@@ -754,7 +754,8 @@ def test_encoder_falls_back_when_a_hardware_encoder_cannot_open(monkeypatch):
     assert enc.backend == "x264" or enc.backend not in cls.failed
 
 
-def test_encoder_bitrate_follows_the_receiver_within_floor_and_cap():
+def test_encoder_bitrate_follows_the_receiver_within_floor_and_cap(monkeypatch):
+    monkeypatch.setattr(settings, "rtc_stable", False)   # these cover the adaptive mode
     cls = webrtc_encoder.install()
     enc = cls()
     webrtc_encoder.Limits.set("t", 4_000_000)
@@ -767,7 +768,8 @@ def test_encoder_bitrate_follows_the_receiver_within_floor_and_cap():
     webrtc_encoder.Limits.set("t", None)
 
 
-def test_encoder_floor_rises_with_a_high_cap_but_never_exceeds_it():
+def test_encoder_floor_rises_with_a_high_cap_but_never_exceeds_it(monkeypatch):
+    monkeypatch.setattr(settings, "rtc_stable", False)   # these cover the adaptive mode
     assert webrtc_encoder.floor_for(4_000_000) == webrtc_encoder.FLOOR_BITRATE        # unchanged for the default cap
     assert webrtc_encoder.floor_for(600_000) == 600_000                               # never above the cap
     assert webrtc_encoder.floor_for(20_000_000) == 20_000_000 // webrtc_encoder.FLOOR_SHARE
@@ -844,7 +846,8 @@ def test_prefetched_frame_is_dropped_when_the_config_changes():
     assert frame.width == 64
 
 
-def test_encoder_reopens_rarely_for_a_wandering_bitrate():
+def test_encoder_reopens_rarely_for_a_wandering_bitrate(monkeypatch):
+    monkeypatch.setattr(settings, "rtc_stable", False)   # these cover the adaptive mode
     import time
     from app import webrtc_encoder as enc
     Enc = enc.make_encoder_class()
@@ -860,3 +863,29 @@ def test_encoder_reopens_rarely_for_a_wandering_bitrate():
     assert e._needs_reopen(Frame(), 6_000_000)                  # -40 %: applied (congestion reacts sooner)
     e._opened_at = time.monotonic() - 1                         # just opened: never again within a second
     assert not e._needs_reopen(Frame(), 20_000_000) and not e._needs_reopen(Frame(), 3_000_000)
+
+
+def test_stable_mode_keeps_the_configured_bitrate_and_never_follows_the_estimate(monkeypatch):
+    from app import webrtc_encoder as enc
+    monkeypatch.setattr(settings, "rtc_stable", True)
+    enc.Limits.reset(); enc.Limits.default_bps = 4_000_000
+    e = enc.make_encoder_class()()
+    assert e.target_bitrate == 4_000_000
+    e.target_bitrate = 500_000       # the receiver's estimate sinks
+    assert e.target_bitrate == 4_000_000
+    e.target_bitrate = 9_000_000     # ...or rises
+    assert e.target_bitrate == 4_000_000
+
+
+def test_stable_mode_does_not_reopen_the_encoder_for_the_estimate(monkeypatch):
+    import time
+    from app import webrtc_encoder as enc
+    monkeypatch.setattr(settings, "rtc_stable", True)
+    enc.Limits.reset(); enc.Limits.default_bps = 4_000_000
+    e = enc.make_encoder_class()()
+    class Codec: width, height, bit_rate = 1280, 720, 4_000_000
+    class Frame: width, height = 1280, 720
+    e.codec, e._opened_at = Codec(), time.monotonic() - 100
+    assert not e._needs_reopen(Frame(), e.target_bitrate)
+    enc.Limits.set("x", 8_000_000)   # a new quality preset really changes the cap
+    assert e._needs_reopen(Frame(), e.target_bitrate)

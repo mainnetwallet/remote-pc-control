@@ -227,6 +227,7 @@ Settings are in `.env` (template: [`.env.example`](.env.example)). Restart the s
 | `REMOTE_PC_HOST` / `_PORT` | `0.0.0.0` / `8888` | Packaged `.exe` only; `start.ps1` always uses `0.0.0.0:8888` |
 | `REMOTE_PC_WEBRTC` | `1` | WebRTC on/off (WebSocket is the fallback) |
 | `REMOTE_PC_RTC_FPS` | `auto` | WebRTC max fps (`auto` = monitor refresh, up to 120) |
+| `REMOTE_PC_RTC_STABLE` | `1` | Steady picture quality: the bitrate stays at `REMOTE_PC_RTC_BITRATE` and does not follow the link estimate (`0` = adaptive) |
 | `REMOTE_PC_RTC_STEADY` | `1` | Always send the full frame rate, even when the screen is still (`0` = only on change + 0.5 s keepalive) |
 | `REMOTE_PC_RTC_BITRATE` | `4000` | Starting WebRTC bitrate limit, kbit/s |
 | `REMOTE_PC_RTC_ENCODER` | `auto` | `auto`, `nvenc`, `qsv`, `amf` or `x264` |

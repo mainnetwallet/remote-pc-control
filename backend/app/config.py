@@ -64,6 +64,9 @@ class Settings:
     rtc_steady = os.getenv("REMOTE_PC_RTC_STEADY", "1").strip().lower() not in ("0", "false", "no", "off")
     # Upper limit of the video bitrate in kbit/s (the link's own estimate can only lower it). 300-30000.
     rtc_bitrate = max(300, min(30000, int(os.getenv("REMOTE_PC_RTC_BITRATE", "4000") or "4000")))
+    # 1 (default) = steady quality: the bitrate stays at the cap above and the encoder is never re-opened because the link's
+    # estimate moved, so the picture does not get sharper/blurrier from second to second. 0 = follow the link's estimate.
+    rtc_stable = os.getenv("REMOTE_PC_RTC_STABLE", "1").strip().lower() not in ("0", "false", "no", "off")
     # H.264 encoder: auto (try nvenc, qsv, amf, then libx264) or force one of nvenc / qsv / amf / x264.
     rtc_encoder = os.getenv("REMOTE_PC_RTC_ENCODER", "auto").strip().lower()
     # ICE servers. STUN finds the public address (comma separated list). TURN relays the video when a direct
