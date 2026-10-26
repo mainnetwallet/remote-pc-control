@@ -279,27 +279,29 @@ With a PIN set, the app's **Lock** button uses this lock; without the lock scree
 | `aiortc is not installed` | `.\scripts\setup.ps1 -Force`, restart the server |
 | Lock button shows nothing | Run `.\scripts\install-lock-overlay.ps1` or set `REMOTE_PC_LOCK_BUTTON=windows` |
 
-### 🛡️ Showing UAC Prompts on Phone
+### 🛡️ Showing UAC Prompts on Phone (and Fixing Blocked Clicks)
 
-When a Windows **User Account Control (UAC)** prompt appears (e.g. *"Do you want to allow this app to make changes to your device?"*), Windows by default switches to the isolated **Secure Desktop** (dimming the background). Because the Secure Desktop is isolated, screen capture pauses and the phone screen turns black or freezes.
+When a Windows **User Account Control (UAC)** prompt appears (e.g. *"Do you want to allow this app to make changes to your device?"*), two Windows security barriers affect remote control:
+1. **Secure Desktop:** By default, Windows switches to an isolated desktop (dimming the background), which causes remote video to freeze or show a black screen.
+2. **UIPI (User Interface Privilege Isolation):** Windows blocks synthetic mouse clicks and keystrokes sent to `consent.exe` (the UAC dialog). When the prompt appears, clicking **Yes / No** from a phone will be ignored, and the mouse will appear stuck until the prompt is closed.
 
-To make UAC prompts show up and be clickable on your phone:
+To make admin apps (like MSI App Player, Task Manager, installers) open smoothly without getting stuck on UAC:
 
 #### Method 1: Run the helper script (Recommended)
 Open PowerShell as Administrator and run:
 ```powershell
 .\scripts\fix-uac-prompt.ps1
 ```
+This disables the Secure Desktop and enables auto-elevation (`ConsentPromptBehaviorAdmin=0`) for administrator accounts. Apps requiring elevation will launch immediately without stalling the remote session.  
 *(To restore Windows default behavior at any time, run `.\scripts\fix-uac-prompt.ps1 -Revert`)*
 
 #### Method 2: Via Windows Settings
 1. Press `Win + R`, type `UserAccountControlSettings`, and press **Enter** (or search **UAC** in Start).
-2. Move the slider one notch down to:  
-   **"Notify me only when apps try to make changes to my computer (do not dim my desktop)"**
+2. Move the slider all the way down to **Never notify** (Level 1).
 3. Click **OK** and confirm.
 
 > [!TIP]
-> Ensure the agent is running with administrator privileges (`.\scripts\install-autostart.ps1 -Admin` or installed via the desktop installer) so you can also click **Yes / No** on elevated prompts from your phone.
+> Ensure the agent is running with administrator privileges (`.\scripts\install-autostart.ps1 -Admin` or installed via the desktop installer) so the agent can interact with all elevated windows.
 
 ## 🔒 Security
 
