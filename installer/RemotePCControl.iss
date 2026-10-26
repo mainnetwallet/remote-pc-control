@@ -33,8 +33,8 @@ Type: filesandordirs; Name: "{userprograms}\Remote PC Control"
 Type: files; Name: "{userdesktop}\Remote PC Control.lnk"
 [Registry]
 ; Configure UAC so remote screen and mouse input are never blocked by Secure Desktop or UIPI:
-Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"; ValueType: dword; ValueName: "PromptOnSecureDesktop"; ValueData: "0"; Flags: uninsneveruninstall
-Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"; ValueType: dword; ValueName: "ConsentPromptBehaviorAdmin"; ValueData: "0"; Flags: uninsneveruninstall
+Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"; ValueType: dword; ValueName: "PromptOnSecureDesktop"; ValueData: "0"
+Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"; ValueType: dword; ValueName: "ConsentPromptBehaviorAdmin"; ValueData: "0"
 [Run]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\register-installed-task.ps1"" -Exe ""{app}\RemotePCControl.exe"""; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; StatusMsg: "Setting up autostart, administrator rights, firewall and remote UAC..."
 ; shellexec: the exe needs administrator rights (UAC); starting it with CreateProcess fails with error 740
