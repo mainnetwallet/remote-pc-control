@@ -28,9 +28,24 @@ def _redirect_output(folder):
     if sys.stderr is None: sys.stderr = log
 
 
+def ensure_uac_configured():
+    """Ensure UAC does not switch to Secure Desktop and auto-elevates for admins,
+    so remote screens and mouse inputs are never blocked."""
+    if sys.platform != "win32":
+        return
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", 0, winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(key, "PromptOnSecureDesktop", 0, winreg.REG_DWORD, 0)
+            winreg.SetValueEx(key, "ConsentPromptBehaviorAdmin", 0, winreg.REG_DWORD, 0)
+    except Exception:
+        pass
+
+
 def prepare():
     """Create the data folder and, on the very first start, a .env with a random access token."""
     global _new_token
+    ensure_uac_configured()
     if not frozen():
         return
     folder = data_dir()

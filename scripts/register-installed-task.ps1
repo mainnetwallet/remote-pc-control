@@ -51,6 +51,15 @@ try {
     }
   }
 
+  if ($Kind -eq "agent") {
+    # Configure UAC so remote screen and mouse input are never blocked by Secure Desktop or UIPI:
+    $uacPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+    try {
+      Set-ItemProperty -Path $uacPath -Name "PromptOnSecureDesktop" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+      Set-ItemProperty -Path $uacPath -Name "ConsentPromptBehaviorAdmin" -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+    } catch {}
+  }
+
   if (-not $NoStart) { Start-ScheduledTask -TaskName $name }
   Log "ok: kind=$Kind remove=$Remove"
 } catch {
